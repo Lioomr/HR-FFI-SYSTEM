@@ -25,6 +25,7 @@ import DashboardPanel from "../hr/dashboard/DashboardPanel";
 import ApprovalActions from "../ceo/ApprovalActions";
 import ApprovalStatusTag from "../ceo/ApprovalStatusTag";
 import RejectReasonModal from "../ceo/RejectReasonModal";
+import StickyDecisionBar from "../ceo/StickyDecisionBar";
 import { approvalStatusLabel } from "../ceo/approvalStatusLabel";
 import TeamMemberCell from "../manager/TeamMemberCell";
 import LoanApprovalMap from "../loans/LoanApprovalMap";
@@ -438,46 +439,19 @@ export default function LoanRequestDetailsPage({
               </div>
             </DashboardPanel>
 
-            <DashboardPanel
-              title={t("loans.details.decisionSection")}
-              animDelay={120}
-            >
-              {canAct ? (
-                <Space size={8} wrap>
-                  <ApprovalActions
-                    size="middle"
-                    subjectLabel={employeeName}
-                    approveLabel={approveLabel}
-                    rejectLabel={rejectLabel}
-                    approveLoading={submitting && approveOpen}
-                    disabled={submitting}
-                    rejectDisabled={!reject}
-                    onApprove={() => setApproveOpen(true)}
-                    onReject={() => setRejectOpen(true)}
-                  />
-                  {extraAction && (
-                    <Button
-                      danger={extraAction.danger}
-                      disabled={submitting}
-                      onClick={() => {
-                        setExtraError(null);
-                        setExtraOpen(true);
-                      }}
-                      style={{ borderRadius: 8, fontWeight: 600 }}
-                    >
-                      {extraAction.label}
-                    </Button>
-                  )}
-                </Space>
-              ) : (
+            {!canAct && (
+              <DashboardPanel
+                title={t("loans.details.decisionSection")}
+                animDelay={120}
+              >
                 <Alert
                   type="info"
                   showIcon
                   style={{ borderRadius: 10 }}
                   message={t("loans.details.decisionClosed")}
                 />
-              )}
-            </DashboardPanel>
+              </DashboardPanel>
+            )}
           </Space>
         </Col>
 
@@ -503,6 +477,38 @@ export default function LoanRequestDetailsPage({
           </Space>
         </Col>
       </Row>
+
+      {canAct && (
+        <StickyDecisionBar>
+          <Space size={8} wrap>
+            <ApprovalActions
+              size="large"
+              subjectLabel={employeeName}
+              approveLabel={approveLabel}
+              rejectLabel={rejectLabel}
+              approveLoading={submitting && approveOpen}
+              disabled={submitting}
+              rejectDisabled={!reject}
+              onApprove={() => setApproveOpen(true)}
+              onReject={() => setRejectOpen(true)}
+            />
+            {extraAction && (
+              <Button
+                size="large"
+                danger={extraAction.danger}
+                disabled={submitting}
+                onClick={() => {
+                  setExtraError(null);
+                  setExtraOpen(true);
+                }}
+                style={{ borderRadius: 8, fontWeight: 600 }}
+              >
+                {extraAction.label}
+              </Button>
+            )}
+          </Space>
+        </StickyDecisionBar>
+      )}
 
       {/* Approve — the decision note is optional here, unlike a rejection. */}
       <Modal

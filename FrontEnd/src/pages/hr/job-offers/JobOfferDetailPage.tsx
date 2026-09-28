@@ -39,6 +39,8 @@ import JobOfferWorkflowHistory from "../../../components/jobOffers/JobOfferWorkf
 import JobOfferDocumentSection, {
   JobOfferDocumentGrid,
 } from "../../../components/jobOffers/JobOfferDocumentSection";
+import StickyDecisionBar from "../../../components/ceo/StickyDecisionBar";
+import { useFilePreview } from "../../../components/ui/useFilePreview";
 import Unauthorized403Page from "../../Unauthorized403Page";
 
 import { isApiError } from "../../../services/api/apiTypes";
@@ -49,7 +51,6 @@ import {
   isNotFound,
 } from "../../../services/api/httpErrors";
 import { triggerBlobDownload } from "../../../services/api/downloads";
-import { previewBlob } from "../../../utils/download";
 import {
   downloadEmployeeDocument,
   getEmployeeDocuments,
@@ -251,15 +252,9 @@ export default function JobOfferDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [forbidden, setForbidden] = useState(false);
   const [acting, setActing] = useState<
-    | "send"
-    | "cancel"
-    | "pdf"
-    | "pdfPreview"
-    | "submit"
-    | "cv"
-    | "cvPreview"
-    | null
+    "send" | "cancel" | "pdf" | "submit" | "cv" | null
   >(null);
+  const { openPreview, previewModal } = useFilePreview();
   const [acknowledgment, setAcknowledgment] = useState<EmployeeDocument | null>(
     null,
   );
@@ -405,28 +400,13 @@ export default function JobOfferDetailPage() {
     }
   }, [id, messageApi, t, reportActionError]);
 
-  /**
-   * Opens the CV in a new tab. A Word document cannot render there, so it falls
-   * back to a download rather than leaving the user on a blank viewer. The tab
-   * is opened synchronously so the browser does not treat it as a popup once
-   * the bytes have been fetched.
-   */
-  const handleCvPreview = useCallback(async () => {
-    const tab = window.open("about:blank", "_blank");
-    setActing("cvPreview");
-    try {
-      const blob = await downloadJobOfferCv(id!);
-      if (!(await previewBlob(blob, tab))) {
-        triggerBlobDownload(blob, `job_offer_${id}_cv`);
-        messageApi.info(t("jobOffers.cv.previewUnavailable"));
-      }
-    } catch (err: unknown) {
-      tab?.close();
-      reportActionError(err, "jobOffers.cv.failed");
-    } finally {
-      setActing(null);
-    }
-  }, [id, messageApi, t, reportActionError]);
+  /** Shows the CV in-app; a Word document offers a download instead. */
+  const handleCvPreview = () =>
+    openPreview({
+      title: t("jobOffers.action.previewCv"),
+      filename: `job_offer_${id}_cv`,
+      load: () => downloadJobOfferCv(id!),
+    });
 
   const handleSend = useCallback(() => {
     modal.confirm({
@@ -497,29 +477,13 @@ export default function JobOfferDetailPage() {
     }
   }, [id, messageApi, t]);
 
-  /**
-   * Opens the offer PDF in a new tab for a quick look instead of saving it.
-   * The tab is opened synchronously so it is not blocked as a popup, and
-   * `previewBlob` normalises the MIME type so it renders inline even when the
-   * backend labels the stream as a generic attachment.
-   */
-  const handlePdfPreview = useCallback(async () => {
-    const tab = window.open("about:blank", "_blank");
-    setActing("pdfPreview");
-    try {
-      const blob = await downloadJobOfferPdf(id!);
-      if (!(await previewBlob(blob, tab))) {
-        messageApi.error(t("jobOffers.pdf.previewFailed"));
-      }
-    } catch (err: unknown) {
-      tab?.close();
-      messageApi.error(
-        (err as Error)?.message || t("jobOffers.pdf.previewFailed"),
-      );
-    } finally {
-      setActing(null);
-    }
-  }, [id, messageApi, t]);
+  /** Shows the offer PDF in-app for a quick look instead of saving it. */
+  const handlePdfPreview = () =>
+    openPreview({
+      title: t("jobOffers.action.previewPdf"),
+      filename: `job_offer_${id}.pdf`,
+      load: () => downloadJobOfferPdf(id!),
+    });
 
   const translateWarning = useCallback(
     (warning: string) => {
@@ -756,7 +720,6 @@ export default function JobOfferDetailPage() {
               <>
                 <Button
                   icon={<EyeOutlined aria-hidden />}
-                  loading={acting === "cvPreview"}
                   onClick={handleCvPreview}
                   style={{ borderRadius: 10, minHeight: 40 }}
                 >
@@ -774,7 +737,6 @@ export default function JobOfferDetailPage() {
             )}
             <Button
               icon={<EyeOutlined aria-hidden />}
-              loading={acting === "pdfPreview"}
               onClick={handlePdfPreview}
               style={{ borderRadius: 10, minHeight: 40 }}
             >
@@ -788,43 +750,6 @@ export default function JobOfferDetailPage() {
             >
               {t("jobOffers.action.downloadPdf")}
             </Button>
-            {cancellable && (
-              <Button
-                danger
-                icon={<StopOutlined aria-hidden />}
-                loading={acting === "cancel"}
-                onClick={handleCancel}
-                style={{ borderRadius: 10, minHeight: 40 }}
-              >
-                {t("jobOffers.action.cancelOffer")}
-              </Button>
-            )}
-            {submittable && (
-              <Button
-                type="primary"
-                icon={<AuditOutlined aria-hidden />}
-                loading={acting === "submit"}
-                onClick={handleSubmitToCeo}
-                style={{ borderRadius: 10, minHeight: 40, fontWeight: 600 }}
-              >
-                {offer.approval_status === "changes_requested"
-                  ? t("jobOffers.action.resubmitToCeo")
-                  : t("jobOffers.form.submitToCeo")}
-              </Button>
-            )}
-            {/* Delivery is gated on the CEO decision, so the button appears
-                only while the backend says the offer may go out. */}
-            {sendable && (
-              <Button
-                type="primary"
-                icon={<SendOutlined aria-hidden />}
-                loading={acting === "send"}
-                onClick={handleSend}
-                style={{ borderRadius: 10, minHeight: 40, fontWeight: 600 }}
-              >
-                {t("jobOffers.action.sendOffer")}
-              </Button>
-            )}
           </div>
         }
       />
@@ -1309,6 +1234,56 @@ export default function JobOfferDetailPage() {
           </Surface>
         </Col>
       </Row>
+
+      {/* HR's next steps on the offer stay pinned while the details scroll. */}
+      {(cancellable || submittable || sendable) && (
+        <StickyDecisionBar hint={null}>
+          <Space size={8} wrap>
+            {cancellable && (
+              <Button
+                danger
+                size="large"
+                icon={<StopOutlined aria-hidden />}
+                loading={acting === "cancel"}
+                onClick={handleCancel}
+                style={{ borderRadius: 8, fontWeight: 600 }}
+              >
+                {t("jobOffers.action.cancelOffer")}
+              </Button>
+            )}
+            {submittable && (
+              <Button
+                type="primary"
+                size="large"
+                icon={<AuditOutlined aria-hidden />}
+                loading={acting === "submit"}
+                onClick={handleSubmitToCeo}
+                style={{ borderRadius: 8, fontWeight: 600 }}
+              >
+                {offer.approval_status === "changes_requested"
+                  ? t("jobOffers.action.resubmitToCeo")
+                  : t("jobOffers.form.submitToCeo")}
+              </Button>
+            )}
+            {/* Delivery is gated on the CEO decision, so the button appears
+                only while the backend says the offer may go out. */}
+            {sendable && (
+              <Button
+                type="primary"
+                size="large"
+                icon={<SendOutlined aria-hidden />}
+                loading={acting === "send"}
+                onClick={handleSend}
+                style={{ borderRadius: 8, fontWeight: 600 }}
+              >
+                {t("jobOffers.action.sendOffer")}
+              </Button>
+            )}
+          </Space>
+        </StickyDecisionBar>
+      )}
+
+      {previewModal}
     </div>
   );
 }

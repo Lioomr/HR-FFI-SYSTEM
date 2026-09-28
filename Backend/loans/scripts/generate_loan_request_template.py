@@ -141,6 +141,8 @@ def build(logo_path: Path) -> None:
     pdf.rect(0, 0, width, height, fill=1, stroke=0)
     logo = ImageReader(str(logo_path))
     logo_width = 220
+    if logo_path.stem.lower() == "athroya":
+        logo_width = min(logo_width, 58 * logo.getSize()[0] / logo.getSize()[1])
     logo_height = logo_width * logo.getSize()[1] / logo.getSize()[0]
     pdf.drawImage(logo, 15, height - 14 - logo_height, logo_width, logo_height, mask="auto")
     pdf.setFillColor(NAVY)

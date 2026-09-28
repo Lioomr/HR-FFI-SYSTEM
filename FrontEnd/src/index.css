@@ -1074,3 +1074,25 @@ html[dir="rtl"] .modern-sidebar .ant-menu-item-selected::before {
     font-size: 13px;
   }
 }
+
+/* Sticky decision bar: on phones every button shares the row's width. */
+@media (max-width: 767px) {
+  .ffi-sticky-decision-bar__actions,
+  .ffi-sticky-decision-bar__actions .ant-space {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    width: 100%;
+  }
+
+  .ffi-sticky-decision-bar__actions .ant-space-item,
+  .ffi-sticky-decision-bar__actions > .ant-btn {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+
+  .ffi-sticky-decision-bar__actions .ant-btn {
+    width: 100%;
+    min-height: 44px;
+  }
+}

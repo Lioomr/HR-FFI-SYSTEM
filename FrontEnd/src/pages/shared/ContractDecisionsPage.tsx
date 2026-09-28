@@ -17,12 +17,7 @@ import {
   message,
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import {
-  ArrowLeftOutlined,
-  CheckOutlined,
-  CloseOutlined,
-  ReloadOutlined,
-} from "@ant-design/icons";
+import { ArrowLeftOutlined, ReloadOutlined } from "@ant-design/icons";
 
 import PageHeader from "../../components/ui/PageHeader";
 import { WorkspaceCard } from "../../components/ui/workspace/Workspace";
@@ -30,6 +25,10 @@ import ResponsiveTable from "../../components/ui/ResponsiveTable";
 import ErrorState from "../../components/ui/ErrorState";
 import LoadingState from "../../components/ui/LoadingState";
 import ApprovalTimeline from "../../components/requests/ApprovalTimeline";
+import ApprovalFlowMap from "../../components/requests/ApprovalFlowMap";
+import { buildStagesFromWorkflow } from "../../components/requests/workflowPresentation";
+import ApprovalActions from "../../components/ceo/ApprovalActions";
+import StickyDecisionBar from "../../components/ceo/StickyDecisionBar";
 import { useAuthStore } from "../../auth/authStore";
 import { useI18n } from "../../i18n/useI18n";
 import { formatDateOnly, formatDateTimeShort } from "../../utils/dateTime";
@@ -510,6 +509,12 @@ export default function ContractDecisionsPage() {
     const canReject = Boolean(
       isCeo && item.status === "PENDING_CEO" && item.workflow?.can_reject,
     );
+    const openCeoModal = () => {
+      setDecisionErrors([]);
+      setDecisionModalOpen(true);
+    };
+    // Stage keys and order come from the backend `contract_decision` workflow template.
+    const stages = buildStagesFromWorkflow(item.workflow, ["hr", "ceo"], t);
     return (
       <>
         {messageContext}
@@ -702,41 +707,21 @@ export default function ContractDecisionsPage() {
               description={item.failure_reason || undefined}
             />
           ) : null}
-
-          <Space style={{ marginTop: 20 }} wrap>
-            {canSubmit ? (
-              <Button type="primary" onClick={() => openHrModal(item)}>
-                {item.status === "MANUAL_RESOLUTION_REQUIRED"
-                  ? t("contractDecisions.resolve")
-                  : t("contractDecisions.takeAction")}
-              </Button>
-            ) : null}
-            {canApprove ? (
-              <Button
-                type="primary"
-                icon={<CheckOutlined />}
-                onClick={() => {
-                  setDecisionErrors([]);
-                  setDecisionModalOpen(true);
-                }}
-              >
-                {t("contractDecisions.approve")}
-              </Button>
-            ) : null}
-            {canReject ? (
-              <Button
-                danger
-                icon={<CloseOutlined />}
-                onClick={() => {
-                  setDecisionErrors([]);
-                  setDecisionModalOpen(true);
-                }}
-              >
-                {t("contractDecisions.reject")}
-              </Button>
-            ) : null}
-          </Space>
         </Card>
+
+        {stages ? (
+          <div style={{ marginTop: 20 }}>
+            <ApprovalFlowMap
+              eyebrow={t("leave.approvalMap.eyebrow")}
+              title={t(
+                "contractDecisions.approvalMap.title",
+                "Decision progress",
+              )}
+              stages={stages}
+              t={t}
+            />
+          </div>
+        ) : null}
 
         <Card title={t("contractDecisions.history")} style={{ marginTop: 20 }}>
           {item.workflow?.history?.length ? (
@@ -749,6 +734,34 @@ export default function ContractDecisionsPage() {
         </Card>
         {renderHrModal()}
         {renderCeoModal()}
+        {canSubmit ? (
+          <StickyDecisionBar>
+            <Button
+              type="primary"
+              size="large"
+              onClick={() => openHrModal(item)}
+              style={{ borderRadius: 8, fontWeight: 600 }}
+            >
+              {item.status === "MANUAL_RESOLUTION_REQUIRED"
+                ? t("contractDecisions.resolve")
+                : t("contractDecisions.takeAction")}
+            </Button>
+          </StickyDecisionBar>
+        ) : canApprove || canReject ? (
+          <StickyDecisionBar>
+            <ApprovalActions
+              size="large"
+              subjectLabel={item.employee.full_name}
+              approveLabel={t("contractDecisions.approve")}
+              rejectLabel={t("contractDecisions.reject")}
+              approveDisabled={!canApprove}
+              rejectDisabled={!canReject}
+              disabled={actionLoading}
+              onApprove={openCeoModal}
+              onReject={openCeoModal}
+            />
+          </StickyDecisionBar>
+        ) : null}
       </>
     );
   }

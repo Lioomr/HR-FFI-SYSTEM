@@ -161,6 +161,56 @@ def test_versioned_and_flat_map_schemas_both_load():
     assert versioned.meta["coordinate_origin"] == "bottom_left"
 
 
+def test_company_templates_resolve_a_complete_pair_for_each_branded_company():
+    pairs = [
+        (LEAVE_TEMPLATE, LEAVE_MAP),
+        ("loan_request_blank.pdf", "loan_request_blank_field_map.json"),
+        ("exit_permission_request_blank.pdf", "exit_permission_request_blank_field_map.json"),
+        ("annual_entitlements_disbursement_blank.pdf", "annual_entitlements_disbursement_blank_field_map.json"),
+        ("job_offer_blank.pdf", "job_offer_blank_field_map.json"),
+        ("starting_work_acknowledgment_blank.pdf", "starting_work_acknowledgment_blank_field_map.json"),
+    ]
+
+    for company_code in ("ATHROYA", "ASECO_PRO"):
+        for template, field_map in pairs:
+            assets = load_form_assets(template, field_map, company_code=company_code)
+            assert assets is not None
+            assert Path(assets.template_path).parent.name == company_code
+            assert (Path(assets.template_path).parent / field_map).is_file()
+
+
+def test_incomplete_company_override_uses_the_bundled_company_pair(tmp_path):
+    company_dir = tmp_path / "company_templates" / "ATHROYA"
+    company_dir.mkdir(parents=True)
+    (company_dir / LEAVE_TEMPLATE).write_bytes((BUNDLED_DIR / LEAVE_TEMPLATE).read_bytes())
+
+    with override_settings(HR_TEMPLATES_DIR=str(tmp_path)):
+        assets = load_form_assets(LEAVE_TEMPLATE, LEAVE_MAP, company_code="ATHROYA")
+
+    assert assets is not None
+    assert Path(assets.template_path).parent == BUNDLED_DIR / "company_templates" / "ATHROYA"
+
+
+def test_non_ffi_company_never_falls_back_to_the_ffi_template(tmp_path):
+    with override_settings(HR_TEMPLATES_DIR=str(tmp_path)):
+        with pytest.raises(FileNotFoundError, match="company-specific template pair"):
+            load_form_assets(LEAVE_TEMPLATE, LEAVE_MAP, company_code="NO_BRAND")
+
+
+def test_company_job_offers_do_not_name_ffi_as_the_employer():
+    for company_code, company_name in (("ATHROYA", "Athroya"), ("ASECO_PRO", "Aseco Pro")):
+        assets = load_form_assets(
+            "job_offer_blank.pdf", "job_offer_blank_field_map.json", company_code=company_code
+        )
+        assert assets is not None
+        reader = PdfReader(assets.template_path)
+        text = reader.pages[0].extract_text()
+
+        assert "Fathi Fouad Itani Contracting Co." not in text
+        assert "FFI" not in (reader.metadata.title or "")
+        assert reader.metadata.author == company_name
+
+
 # --------------------------------------------------------------------------
 # Rendering
 # --------------------------------------------------------------------------

@@ -1,0 +1,344 @@
+{
+  "reference_no": {
+    "page": 1,
+    "x": 89,
+    "y": 737.89,
+    "width": 78,
+    "height": 18,
+    "font_size": 8
+  },
+  "request_date": {
+    "page": 1,
+    "x": 290,
+    "y": 737.89,
+    "width": 74,
+    "height": 18,
+    "font_size": 7.4
+  },
+  "filed_date": {
+    "page": 1,
+    "x": 465,
+    "y": 737.89,
+    "width": 92,
+    "height": 18,
+    "font_size": 7.4,
+    "source": "leave_request.filed_at"
+  },
+  "employee_name": {
+    "page": 1,
+    "x": 102,
+    "y": 682.89,
+    "width": 406,
+    "height": 19,
+    "font_size": 7.8,
+    "shrink": true
+  },
+  "employee_id": {
+    "page": 1,
+    "x": 102,
+    "y": 657.89,
+    "width": 406,
+    "height": 19,
+    "font_size": 7.8,
+    "shrink": true
+  },
+  "department": {
+    "page": 1,
+    "x": 102,
+    "y": 632.89,
+    "width": 406,
+    "height": 19,
+    "font_size": 7.8,
+    "shrink": true
+  },
+  "job_title": {
+    "page": 1,
+    "x": 102,
+    "y": 607.89,
+    "width": 406,
+    "height": 19,
+    "font_size": 7.8,
+    "shrink": true
+  },
+  "line_manager": {
+    "page": 1,
+    "x": 102,
+    "y": 582.89,
+    "width": 406,
+    "height": 19,
+    "font_size": 7.8,
+    "shrink": true
+  },
+  "work_location": {
+    "page": 1,
+    "x": 102,
+    "y": 557.89,
+    "width": 406,
+    "height": 19,
+    "font_size": 7.8,
+    "shrink": true
+  },
+  "contact_no": {
+    "page": 1,
+    "x": 102,
+    "y": 532.89,
+    "width": 406,
+    "height": 19,
+    "font_size": 7.8,
+    "shrink": true
+  },
+  "email": {
+    "page": 1,
+    "x": 102,
+    "y": 507.89,
+    "width": 406,
+    "height": 19,
+    "font_size": 7.8,
+    "shrink": true
+  },
+  "leave_type": {
+    "page": 1,
+    "x": 111,
+    "y": 450.89,
+    "width": 171,
+    "height": 24,
+    "font_size": 7.4,
+    "shrink": true
+  },
+  "leave_balance_days": {
+    "page": 1,
+    "x": 390,
+    "y": 450.89,
+    "width": 182,
+    "height": 24,
+    "font_size": 7.4
+  },
+  "end_date": {
+    "page": 1,
+    "x": 102,
+    "y": 425.89,
+    "width": 116,
+    "height": 19,
+    "font_size": 7.8
+  },
+  "start_date": {
+    "page": 1,
+    "x": 390,
+    "y": 425.89,
+    "width": 120,
+    "height": 19,
+    "font_size": 7.8
+  },
+  "total_days_requested": {
+    "page": 1,
+    "x": 102,
+    "y": 400.89,
+    "width": 116,
+    "height": 19,
+    "font_size": 7.8
+  },
+  "will_travel": {
+    "page": 1,
+    "checkboxes": {
+      "yes": [
+        402.0,
+        410.8897637795277
+      ],
+      "no": [
+        455.0,
+        410.8897637795277
+      ]
+    }
+  },
+  "reason": {
+    "page": 1,
+    "x": 102,
+    "y": 368.89,
+    "width": 406,
+    "height": 26,
+    "font_size": 7.2,
+    "multiline": true,
+    "max_lines": 2
+  },
+  "address_during_leave": {
+    "page": 1,
+    "x": 102,
+    "y": 343.89,
+    "width": 406,
+    "height": 19,
+    "font_size": 7.2,
+    "shrink": true
+  },
+  "contact_no_during_leave": {
+    "page": 1,
+    "x": 112,
+    "y": 318.89,
+    "width": 388,
+    "height": 19,
+    "font_size": 7.5
+  },
+  "substitute_employee_id": {
+    "page": 1,
+    "x": 102,
+    "y": 268.89,
+    "width": 116,
+    "height": 17,
+    "font_size": 7.0,
+    "multiline": false,
+    "max_lines": 1,
+    "shrink": true
+  },
+  "substitute_employee_name": {
+    "page": 1,
+    "x": 102,
+    "y": 245.89,
+    "width": 116,
+    "height": 17,
+    "font_size": 7.0,
+    "multiline": false,
+    "max_lines": 1,
+    "shrink": true
+  },
+  "substitute_department": {
+    "page": 1,
+    "x": 102,
+    "y": 222.89,
+    "width": 116,
+    "height": 17,
+    "font_size": 7.0,
+    "multiline": false,
+    "max_lines": 1,
+    "shrink": true
+  },
+  "substitute_notes": {
+    "page": 1,
+    "x": 102,
+    "y": 189.89,
+    "width": 150,
+    "height": 27,
+    "font_size": 7.0,
+    "multiline": true,
+    "max_lines": 2,
+    "shrink": true
+  },
+  "destination": {
+    "page": 1,
+    "x": 390,
+    "y": 268.89,
+    "width": 120,
+    "height": 17,
+    "font_size": 7.3,
+    "shrink": true
+  },
+  "travel_date": {
+    "page": 1,
+    "x": 390,
+    "y": 245.89,
+    "width": 120,
+    "height": 17,
+    "font_size": 7.3,
+    "shrink": true
+  },
+  "return_date": {
+    "page": 1,
+    "x": 390,
+    "y": 222.89,
+    "width": 120,
+    "height": 17,
+    "font_size": 7.3,
+    "shrink": true
+  },
+  "ticket_required": {
+    "page": 1,
+    "checkboxes": {
+      "yes": [
+        406.0,
+        203.8897637795277
+      ],
+      "no": [
+        463.0,
+        203.8897637795277
+      ]
+    }
+  },
+  "employee_signature_image": {
+    "page": 1,
+    "x": 25,
+    "y": 61.89,
+    "width": 121.32,
+    "height": 70,
+    "kind": "image",
+    "padding": 3,
+    "source": "request.signers.employee.signature"
+  },
+  "employee_signature_date": {
+    "page": 1,
+    "x": 63,
+    "y": 32.89,
+    "width": 45.32,
+    "height": 16,
+    "font_size": 6.6,
+    "shrink": true,
+    "source": "leave_request.workflow_timestamp"
+  },
+  "line_manager_signature_image": {
+    "page": 1,
+    "x": 166.32,
+    "y": 61.89,
+    "width": 121.32,
+    "height": 70,
+    "kind": "image",
+    "padding": 3,
+    "source": "request.signers.line_manager.signature"
+  },
+  "line_manager_signature_date": {
+    "page": 1,
+    "x": 204.32,
+    "y": 32.89,
+    "width": 45.32,
+    "height": 16,
+    "font_size": 6.6,
+    "shrink": true,
+    "source": "leave_request.workflow_timestamp"
+  },
+  "department_head_signature_image": {
+    "page": 1,
+    "x": 307.64,
+    "y": 61.89,
+    "width": 121.32,
+    "height": 70,
+    "kind": "image",
+    "padding": 3,
+    "source": "request.signers.department_head.signature"
+  },
+  "department_head_signature_date": {
+    "page": 1,
+    "x": 345.64,
+    "y": 32.89,
+    "width": 45.32,
+    "height": 16,
+    "font_size": 6.6,
+    "shrink": true,
+    "source": "leave_request.workflow_timestamp"
+  },
+  "hr_signature_image": {
+    "page": 1,
+    "x": 448.96,
+    "y": 61.89,
+    "width": 121.32,
+    "height": 70,
+    "kind": "image",
+    "padding": 3,
+    "source": "request.signers.hr.signature"
+  },
+  "hr_signature_date": {
+    "page": 1,
+    "x": 486.96,
+    "y": 32.89,
+    "width": 45.32,
+    "height": 16,
+    "font_size": 6.6,
+    "shrink": true,
+    "source": "leave_request.workflow_timestamp"
+  }
+}

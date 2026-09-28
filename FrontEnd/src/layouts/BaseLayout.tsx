@@ -1989,7 +1989,10 @@ export default function BaseLayout() {
         <Content
           style={{
             padding: isMobile ? 12 : 24,
-            overflowX: "hidden",
+            // `clip`, not `hidden`: hidden turns this into a scroll container,
+            // which stops sticky page elements (decision bars) from sticking
+            // to the viewport.
+            overflowX: "clip",
           }}
         >
           {isHeadOffice && !showCompanyPicker && (

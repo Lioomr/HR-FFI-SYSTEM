@@ -149,6 +149,9 @@ pre-check yourself, or you can create duplicate notifications on a redelivery. F
   `action_path` in WhatsApp variables and email context. The id is the company the caller passed (`company`,
   `company_id`, or `related_object.company`), never the recipient's fallback company. Helper: `with_company_param()`
   in `Backend/in_app_notifications/services.py`.
+- `Notification.company` (the bell's company filter) uses that same stated company, and falls back to the recipient's
+  profile company only when the caller stated none. A pending approval for an FFI request is listed in the reviewer's
+  FFI bell even when their own profile is in another company.
 - The frontend (`RequireAuth` + `resolveCompanyLink()` in `FrontEnd/src/utils/organizationContext.ts`) switches to that
   company before the page loads, then reloads without the parameter and shows a notice. It only switches to a company
   in `accessible_organizations`, never to the head office, and never on `new`/`create`/`edit` pages; otherwise it just

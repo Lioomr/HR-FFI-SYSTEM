@@ -607,12 +607,13 @@ _FFI HR · الموارد البشرية_""",
             "reference_number": "LAN-FFI-000041",
             "policy_result": "Formal caution - 5% daily-rate deduction.",
             "policy_result_ar": "تنبيه رسمي - خصم بنسبة ٥٪ من الأجر اليومي.",
-            "action_url": "https://app.asecopro.com/employee/attendance",
+            "action_url": "https://app.asecopro.com/employee/permission-requests/new",
         },
         default_body="""⚠️ *إنذار التأخر في الحضور*
 
 مرحباً {{ employee_name }}،
 صدر لك إنذار تأخر في الحضور. نسختك الخاصة من الإنذار بصيغة PDF مرفقة بهذه الرسالة.
+إذا كان لديك عذر عن التأخر في هذا التاريخ، أرسل طلب صلاحية تأخر من النموذج أدناه، واختر تاريخ المخالفة وأرفق المستندات الداعمة. سيُراجع الطلب من المدير والموارد البشرية، ولا يُعتمد العذر إلا بعد الموافقة النهائية.
 
 • *نوع الإنذار:* {{ notice_level_ar }}
 • *تاريخ المخالفة:* {{ violation_date }}
@@ -626,6 +627,7 @@ _FFI HR · الموارد البشرية_""",
 
 Hi {{ employee_name }},
 A late attendance notice has been issued to you. Your private PDF copy of the notice is attached to this message.
+If you have an excuse for being late on this date, submit a Late Permission request using the form below. Select the violation date and attach supporting evidence. Your manager and HR will review the request; the excuse takes effect only after final approval.
 
 • *Notice type:* {{ notice_level }}
 • *Violation date:* {{ violation_date }}

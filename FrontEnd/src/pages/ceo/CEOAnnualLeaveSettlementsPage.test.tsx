@@ -1,5 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
+import { MemoryRouter, Route, Routes } from "react-router-dom";
 
 vi.mock("../../services/api/annualLeavePaymentsApi", async () => {
   const actual = await vi.importActual<
@@ -71,6 +78,23 @@ const listResponse = (items: AnnualLeavePaymentRequest[]) => ({
   data: { items, count: items.length, page: 1, page_size: 20 },
 });
 
+function renderPage(path = "/ceo/annual-leave-payments") {
+  return render(
+    <MemoryRouter initialEntries={[path]}>
+      <Routes>
+        <Route
+          path="/ceo/annual-leave-payments"
+          element={<CEOAnnualLeaveSettlementsPage />}
+        />
+        <Route
+          path="/ceo/annual-leave-payments/:id"
+          element={<CEOAnnualLeaveSettlementsPage />}
+        />
+      </Routes>
+    </MemoryRouter>,
+  );
+}
+
 /** antd + jsdom are slow under a full-suite run; the 1s waitFor default is tight. */
 const FIND = { timeout: 8000 };
 
@@ -90,7 +114,7 @@ beforeEach(() => {
 
 describe("CEO Annual Leave settlements queue", () => {
   it("asks only for the records awaiting the CEO", async () => {
-    render(<CEOAnnualLeaveSettlementsPage />);
+    renderPage();
 
     await waitFor(() =>
       expect(getAnnualLeavePaymentRequests).toHaveBeenCalledWith(
@@ -101,7 +125,7 @@ describe("CEO Annual Leave settlements queue", () => {
   });
 
   it("labels both decisions in text, never colour alone", async () => {
-    render(<CEOAnnualLeaveSettlementsPage />);
+    renderPage();
 
     expect(
       await screen.findByRole("button", { name: "Approve: Sara Ahmed" }),
@@ -117,7 +141,7 @@ describe("CEO Annual Leave settlements queue", () => {
       data: makeSettlement({ status: "approved" }),
     });
 
-    render(<CEOAnnualLeaveSettlementsPage />);
+    renderPage();
 
     fireEvent.click(
       await screen.findByRole("button", { name: "Approve: Sara Ahmed" }),
@@ -156,7 +180,7 @@ describe("CEO Annual Leave settlements queue", () => {
       }),
     });
 
-    render(<CEOAnnualLeaveSettlementsPage />);
+    renderPage();
 
     fireEvent.click(
       await screen.findByRole("button", { name: "Approve: Sara Ahmed" }),
@@ -180,7 +204,7 @@ describe("CEO Annual Leave settlements queue", () => {
       data: makeSettlement({ status: "rejected" }),
     });
 
-    render(<CEOAnnualLeaveSettlementsPage />);
+    renderPage();
 
     fireEvent.click(
       await screen.findByRole("button", { name: "Reject: Sara Ahmed" }),
@@ -234,7 +258,7 @@ describe("CEO Annual Leave settlements queue", () => {
         ]),
       );
 
-    render(<CEOAnnualLeaveSettlementsPage />);
+    renderPage();
 
     fireEvent.click(
       await screen.findByRole("button", { name: "Approve: Sara Ahmed" }, FIND),
@@ -262,7 +286,7 @@ describe("CEO Annual Leave settlements queue", () => {
       },
     });
 
-    render(<CEOAnnualLeaveSettlementsPage />);
+    renderPage();
 
     fireEvent.click(
       await screen.findByRole("button", { name: "Approve: Sara Ahmed" }),
@@ -279,7 +303,7 @@ describe("CEO Annual Leave settlements queue", () => {
       listResponse([makeSettlement({ resolution: "carry_forward" })]),
     );
 
-    render(<CEOAnnualLeaveSettlementsPage />);
+    renderPage();
 
     await screen.findByText("Sara Ahmed");
     expect(
@@ -291,7 +315,7 @@ describe("CEO Annual Leave settlements queue", () => {
   it("renders an empty state when nothing awaits the CEO", async () => {
     getAnnualLeavePaymentRequests.mockResolvedValue(listResponse([]));
 
-    render(<CEOAnnualLeaveSettlementsPage />);
+    renderPage();
 
     expect(
       await screen.findByText("No settlements are awaiting CEO approval."),
@@ -304,7 +328,7 @@ describe("CEO Annual Leave settlements queue", () => {
       message: "backend down",
     });
 
-    render(<CEOAnnualLeaveSettlementsPage />);
+    renderPage();
 
     expect(await screen.findByText("backend down")).toBeInTheDocument();
 
@@ -319,7 +343,7 @@ describe("CEO Annual Leave settlements queue", () => {
   });
 
   it("never offers the HR review controls to the CEO", async () => {
-    render(<CEOAnnualLeaveSettlementsPage />);
+    renderPage();
 
     await screen.findByText("Sara Ahmed");
     expect(
@@ -327,6 +351,42 @@ describe("CEO Annual Leave settlements queue", () => {
     ).not.toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: /New Settlement/ }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("opens the deep-linked settlement with its approval trail and a pinned decision bar", async () => {
+    approveAnnualLeavePaymentRequest.mockResolvedValue({
+      status: "success" as const,
+      data: makeSettlement({ status: "approved" }),
+    });
+
+    renderPage("/ceo/annual-leave-payments/9");
+
+    expect(await screen.findByText("Request #9", {}, FIND)).toBeInTheDocument();
+    // The trail comes from the HR review fields on the record.
+    expect(screen.getByText("Request Progress")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Show details" }));
+    expect(screen.getAllByText("Reviewed by HR.").length).toBeGreaterThan(0);
+
+    const bar = screen.getByRole("region", { name: "Decision actions" });
+    expect(within(bar).getByText("Awaiting your decision")).toBeInTheDocument();
+    fireEvent.click(
+      within(bar).getByRole("button", { name: "Approve: Sara Ahmed" }),
+    );
+    expect(await screen.findByText("Approve settlement")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Approve" }));
+
+    await waitFor(() =>
+      expect(approveAnnualLeavePaymentRequest).toHaveBeenCalledWith(9),
+    );
+  });
+
+  it("shows no decision bar without an open settlement", async () => {
+    renderPage();
+
+    await screen.findByText("Sara Ahmed");
+    expect(
+      screen.queryByRole("region", { name: "Decision actions" }),
     ).not.toBeInTheDocument();
   });
 });

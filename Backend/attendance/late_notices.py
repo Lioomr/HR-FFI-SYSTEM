@@ -48,6 +48,7 @@ TEMPLATE_VERSION = 3
 ASSET_REVISION = 5
 NOTICE_EVENT_KEY = "attendance.late_notice"
 NOTICE_ACTION_URL = "/employee/attendance"
+LATE_PERMISSION_FORM_URL = "/employee/permission-requests/new"
 WHATSAPP_TEMPLATE = "late_attendance_notice_v1"
 #: Payroll amounts carry no currency field; every salary in the system is in Saudi riyals.
 CURRENCY = "SAR"
@@ -418,7 +419,9 @@ def whatsapp_variables(notice: AttendanceLateNotice) -> dict[str, str]:
         "reference_number": notice.reference_number,
         "policy_result": result_en,
         "policy_result_ar": result_ar,
-        "action_url": NOTICE_ACTION_URL,
+        # The WhatsApp action link should take the employee straight to the
+        # request form. The in-app notification keeps NOTICE_ACTION_URL above.
+        "action_url": LATE_PERMISSION_FORM_URL,
     }
     return {name: values[name] for name in WHATSAPP_VARIABLES}
 

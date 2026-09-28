@@ -24,7 +24,8 @@ import { approvalStatusLabel } from "../../components/ceo/approvalStatusLabel";
 import LeaveApprovalMap from "../../components/leaves/LeaveApprovalMap";
 import RequestObligationsPanel from "../../components/requests/RequestObligationsPanel";
 import { useI18n } from "../../i18n/useI18n";
-import { openOrDownloadBlob } from "../../utils/download";
+import { useFilePreview } from "../../components/ui/useFilePreview";
+import { downloadBlob } from "../../utils/download";
 import { isApiError } from "../../services/api/apiTypes";
 import {
   approveCEOLeaveRequest,
@@ -56,6 +57,7 @@ export default function CEOLeaveInboxPage() {
   const [rejecting, setRejecting] = useState<LeaveRequest | null>(null);
   const [processing, setProcessing] = useState(false);
   const [documentLoading, setDocumentLoading] = useState<number | null>(null);
+  const { openPreview, previewModal } = useFilePreview();
 
   const loadData = useCallback(
     async (
@@ -99,7 +101,9 @@ export default function CEOLeaveInboxPage() {
 
   const isInteractiveTableTarget = (target: EventTarget | null) =>
     target instanceof Element &&
-    Boolean(target.closest("a, button, input, select, textarea, [role='button']"));
+    Boolean(
+      target.closest("a, button, input, select, textarea, [role='button']"),
+    );
 
   // ── Approve, with the CEO waiver requirement kept intact ──────────────────
   const blockerCount = approving?.obligations_summary?.blocking_open || 0;
@@ -210,11 +214,19 @@ export default function CEOLeaveInboxPage() {
     }
   };
 
-  const handleDocumentBlobAction = async (id: number, download: boolean) => {
+  const previewDocument = (record: LeaveRequest) => {
+    openPreview({
+      title: `${t("common.document")}: ${employeeName(record)}`,
+      filename: `leave_request_${record.id}_document`,
+      load: () => getLeaveRequestDocumentBlob(record.id, false),
+    });
+  };
+
+  const downloadDocument = async (id: number) => {
     setDocumentLoading(id);
     try {
-      const blob = await getLeaveRequestDocumentBlob(id, download);
-      openOrDownloadBlob(blob, `leave_request_${id}_document`, download);
+      const blob = await getLeaveRequestDocumentBlob(id, true);
+      downloadBlob(blob, `leave_request_${id}_document`);
     } catch {
       notification.error({
         message: t("common.error"),
@@ -294,8 +306,7 @@ export default function CEOLeaveInboxPage() {
               <Button
                 size="small"
                 icon={<EyeOutlined aria-hidden />}
-                loading={documentLoading === record.id}
-                onClick={() => handleDocumentBlobAction(record.id, false)}
+                onClick={() => previewDocument(record)}
                 aria-label={`${t("common.view")}: ${employeeName(record)}`}
               />
             </Tooltip>
@@ -304,7 +315,7 @@ export default function CEOLeaveInboxPage() {
                 size="small"
                 icon={<DownloadOutlined aria-hidden />}
                 loading={documentLoading === record.id}
-                onClick={() => handleDocumentBlobAction(record.id, true)}
+                onClick={() => downloadDocument(record.id)}
                 aria-label={`${t("common.download")}: ${employeeName(record)}`}
               />
             </Tooltip>
@@ -458,6 +469,8 @@ export default function CEOLeaveInboxPage() {
         onCancel={() => setRejecting(null)}
         onSubmit={submitReject}
       />
+
+      {previewModal}
     </>
   );
 }

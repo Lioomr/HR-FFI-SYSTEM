@@ -36,6 +36,40 @@ Keep this behavior:
 - Keep `core.pdf.render_request_pdf(...)` only as the fallback when the pair
   cannot be resolved.
 
+## Company Branding
+
+Mapped request PDFs select a paired template from
+`company_templates/<ORGANIZATION_CODE>/` using the request employee's company.
+The resolver checks `HR_TEMPLATES_DIR` first and then bundled
+`Backend/static/pdf_templates`, while keeping each template beside its own
+field map. FFI continues to use the default templates. A non-FFI company must
+resolve a complete branded PDF/map pair; the renderer never substitutes an FFI
+template when that pair is missing. An incomplete mounted company pair may
+fall through to the complete bundled pair for the same company.
+
+The HR template library uses the active company selected in
+`x-active-company-id`. FFI resolves the default catalog PDFs; Athroya and Aseco
+Pro resolve the matching files under `company_templates/<ORGANIZATION_CODE>/`.
+There is no fallback from a non-FFI company to an FFI file, and the library
+requires an active company (head-office context has no aggregate template view).
+
+Branded variants are generated with
+`python manage.py generate_company_pdf_templates` from the source logos in
+`company_logos/`. The command creates a variant for every catalog PDF for both
+companies. Six mapped request forms retain their paired field maps; the other
+six forms are branded blank copies rendered with the shared FFI layouts. Current
+palette: FFI orange (`#FF5A00`), Athroya teal (`#01424D`), and Aseco Pro blue
+(`#123B82`). Athroya's English company name is printed beside its Arabic logo.
+The Aseco Pro logo asset is reduced to 90% within its existing canvas. Regenerate
+the variants whenever a source logo, palette, or source form layout changes.
+Branded job offers use entity-neutral validity wording unless an approved legal
+company name is supplied.
+
+The bundled per-company pairs currently cover leave, loan, exit permission,
+annual entitlements, job offer, and starting-work acknowledgment PDFs. Forms
+without an approved field map remain outside this renderer and need their own
+measured template/map before they can use company-specific variants.
+
 ## Signatures
 
 `Backend/core/pdf_signers.py` resolves a signature from the actor the workflow
@@ -88,9 +122,10 @@ Fallbacks: `leaves/views.py::_build_leave_request_pdf_fallback`,
 `loans/views.py::_build_loan_request_pdf_fallback`,
 `job_offers/pdf.py::_fallback_pdf`, `job_offers/starting_work_pdf.py::_fallback_pdf`.
 
-**Blocked forms**: `asset_damage_report`, `asset_return_request`, and
-`rent_agreement` have no supplied field map. Do not author one without measuring
-it against the actual PDF and attaching visual evidence.
+**Blocked fill maps**: `asset_damage_report`, `asset_return_request`, and
+`rent_agreement` have no supplied field map. Their blank library PDFs are
+company-branded, but do not add fill coordinates without measuring against the
+actual PDF and attaching visual evidence.
 
 **Job offer approvals**: the internal HR and CEO each have an open signature
 area plus visible name and date fields. The external applicant has no signature

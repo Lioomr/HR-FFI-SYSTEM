@@ -4,11 +4,12 @@ import {
   Button,
   Card,
   Descriptions,
-  Divider,
   Alert,
   Tag,
   Modal,
   Input,
+  Space,
+  Typography,
   notification,
 } from "antd";
 import {
@@ -31,6 +32,8 @@ import {
   sendLeaveRequestToCEO,
   hrCancelLeaveRequest,
   getCEOLeaveRequest,
+  approveCEOLeaveRequest,
+  rejectCEOLeaveRequest,
   getCEOLeaveRequestDocumentBlob,
   getCEOLeaveRequestPdfBlob,
   getLeaveRequestDocumentBlob,
@@ -41,11 +44,11 @@ import { isApiError } from "../../../services/api/apiTypes";
 import { useI18n } from "../../../i18n/useI18n";
 import LeaveApprovalMap from "../../../components/leaves/LeaveApprovalMap";
 import RequestObligationsPanel from "../../../components/requests/RequestObligationsPanel";
-import {
-  downloadBlob,
-  openOrDownloadBlob,
-  previewBlob,
-} from "../../../utils/download";
+import ApprovalActions from "../../../components/ceo/ApprovalActions";
+import RejectReasonModal from "../../../components/ceo/RejectReasonModal";
+import StickyDecisionBar from "../../../components/ceo/StickyDecisionBar";
+import { useFilePreview } from "../../../components/ui/useFilePreview";
+import { downloadBlob } from "../../../utils/download";
 
 const { confirm } = Modal;
 const { TextArea } = Input;
@@ -85,6 +88,11 @@ export default function LeaveRequestDetailsPage({
   const [rejectionReason, setRejectionReason] = useState("");
   const [cancelModalVisible, setCancelModalVisible] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
+  const [ceoApproveOpen, setCeoApproveOpen] = useState(false);
+  const [waiverReason, setWaiverReason] = useState("");
+  const [waiverError, setWaiverError] = useState<string | null>(null);
+  const [ceoRejectOpen, setCeoRejectOpen] = useState(false);
+  const { openPreview, previewModal } = useFilePreview();
 
   const loadData = useCallback(async () => {
     if (!id) return;
@@ -178,17 +186,27 @@ export default function LeaveRequestDetailsPage({
     });
   };
 
-  const openDocument = async (download: boolean) => {
+  const loadDocument = (id: number, download: boolean) =>
+    isCEO
+      ? getCEOLeaveRequestDocumentBlob(id, download)
+      : getLeaveRequestDocumentBlob(id, download);
+
+  const previewDocument = () => {
+    if (!request) return;
+    openPreview({
+      title: t("common.document"),
+      filename: `leave_request_${request.id}_document`,
+      load: () => loadDocument(request.id, false),
+    });
+  };
+
+  const downloadDocument = async () => {
     if (!request) return;
     setDocumentLoading(true);
     try {
-      const blob = isCEO
-        ? await getCEOLeaveRequestDocumentBlob(request.id, download)
-        : await getLeaveRequestDocumentBlob(request.id, download);
-      openOrDownloadBlob(
-        blob,
+      downloadBlob(
+        await loadDocument(request.id, true),
         `leave_request_${request.id}_document`,
-        download,
       );
     } catch {
       notification.error({
@@ -218,30 +236,93 @@ export default function LeaveRequestDetailsPage({
     }
   };
 
-  const previewPdf = async () => {
+  const previewPdf = () => {
     if (!request) return;
-    // Opening the tab synchronously keeps the browser from blocking the PDF
-    // once the authenticated request has completed.
-    const previewTab = window.open("about:blank", "_blank");
-    setPdfLoading(true);
+    openPreview({
+      title: t("leave.requestDetailsTitle", { id: request.id }),
+      filename: `leave_request_${request.id}.pdf`,
+      load: () =>
+        isCEO
+          ? getCEOLeaveRequestPdfBlob(request.id, false)
+          : getLeaveRequestPdfBlob(request.id, false),
+    });
+  };
+
+  // ── CEO decision ──────────────────────────────────────────────────────────
+  // Once decided, the request leaves the CEO queue (and this endpoint), so a
+  // successful decision returns to the inbox instead of reloading.
+  const blockerCount = request?.obligations_summary?.blocking_open || 0;
+
+  const closeCeoApprove = () => {
+    if (processing) return;
+    setCeoApproveOpen(false);
+    setWaiverReason("");
+    setWaiverError(null);
+  };
+
+  const submitCeoApprove = async () => {
+    if (!request) return;
+    const trimmedWaiver = waiverReason.trim();
+    if (blockerCount > 0 && !trimmedWaiver) {
+      setWaiverError(
+        t("obligations.waiverRequired", "Waiver reason is required."),
+      );
+      return;
+    }
+    setProcessing(true);
     try {
-      const blob = isCEO
-        ? await getCEOLeaveRequestPdfBlob(request.id, false)
-        : await getLeaveRequestPdfBlob(request.id, false);
-      if (!(await previewBlob(blob, previewTab))) {
+      const res = await approveCEOLeaveRequest(
+        request.id,
+        undefined,
+        trimmedWaiver || undefined,
+      );
+      if (isApiError(res)) {
         notification.error({
           message: t("common.error"),
-          description: t("leave.pdfDownloadFailed"),
+          description: res.message,
         });
+        return;
       }
+      notification.success({
+        message: t(
+          "leave.ceoApproveSuccess",
+          "Approved and sent to HR for completion.",
+        ),
+      });
+      setCeoApproveOpen(false);
+      navigate("/ceo/leave/requests");
     } catch {
-      previewTab?.close();
       notification.error({
         message: t("common.error"),
-        description: t("leave.pdfDownloadFailed"),
+        description: t("common.tryAgain"),
       });
     } finally {
-      setPdfLoading(false);
+      setProcessing(false);
+    }
+  };
+
+  const submitCeoReject = async (reason: string) => {
+    if (!request) return;
+    setProcessing(true);
+    try {
+      const res = await rejectCEOLeaveRequest(request.id, reason);
+      if (isApiError(res)) {
+        notification.error({
+          message: t("common.error"),
+          description: res.message,
+        });
+        return;
+      }
+      notification.success({ message: t("leave.rejected") });
+      setCeoRejectOpen(false);
+      navigate("/ceo/leave/requests");
+    } catch {
+      notification.error({
+        message: t("common.error"),
+        description: t("common.tryAgain"),
+      });
+    } finally {
+      setProcessing(false);
     }
   };
 
@@ -335,6 +416,9 @@ export default function LeaveRequestDetailsPage({
     !isCEO &&
     ["submitted", "pending_hr"].includes(request.status?.toLowerCase() ?? "");
   const canSendToCEO = !isCEO && canAction;
+  const canCeoDecide = isCEO && request.status?.toLowerCase() === "pending_ceo";
+  const employeeName =
+    request.employee?.full_name || `ID: ${request.employee?.id}`;
   // Employees cannot cancel their own leave; HR cancels any request in progress or already approved.
   const canHrCancel =
     [
@@ -386,11 +470,7 @@ export default function LeaveRequestDetailsPage({
         tags={<Tag color={statusColor()}>{statusLabel}</Tag>}
         actions={
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <Button
-              icon={<EyeOutlined />}
-              onClick={previewPdf}
-              loading={pdfLoading}
-            >
+            <Button icon={<EyeOutlined />} onClick={previewPdf}>
               {t("common.preview")}
             </Button>
             <Button
@@ -418,7 +498,7 @@ export default function LeaveRequestDetailsPage({
         <Card style={{ borderRadius: 16 }} title={t("common.details")}>
           <Descriptions bordered column={1}>
             <Descriptions.Item label={t("common.employee")}>
-              {request.employee?.full_name || `ID: ${request.employee?.id}`}
+              {employeeName}
             </Descriptions.Item>
             <Descriptions.Item label={t("leave.type")}>
               {translateLeaveType(request.leave_type?.name)}
@@ -435,16 +515,12 @@ export default function LeaveRequestDetailsPage({
             <Descriptions.Item label={t("common.document")}>
               {request.document ? (
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                  <Button
-                    icon={<EyeOutlined />}
-                    onClick={() => openDocument(false)}
-                    loading={documentLoading}
-                  >
+                  <Button icon={<EyeOutlined />} onClick={previewDocument}>
                     {t("common.preview")}
                   </Button>
                   <Button
                     icon={<DownloadOutlined />}
-                    onClick={() => openDocument(true)}
+                    onClick={downloadDocument}
                     loading={documentLoading}
                   >
                     {t("common.download")}
@@ -488,7 +564,7 @@ export default function LeaveRequestDetailsPage({
                   "-"}
               </Descriptions.Item>
             )}
-            {request.status === "pending_ceo" && (
+            {request.status === "pending_ceo" && !isCEO && (
               <Descriptions.Item
                 label={t("leave.statusNote")}
                 contentStyle={{ color: "#d4380d" }}
@@ -497,62 +573,130 @@ export default function LeaveRequestDetailsPage({
               </Descriptions.Item>
             )}
           </Descriptions>
-
-          {(canAction || canHrCancel) && (
-            <>
-              <Divider />
-              <div
-                style={{
-                  display: "flex",
-                  gap: 16,
-                  justifyContent: "flex-end",
-                  flexWrap: "wrap",
-                }}
-              >
-                {canHrCancel && (
-                  <Button
-                    danger
-                    type="text"
-                    onClick={() => setCancelModalVisible(true)}
-                    disabled={processing}
-                  >
-                    {t("leave.cancel")}
-                  </Button>
-                )}
-                {canSendToCEO && (
-                  <Button
-                    icon={<ExportOutlined />}
-                    onClick={handleSendToCEO}
-                    disabled={processing}
-                  >
-                    {t("leave.sendToCeoBtn")}
-                  </Button>
-                )}
-                {canAction && (
-                  <>
-                    <Button
-                      danger
-                      icon={<CloseCircleOutlined />}
-                      onClick={() => setRejectModalVisible(true)}
-                      disabled={processing}
-                    >
-                      {t("leave.reject")}
-                    </Button>
-                    <Button
-                      type="primary"
-                      icon={<CheckCircleOutlined />}
-                      onClick={handleApprove}
-                      loading={processing}
-                    >
-                      {t("leave.approve")}
-                    </Button>
-                  </>
-                )}
-              </div>
-            </>
-          )}
         </Card>
       </div>
+
+      {canCeoDecide && (
+        <StickyDecisionBar>
+          <ApprovalActions
+            size="large"
+            subjectLabel={employeeName}
+            approveLoading={processing && ceoApproveOpen}
+            disabled={processing}
+            onApprove={() => setCeoApproveOpen(true)}
+            onReject={() => setCeoRejectOpen(true)}
+          />
+        </StickyDecisionBar>
+      )}
+
+      {(canAction || canHrCancel) && (
+        <StickyDecisionBar hint={canAction ? undefined : null}>
+          <Space size={8} wrap>
+            {canHrCancel && (
+              <Button
+                danger
+                type="text"
+                onClick={() => setCancelModalVisible(true)}
+                disabled={processing}
+              >
+                {t("leave.cancel")}
+              </Button>
+            )}
+            {canSendToCEO && (
+              <Button
+                icon={<ExportOutlined />}
+                onClick={handleSendToCEO}
+                disabled={processing}
+              >
+                {t("leave.sendToCeoBtn")}
+              </Button>
+            )}
+            {canAction && (
+              <>
+                <Button
+                  danger
+                  icon={<CloseCircleOutlined />}
+                  onClick={() => setRejectModalVisible(true)}
+                  disabled={processing}
+                >
+                  {t("leave.reject")}
+                </Button>
+                <Button
+                  type="primary"
+                  icon={<CheckCircleOutlined />}
+                  onClick={handleApprove}
+                  loading={processing}
+                >
+                  {t("leave.approve")}
+                </Button>
+              </>
+            )}
+          </Space>
+        </StickyDecisionBar>
+      )}
+
+      {previewModal}
+
+      {/* CEO approve — carries the blocking-obligation waiver when required */}
+      <Modal
+        open={ceoApproveOpen}
+        title={t("ceo.leaveApprovals.approveTitle")}
+        okText={t("common.approve")}
+        okButtonProps={{ loading: processing }}
+        cancelText={t("common.cancel")}
+        cancelButtonProps={{ disabled: processing }}
+        onOk={submitCeoApprove}
+        onCancel={closeCeoApprove}
+        closable={!processing}
+        maskClosable={!processing}
+        destroyOnHidden
+      >
+        <Space direction="vertical" size={12} style={{ width: "100%" }}>
+          <Typography.Text strong>
+            {employeeName} — {request.days} {t("leave.days")}
+          </Typography.Text>
+          {blockerCount > 0 && (
+            <>
+              <Alert
+                type="warning"
+                showIcon
+                style={{ borderRadius: 10 }}
+                message={t(
+                  "obligations.ceoWaiverRequired",
+                  { count: blockerCount },
+                  "{count} blocking obligation(s) remain. Enter a CEO waiver reason to approve.",
+                )}
+              />
+              <TextArea
+                rows={3}
+                autoFocus
+                value={waiverReason}
+                disabled={processing}
+                status={waiverError ? "error" : undefined}
+                placeholder={t("obligations.waiverReason", "Waiver reason")}
+                aria-label={t("obligations.waiverReason", "Waiver reason")}
+                onChange={(event) => {
+                  setWaiverReason(event.target.value);
+                  if (waiverError) setWaiverError(null);
+                }}
+              />
+              {waiverError && (
+                <Typography.Text type="danger">{waiverError}</Typography.Text>
+              )}
+            </>
+          )}
+        </Space>
+      </Modal>
+
+      <RejectReasonModal
+        open={ceoRejectOpen}
+        title={t("ceo.leaveApprovals.rejectTitle")}
+        subject={employeeName}
+        confirmText={t("ceo.leaveApprovals.rejectConfirm")}
+        loading={processing}
+        onCancel={() => setCeoRejectOpen(false)}
+        onSubmit={submitCeoReject}
+      />
 
       {/* Reject Modal */}
       <Modal

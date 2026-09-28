@@ -5,7 +5,13 @@ from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 
 from core.pdf import font_pair, shape_ar
-from core.pdf_forms import FormAssets, load_form_assets, log_signature_diagnostics, render_mapped_form
+from core.pdf_forms import (
+    FormAssets,
+    load_form_assets,
+    log_signature_diagnostics,
+    render_mapped_form,
+    request_company_code,
+)
 from core.pdf_signers import signer_signatures
 
 from .models import JobOffer
@@ -135,12 +141,13 @@ def _load_field_map() -> dict:
     return assets.fields if assets else {}
 
 
-def _load_form_assets() -> FormAssets | None:
+def _load_form_assets(*, company_code: str | None = None) -> FormAssets | None:
     return load_form_assets(
         TEMPLATE_FILENAME,
         FIELD_MAP_FILENAME,
         aliases=TEMPLATE_ALIASES,
         required_keys=REQUIRED_FIELD_KEYS,
+        company_code=company_code,
     )
 
 
@@ -199,7 +206,8 @@ def _fallback_pdf(offer: JobOffer) -> bytes:
 def build_job_offer_pdf(offer: JobOffer) -> bytes:
     """Render the mapped offer, falling back only when its paired asset is absent."""
 
-    assets = _load_form_assets()
+    company_code = request_company_code(offer)
+    assets = _load_form_assets(company_code=company_code) if company_code else _load_form_assets()
     if assets is None:
         return _fallback_pdf(offer)
     signatures = signer_signatures(build_job_offer_signers(offer))

@@ -8,7 +8,13 @@ from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 
 from core.pdf import font_pair, shape_ar
-from core.pdf_forms import FormAssets, load_form_assets, log_signature_diagnostics, render_mapped_form
+from core.pdf_forms import (
+    FormAssets,
+    load_form_assets,
+    log_signature_diagnostics,
+    render_mapped_form,
+    request_company_code,
+)
 from core.pdf_signers import signer_signatures
 from employees.models import EmployeeProfile
 
@@ -145,12 +151,13 @@ def build_starting_work_signers(data: StartingWorkAcknowledgmentData) -> dict[st
     }
 
 
-def load_starting_work_form_assets() -> FormAssets | None:
+def load_starting_work_form_assets(*, company_code: str | None = None) -> FormAssets | None:
     return load_form_assets(
         TEMPLATE_FILENAME,
         FIELD_MAP_FILENAME,
         aliases=TEMPLATE_ALIASES,
         required_keys=REQUIRED_FIELD_KEYS,
+        company_code=company_code,
     )
 
 
@@ -192,7 +199,8 @@ def build_starting_work_acknowledgment_pdf(
 
     data = data or StartingWorkAcknowledgmentData(start_date=profile.hire_date)
     values = starting_work_field_values(profile, data)
-    assets = load_starting_work_form_assets()
+    company_code = request_company_code(profile)
+    assets = load_starting_work_form_assets(company_code=company_code) if company_code else load_starting_work_form_assets()
     if assets is None:
         return _fallback_pdf(profile, data)
     signatures = signer_signatures(build_starting_work_signers(data))

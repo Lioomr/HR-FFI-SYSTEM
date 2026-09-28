@@ -175,6 +175,26 @@ describe("StartingWorkAcknowledgmentDetailPage actions", () => {
     ).toBeInTheDocument();
   });
 
+  it("pins the decision in the sticky bar, not the page header", async () => {
+    render(<StartingWorkAcknowledgmentDetailPage />);
+
+    const bar = await screen.findByRole("region", { name: "Decision actions" });
+    expect(within(bar).getByText("Awaiting your decision")).toBeInTheDocument();
+    expect(
+      within(bar).getByRole("button", { name: "Approve BioTime Verification" }),
+    ).toBeEnabled();
+    expect(
+      within(bar).getByRole("button", { name: "Reject Verification" }),
+    ).toBeEnabled();
+    expect(
+      screen.getAllByRole("button", { name: "Approve BioTime Verification" }),
+    ).toHaveLength(1);
+    // Download is not a decision, so it stays with the page actions.
+    expect(
+      within(bar).queryByRole("button", { name: "Download Acknowledgment" }),
+    ).not.toBeInTheDocument();
+  });
+
   it("renders no decision action when the backend allows none", async () => {
     getAcknowledgment.mockResolvedValue(
       ok(
@@ -197,6 +217,9 @@ describe("StartingWorkAcknowledgmentDetailPage actions", () => {
     ).not.toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "Download Acknowledgment" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("region", { name: "Decision actions" }),
     ).not.toBeInTheDocument();
   });
 
@@ -224,8 +247,8 @@ describe("StartingWorkAcknowledgmentDetailPage actions", () => {
       name: "Approve BioTime Verification",
     });
     expect(
-      screen.queryByRole("button", { name: "Reject Verification" }),
-    ).not.toBeInTheDocument();
+      screen.getByRole("button", { name: "Reject Verification" }),
+    ).toBeDisabled();
 
     fireEvent.click(approve);
 
@@ -253,6 +276,62 @@ describe("StartingWorkAcknowledgmentDetailPage actions", () => {
       blob,
       "starting_work_acknowledgment_FFI-064303-20260830.pdf",
     );
+  });
+});
+
+describe("StartingWorkAcknowledgmentDetailPage approval progress", () => {
+  it("shows the HR stage waiting on the named approver", async () => {
+    getAcknowledgment.mockResolvedValue(
+      ok(
+        makeAcknowledgment({
+          workflow: makeWorkflow({
+            can_approve: true,
+            can_reject: true,
+            current_actor: { id: 3, full_name: "Huda Ali" },
+          }),
+        }),
+      ),
+    );
+
+    render(<StartingWorkAcknowledgmentDetailPage />);
+
+    expect(
+      await screen.findByText("BioTime Verification Workflow"),
+    ).toBeInTheDocument();
+    const current = document.querySelector('[aria-current="step"]');
+    expect(current).not.toBeNull();
+    expect(
+      within(current as HTMLElement).getByText("Waiting for Huda Ali"),
+    ).toBeInTheDocument();
+  });
+
+  it("marks the HR stage rejected with the recorded reviewer", async () => {
+    getAcknowledgment.mockResolvedValue(
+      ok(
+        makeAcknowledgment({
+          status: "rejected",
+          status_label: "Rejected",
+          actions: makeActions({ can_approve: true }),
+          workflow: makeWorkflow({
+            status: "rejected",
+            current_stage: null,
+            history: [
+              {
+                action: "reject",
+                from_stage: "hr",
+                actor_name: "Huda Ali",
+                timestamp: "2026-08-25T08:00:00Z",
+                note: "BioTime attendance could not be verified.",
+              },
+            ],
+          }),
+        }),
+      ),
+    );
+
+    render(<StartingWorkAcknowledgmentDetailPage />);
+
+    expect(await screen.findByText("Handled by Huda Ali")).toBeInTheDocument();
   });
 });
 

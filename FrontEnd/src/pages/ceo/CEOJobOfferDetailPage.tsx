@@ -26,6 +26,8 @@ import {
 } from "@ant-design/icons";
 
 import ApprovalActions from "../../components/ceo/ApprovalActions";
+import StickyDecisionBar from "../../components/ceo/StickyDecisionBar";
+import { useFilePreview } from "../../components/ui/useFilePreview";
 import ErrorState from "../../components/ui/ErrorState";
 import LoadingState from "../../components/ui/LoadingState";
 import PageHeader from "../../components/ui/PageHeader";
@@ -49,7 +51,6 @@ import {
   isNotFound,
 } from "../../services/api/httpErrors";
 import { triggerBlobDownload } from "../../services/api/downloads";
-import { previewBlob } from "../../utils/download";
 import {
   listDepartments,
   type Department,
@@ -182,7 +183,7 @@ export default function CEOJobOfferDetailPage() {
   const [forbidden, setForbidden] = useState(false);
   const [deciding, setDeciding] = useState(false);
   const [downloading, setDownloading] = useState(false);
-  const [cvPreviewing, setCvPreviewing] = useState(false);
+  const { openPreview, previewModal } = useFilePreview();
   const [editing, setEditing] = useState(false);
   const [savingTerms, setSavingTerms] = useState(false);
   const [termsError, setTermsError] = useState<string | null>(null);
@@ -410,28 +411,13 @@ export default function CEOJobOfferDetailPage() {
     }
   }, [id, messageApi, t, reportActionError]);
 
-  /**
-   * Opens the CV in a new tab. A Word document cannot render there, so it falls
-   * back to a download rather than leaving the user on a blank viewer. The tab
-   * is opened synchronously so the browser does not block it as a popup once
-   * the bytes have been fetched.
-   */
-  const handleCvPreview = useCallback(async () => {
-    const tab = window.open("about:blank", "_blank");
-    setCvPreviewing(true);
-    try {
-      const blob = await downloadJobOfferCv(id!);
-      if (!(await previewBlob(blob, tab))) {
-        triggerBlobDownload(blob, `job_offer_${id}_cv`);
-        messageApi.info(t("jobOffers.cv.previewUnavailable"));
-      }
-    } catch (err: unknown) {
-      tab?.close();
-      messageApi.error(reportActionError(err, "jobOffers.cv.failed"));
-    } finally {
-      setCvPreviewing(false);
-    }
-  }, [id, messageApi, t, reportActionError]);
+  /** Shows the CV in-app; a Word document offers a download instead. */
+  const handleCvPreview = () =>
+    openPreview({
+      title: t("jobOffers.action.previewCv"),
+      filename: `job_offer_${id}_cv`,
+      load: () => downloadJobOfferCv(id!),
+    });
 
   const departmentOptions = useMemo(
     () =>
@@ -520,7 +506,6 @@ export default function CEOJobOfferDetailPage() {
               <>
                 <Button
                   icon={<EyeOutlined aria-hidden />}
-                  loading={cvPreviewing}
                   onClick={handleCvPreview}
                   style={{ borderRadius: 10, minHeight: 40 }}
                 >
@@ -603,7 +588,6 @@ export default function CEOJobOfferDetailPage() {
                 <Space size={8} wrap>
                   <Button
                     icon={<EyeOutlined aria-hidden />}
-                    loading={cvPreviewing}
                     onClick={handleCvPreview}
                     style={{ borderRadius: 10 }}
                   >
@@ -990,41 +974,9 @@ export default function CEOJobOfferDetailPage() {
             ) : null}
 
             {actionable ? (
-              <div style={{ marginTop: offer.ceo_decision_at ? 16 : 0 }}>
-                <Text
-                  type="secondary"
-                  style={{ display: "block", marginBottom: 16 }}
-                >
-                  {t("jobOffers.ceo.decisionHint")}
-                </Text>
-                <ApprovalActions
-                  size="middle"
-                  block
-                  onApprove={handleApprove}
-                  onReject={() => {
-                    setDecisionError(null);
-                    setPending("reject");
-                  }}
-                  approveLoading={deciding}
-                  approveDisabled={!approvable}
-                  rejectDisabled={!rejectable}
-                  subjectLabel={offer.candidate_full_name}
-                />
-                {revisable && (
-                  <Button
-                    block
-                    onClick={() => {
-                      setDecisionError(null);
-                      setPending("request_changes");
-                    }}
-                    disabled={deciding}
-                    aria-label={`${t("jobOffers.approval.requestChanges")}: ${offer.candidate_full_name}`}
-                    style={{ borderRadius: 8, fontWeight: 600, marginTop: 8 }}
-                  >
-                    {t("jobOffers.approval.requestChanges")}
-                  </Button>
-                )}
-              </div>
+              <Text type="secondary" style={{ display: "block" }}>
+                {t("jobOffers.ceo.decisionHint")}
+              </Text>
             ) : (
               // Already decided elsewhere, or never this approver's to make.
               <Alert
@@ -1047,6 +999,41 @@ export default function CEOJobOfferDetailPage() {
           </Surface>
         </Col>
       </Row>
+
+      {actionable && (
+        <StickyDecisionBar>
+          <Space size={8} wrap>
+            <ApprovalActions
+              size="large"
+              onApprove={handleApprove}
+              onReject={() => {
+                setDecisionError(null);
+                setPending("reject");
+              }}
+              approveLoading={deciding}
+              approveDisabled={!approvable}
+              rejectDisabled={!rejectable}
+              subjectLabel={offer.candidate_full_name}
+            />
+            {revisable && (
+              <Button
+                size="large"
+                onClick={() => {
+                  setDecisionError(null);
+                  setPending("request_changes");
+                }}
+                disabled={deciding}
+                aria-label={`${t("jobOffers.approval.requestChanges")}: ${offer.candidate_full_name}`}
+                style={{ borderRadius: 8, fontWeight: 600 }}
+              >
+                {t("jobOffers.approval.requestChanges")}
+              </Button>
+            )}
+          </Space>
+        </StickyDecisionBar>
+      )}
+
+      {previewModal}
 
       <JobOfferDecisionModal
         open={pending !== null}

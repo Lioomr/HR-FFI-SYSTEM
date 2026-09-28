@@ -14,8 +14,6 @@ import {
 } from "antd";
 import {
   ArrowLeftOutlined,
-  CheckCircleOutlined,
-  CloseCircleOutlined,
   DownloadOutlined,
   ReloadOutlined,
 } from "@ant-design/icons";
@@ -25,6 +23,10 @@ import LoadingState from "../../../components/ui/LoadingState";
 import PageHeader from "../../../components/ui/PageHeader";
 import StartingWorkStatusTag from "../../../components/hr/StartingWorkStatusTag";
 import StartingWorkWorkflowHistory from "../../../components/hr/StartingWorkWorkflowHistory";
+import ApprovalActions from "../../../components/ceo/ApprovalActions";
+import StickyDecisionBar from "../../../components/ceo/StickyDecisionBar";
+import ApprovalFlowMap from "../../../components/requests/ApprovalFlowMap";
+import { buildStagesFromWorkflow } from "../../../components/requests/workflowPresentation";
 import Unauthorized403Page from "../../Unauthorized403Page";
 
 import { isApiError } from "../../../services/api/apiTypes";
@@ -40,15 +42,48 @@ import {
   approveStartingWorkAcknowledgment,
   downloadStartingWorkAcknowledgmentPdf,
   getStartingWorkAcknowledgment,
+  historyEntryActorName,
+  historyEntryTimestamp,
   rejectStartingWorkAcknowledgment,
   workflowActorName,
   type StartingWorkAcknowledgment,
   type StartingWorkReviewer,
+  type StartingWorkWorkflow,
 } from "../../../services/api/startingWorkAcknowledgmentsApi";
 import { useI18n } from "../../../i18n/useI18n";
+import type { WorkflowSnapshot } from "../../../types/workflow";
 import { formatDateOnly, formatDateTimeShort } from "../../../utils/dateTime";
 
 const { Text } = Typography;
+
+/** The single stage of the backend `starting_work_acknowledgment` workflow. */
+const WORKFLOW_STAGES = ["hr"];
+
+/**
+ * Reads this API's tolerant workflow shape (flat `actor_name`, `timestamp`,
+ * string actors) into the snapshot the shared approval map expects.
+ */
+function toWorkflowSnapshot(workflow: StartingWorkWorkflow): WorkflowSnapshot {
+  const currentActor = workflowActorName(workflow.current_actor);
+  return {
+    status: workflow.status as WorkflowSnapshot["status"],
+    current_stage: workflow.current_stage || undefined,
+    current_actor: currentActor ? { id: 0, full_name: currentActor } : null,
+    history: (workflow.history || []).map((entry) => {
+      const actor = historyEntryActorName(entry);
+      return {
+        action: entry.action,
+        stage: entry.stage || undefined,
+        from_stage: entry.from_stage || undefined,
+        to_stage: entry.to_stage || undefined,
+        to_status: entry.to_status || undefined,
+        note: entry.note || undefined,
+        at: historyEntryTimestamp(entry),
+        actor: actor ? { id: 0, full_name: actor } : null,
+      };
+    }),
+  };
+}
 
 function Surface({
   children,
@@ -292,6 +327,13 @@ export default function StartingWorkAcknowledgmentDetailPage() {
     can_download: false,
   };
   const currentApprover = workflowActorName(record.workflow?.current_actor);
+  const workflowStages = record.workflow
+    ? buildStagesFromWorkflow(
+        toWorkflowSnapshot(record.workflow),
+        WORKFLOW_STAGES,
+        t,
+      )
+    : null;
 
   return (
     <div style={{ maxWidth: 1200, margin: "0 auto", paddingBottom: 24 }}>
@@ -333,28 +375,6 @@ export default function StartingWorkAcknowledgmentDetailPage() {
                 style={{ borderRadius: 10, minHeight: 40 }}
               >
                 {t("startingWork.action.download")}
-              </Button>
-            )}
-            {actions.can_reject && (
-              <Button
-                danger
-                icon={<CloseCircleOutlined aria-hidden />}
-                disabled={deciding}
-                onClick={openReject}
-                style={{ borderRadius: 10, minHeight: 40 }}
-              >
-                {t("startingWork.action.reject")}
-              </Button>
-            )}
-            {actions.can_approve && (
-              <Button
-                type="primary"
-                icon={<CheckCircleOutlined aria-hidden />}
-                loading={deciding && !rejectOpen}
-                onClick={handleApprove}
-                style={{ borderRadius: 10, minHeight: 40, fontWeight: 600 }}
-              >
-                {t("startingWork.action.approve")}
               </Button>
             )}
           </div>
@@ -500,10 +520,41 @@ export default function StartingWorkAcknowledgmentDetailPage() {
                 {`${t("startingWork.workflow.currentActor")}: ${currentApprover || "—"}`}
               </Text>
             </Space>
+            {workflowStages && (
+              <div style={{ marginBottom: 16 }}>
+                <ApprovalFlowMap
+                  eyebrow={t(
+                    "startingWork.approvalMap.eyebrow",
+                    "BioTime Verification Workflow",
+                  )}
+                  title={t(
+                    "startingWork.approvalMap.title",
+                    "Approval Progress",
+                  )}
+                  stages={workflowStages}
+                  t={t}
+                />
+              </div>
+            )}
             <StartingWorkWorkflowHistory history={record.workflow?.history} />
           </Surface>
         </Col>
       </Row>
+
+      {(actions.can_approve || actions.can_reject) && (
+        <StickyDecisionBar>
+          <ApprovalActions
+            size="large"
+            approveLabel={t("startingWork.action.approve")}
+            rejectLabel={t("startingWork.action.reject")}
+            onApprove={handleApprove}
+            onReject={openReject}
+            approveLoading={deciding && !rejectOpen}
+            approveDisabled={!actions.can_approve}
+            rejectDisabled={!actions.can_reject || deciding}
+          />
+        </StickyDecisionBar>
+      )}
 
       <Modal
         open={rejectOpen}

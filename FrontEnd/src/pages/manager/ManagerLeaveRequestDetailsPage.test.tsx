@@ -13,6 +13,7 @@ vi.mock("../../services/api/managerApi", async (importOriginal) => ({
   getManagerLeaveRequest: vi.fn(),
   approveLeaveRequestManager: vi.fn(),
   rejectLeaveRequestManager: vi.fn(),
+  getManagerLeaveRequestDocumentBlob: vi.fn(),
 }));
 
 // The obligations panel talks to its own endpoints and is out of scope here.
@@ -24,6 +25,7 @@ import ManagerLeaveRequestDetailsPage from "./ManagerLeaveRequestDetailsPage";
 import {
   approveLeaveRequestManager,
   getManagerLeaveRequest,
+  getManagerLeaveRequestDocumentBlob,
   rejectLeaveRequestManager,
   type ManagerLeaveRequest,
 } from "../../services/api/managerApi";
@@ -33,6 +35,7 @@ import { useI18nStore } from "../../i18n/i18nStore";
 const mockedFetch = vi.mocked(getManagerLeaveRequest);
 const mockedApprove = vi.mocked(approveLeaveRequestManager);
 const mockedReject = vi.mocked(rejectLeaveRequestManager);
+const mockedDocument = vi.mocked(getManagerLeaveRequestDocumentBlob);
 
 const BASE: ManagerLeaveRequest = {
   id: 9,
@@ -89,14 +92,15 @@ describe("ManagerLeaveRequestDetailsPage", () => {
     expect(screen.getByText("Approval trail")).toBeInTheDocument();
   });
 
-  it("offers approve and reject while the manager is the deciding approver", async () => {
+  it("offers approve and reject in the sticky decision bar while the manager decides", async () => {
     renderPage();
 
+    const bar = await screen.findByRole("region", { name: "Decision actions" });
     expect(
-      await screen.findByRole("button", { name: "Approve: Sara Idris" }),
+      within(bar).getByRole("button", { name: "Approve: Sara Idris" }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Reject: Sara Idris" }),
+      within(bar).getByRole("button", { name: "Reject: Sara Idris" }),
     ).toBeInTheDocument();
   });
 
@@ -119,6 +123,35 @@ describe("ManagerLeaveRequestDetailsPage", () => {
     expect(
       screen.queryByRole("button", { name: "Reject: Sara Idris" }),
     ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("region", { name: "Decision actions" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("previews the attached document inside the app, not in a new tab", async () => {
+    const openSpy = vi.spyOn(window, "open").mockReturnValue(null);
+    mockedFetch.mockResolvedValue({
+      status: "success",
+      data: { ...BASE, document: "/media/leave/9.txt" },
+    });
+    // Not a PDF or image, so the modal falls back to its download notice.
+    mockedDocument.mockResolvedValue(
+      new Blob(["plain"], { type: "text/plain" }),
+    );
+
+    renderPage();
+
+    fireEvent.click(await screen.findByRole("button", { name: /Preview/ }));
+
+    const dialog = await screen.findByRole("dialog");
+    expect(
+      await within(dialog).findByText(
+        "This file cannot be previewed here. Download it to view.",
+      ),
+    ).toBeInTheDocument();
+    expect(mockedDocument).toHaveBeenCalledWith(9, false);
+    expect(openSpy).not.toHaveBeenCalled();
+    openSpy.mockRestore();
   });
 
   it("confirms an approval through a dialog", async () => {

@@ -73,6 +73,8 @@ PALETTE_RGB = {
     "muted_text": (0.420, 0.447, 0.502),
 }
 
+PDF_COMPANY_NAME = "FFI"
+
 
 _FONT_CANDIDATES = {
     "DejaVuSans": [
@@ -419,7 +421,7 @@ def render_request_pdf(doc: RequestDocument) -> bytes:
     pdf.rect(36, 48, width - 72, 2, fill=1, stroke=0)
     pdf.setFillColorRGB(*PALETTE_RGB["muted_text"])
     pdf.setFont(regular, 8)
-    pdf.drawString(36, 32, "FFI HR System")
+    pdf.drawString(36, 32, f"{PDF_COMPANY_NAME} HR")
     pdf.drawCentredString(width / 2, 32, f"Ref #{doc.reference_no}")
     pdf.drawRightString(width - 36, 32, f"Generated {doc.generated_at}")
 
@@ -469,7 +471,7 @@ def build_corporate_header(title: str, period_text: str, second_col_width: float
             [
                 logo_cell,
                 [
-                    Paragraph("FFI HR SYSTEM", subtitle_style),
+                    Paragraph(f"{PDF_COMPANY_NAME.upper()} HR", subtitle_style),
                     Paragraph(title, title_style),
                     Paragraph(period_text, subtitle_style),
                 ],

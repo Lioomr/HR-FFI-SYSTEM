@@ -16,6 +16,7 @@ import {
   Spin,
 } from "antd";
 import ResponsiveTable from "../ui/ResponsiveTable";
+import { useFilePreview } from "../ui/useFilePreview";
 import {
   UploadOutlined,
   DownloadOutlined,
@@ -946,6 +947,7 @@ export default function EmployeeDocumentArchive({
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [previewLoadingId, setPreviewLoadingId] = useState<number | null>(null);
   const previewUrlRef = useRef<string | null>(null);
+  const { openPreview, previewModal } = useFilePreview();
   const previewRequestRef = useRef(0);
 
   const [form] = Form.useForm();
@@ -1017,11 +1019,6 @@ export default function EmployeeDocumentArchive({
   const handlePreview = async (doc: EmployeeDocument) => {
     clearPreview();
     const kind = documentPreviewKind(doc.original_filename);
-    // A blob PDF inherits this app's `frame-ancestors 'none'` CSP, so Chromium
-    // blocks it inside an iframe. Open a blank native tab synchronously while
-    // the click gesture is active, then navigate it only after validation.
-    const nativePdfWindow =
-      kind === "pdf" ? window.open("about:blank", "_blank") : null;
     setPreviewTarget(doc);
     setPreviewKind(kind);
     setPreviewError(null);
@@ -1047,7 +1044,6 @@ export default function EmployeeDocumentArchive({
         (kind === "pdf" && detectedType === "application/pdf") ||
         (kind === "image" && !!detectedType?.startsWith("image/"));
       if (!isExpectedType || !detectedType) {
-        nativePdfWindow?.close();
         setPreviewError(
           t(
             "archive.previewInvalid",
@@ -1057,21 +1053,15 @@ export default function EmployeeDocumentArchive({
         return;
       }
       if (kind === "pdf") {
-        if (!nativePdfWindow || nativePdfWindow.closed) {
-          setPreviewError(
-            t(
-              "archive.previewPopupBlocked",
-              "Your browser blocked the PDF preview. Allow pop-ups for this site and try again.",
-            ),
-          );
-          return;
-        }
-        const url = URL.createObjectURL(
-          new Blob([blob], { type: detectedType }),
-        );
-        nativePdfWindow.location.href = url;
-        window.setTimeout(() => URL.revokeObjectURL(url), 5000);
+        // A blob PDF cannot render in an iframe under the app's CSP, so the
+        // validated bytes go to the shared in-app viewer (pdf.js) instead.
+        const pdf = new Blob([blob], { type: detectedType });
         closePreview();
+        openPreview({
+          title: `${t("archive.preview", "Preview document")}: ${doc.original_filename}`,
+          filename: doc.original_filename || `document_${doc.id}.pdf`,
+          load: async () => pdf,
+        });
         return;
       }
       // Use the detected MIME rather than trusting an attachment header or
@@ -1736,6 +1726,7 @@ export default function EmployeeDocumentArchive({
 
   return (
     <div style={{ marginTop: 8 }}>
+      {previewModal}
       <div
         style={{
           display: "flex",

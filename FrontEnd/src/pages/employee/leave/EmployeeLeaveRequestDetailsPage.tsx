@@ -2,8 +2,6 @@ import { useCallback, useEffect, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import {
   ArrowLeftOutlined,
-  CheckCircleOutlined,
-  CloseCircleOutlined,
   DownloadOutlined,
   EyeOutlined,
   FilePdfOutlined,
@@ -12,7 +10,6 @@ import {
   Button,
   Card,
   Descriptions,
-  Divider,
   Input,
   Modal,
   Space,
@@ -21,10 +18,13 @@ import {
   notification,
 } from "antd";
 
+import ApprovalActions from "../../../components/ceo/ApprovalActions";
+import StickyDecisionBar from "../../../components/ceo/StickyDecisionBar";
 import LeaveApprovalMap from "../../../components/leaves/LeaveApprovalMap";
 import ErrorState from "../../../components/ui/ErrorState";
 import LoadingState from "../../../components/ui/LoadingState";
 import PageHeader from "../../../components/ui/PageHeader";
+import { useFilePreview } from "../../../components/ui/useFilePreview";
 import ApprovalTimeline from "../../../components/requests/ApprovalTimeline";
 import PendingActionBanner from "../../../components/requests/PendingActionBanner";
 import RequestObligationsPanel from "../../../components/requests/RequestObligationsPanel";
@@ -40,7 +40,7 @@ import {
 import { getHttpStatus } from "../../../services/api/httpErrors";
 import { useI18n } from "../../../i18n/useI18n";
 import { formatDateTime } from "../../../utils/dateTime";
-import { downloadBlob, openOrDownloadBlob } from "../../../utils/download";
+import { downloadBlob } from "../../../utils/download";
 
 const { Text } = Typography;
 const { TextArea } = Input;
@@ -58,6 +58,7 @@ export default function EmployeeLeaveRequestDetailsPage() {
   const [processing, setProcessing] = useState(false);
   const [rejectModalVisible, setRejectModalVisible] = useState(false);
   const [rejectionReason, setRejectionReason] = useState("");
+  const { openPreview, previewModal } = useFilePreview();
 
   const translateLeaveType = (name?: string): string => {
     if (!name) return "-";
@@ -139,12 +140,21 @@ export default function EmployeeLeaveRequestDetailsPage() {
     }
   };
 
-  const handleDocumentAction = async (download: boolean) => {
+  const previewDocument = () => {
+    if (!request) return;
+    openPreview({
+      title: t("leave.previewAttachment"),
+      filename: `leave_document_${request.id}`,
+      load: () => getLeaveRequestDocumentBlob(request.id, false),
+    });
+  };
+
+  const downloadDocument = async () => {
     if (!request) return;
     setDocumentLoading(true);
     try {
-      const blob = await getLeaveRequestDocumentBlob(request.id, download);
-      openOrDownloadBlob(blob, `leave_document_${request.id}`, download);
+      const blob = await getLeaveRequestDocumentBlob(request.id, true);
+      downloadBlob(blob, `leave_document_${request.id}`);
     } catch {
       notification.error({
         message: t("common.error"),
@@ -279,16 +289,12 @@ export default function EmployeeLeaveRequestDetailsPage() {
             </Button>
             {request.document ? (
               <>
-                <Button
-                  icon={<EyeOutlined />}
-                  onClick={() => handleDocumentAction(false)}
-                  loading={documentLoading}
-                >
+                <Button icon={<EyeOutlined />} onClick={previewDocument}>
                   {t("leave.previewAttachment")}
                 </Button>
                 <Button
                   icon={<DownloadOutlined />}
-                  onClick={() => handleDocumentAction(true)}
+                  onClick={downloadDocument}
                   loading={documentLoading}
                 >
                   {t("leave.downloadAttachment")}
@@ -356,37 +362,6 @@ export default function EmployeeLeaveRequestDetailsPage() {
               </Descriptions.Item>
             ) : null}
           </Descriptions>
-
-          {canDelegateAction ? (
-            <>
-              <Divider />
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "flex-end",
-                  gap: 12,
-                  flexWrap: "wrap",
-                }}
-              >
-                <Button
-                  danger
-                  icon={<CloseCircleOutlined />}
-                  onClick={() => setRejectModalVisible(true)}
-                  disabled={processing}
-                >
-                  {t("common.reject")}
-                </Button>
-                <Button
-                  type="primary"
-                  icon={<CheckCircleOutlined />}
-                  onClick={handleDelegateApprove}
-                  loading={processing}
-                >
-                  {t("common.approve")}
-                </Button>
-              </div>
-            </>
-          ) : null}
         </Card>
       </div>
 
@@ -408,6 +383,20 @@ export default function EmployeeLeaveRequestDetailsPage() {
           onChange={(e) => setRejectionReason(e.target.value)}
         />
       </Modal>
+
+      {previewModal}
+
+      {canDelegateAction ? (
+        <StickyDecisionBar>
+          <ApprovalActions
+            size="large"
+            subjectLabel={request.employee?.full_name}
+            approveLoading={processing}
+            onApprove={handleDelegateApprove}
+            onReject={() => setRejectModalVisible(true)}
+          />
+        </StickyDecisionBar>
+      ) : null}
     </div>
   );
 }

@@ -1,10 +1,13 @@
+import { useState } from "react";
 import {
   ClockCircleOutlined,
+  DownOutlined,
+  UpOutlined,
   CheckCircleFilled,
   CloseCircleFilled,
   MinusCircleOutlined,
 } from "@ant-design/icons";
-import { Card, Space, Tag, Typography } from "antd";
+import { Button, Card, Grid, Space, Tag, Typography } from "antd";
 import { formatDateTime } from "../../utils/dateTime";
 
 const { Paragraph, Text } = Typography;
@@ -108,6 +111,209 @@ export default function ApprovalFlowMap({
         ? t("workflow.flowComplete")
         : t("workflow.awaitingNextStep");
 
+  // On phones the waiting (or final rejected/cancelled) stage keeps its full
+  // card and the rest shrink to mini cards, so the flow fits on one screen.
+  const isMobile = !Grid.useBreakpoint().md;
+  const [showAll, setShowAll] = useState(false);
+  const compact = isMobile && !showAll;
+  const focusIndex = stages.findIndex(
+    (stage) =>
+      stage.state === "current" ||
+      stage.state === "rejected" ||
+      stage.state === "cancelled",
+  );
+
+  const renderStageCard = (stage: ApprovalFlowStage, index: number) => {
+    const colors = getStageColor(stage.state);
+    return (
+      <div
+        key={stage.key}
+        style={{
+          position: "relative",
+          padding: 16,
+          borderRadius: 18,
+          border: `1px solid ${colors.border}`,
+          background: colors.surface,
+          minHeight: 140,
+          boxShadow:
+            stage.state === "current"
+              ? "0 8px 18px rgba(249, 115, 22, 0.10)"
+              : "none",
+        }}
+        aria-current={stage.state === "current" ? "step" : undefined}
+      >
+        {!isMobile && index < stages.length - 1 ? (
+          <div
+            style={{
+              position: "absolute",
+              top: 28,
+              right: -10,
+              width: 20,
+              height: 2,
+              background:
+                "linear-gradient(90deg, rgba(249,115,22,0.35), rgba(148,163,184,0.25))",
+            }}
+          />
+        ) : null}
+        <Space direction="vertical" size={10} style={{ width: "100%" }}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 10,
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                minWidth: 0,
+              }}
+            >
+              <div
+                style={{
+                  width: 34,
+                  height: 34,
+                  borderRadius: 999,
+                  background: "#fff",
+                  border: `1px solid ${colors.border}`,
+                  display: "grid",
+                  placeItems: "center",
+                  color: colors.accent,
+                }}
+              >
+                {getStageIcon(stage.state)}
+              </div>
+              <Text
+                type="secondary"
+                style={{
+                  fontSize: 11,
+                  fontWeight: 700,
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {t("workflow.step", { number: index + 1 })}
+              </Text>
+            </div>
+            <Tag
+              color={
+                stage.state === "skipped" || stage.state === "cancelled"
+                  ? "default"
+                  : stage.state === "rejected"
+                    ? "red"
+                    : stage.state === "completed"
+                      ? "green"
+                      : "orange"
+              }
+            >
+              {getStateLabel(stage.state)}
+            </Tag>
+          </div>
+          <Text
+            style={{
+              fontSize: 15,
+              fontWeight: 800,
+              color: "#0f172a",
+              letterSpacing: "0.02em",
+              textTransform: "uppercase",
+            }}
+          >
+            {getStageLabel(stage)}
+          </Text>
+          {stage.detail ? (
+            <Text
+              style={{
+                color: "#0f172a",
+                fontSize: 13,
+                fontWeight: 600,
+                overflowWrap: "anywhere",
+              }}
+            >
+              {stage.detail}
+            </Text>
+          ) : null}
+          <Paragraph
+            style={{
+              marginBottom: 0,
+              color: "#475569",
+              minHeight: 44,
+              padding: "8px 10px",
+              borderRadius: 10,
+              background: "rgba(255, 255, 255, 0.56)",
+              fontSize: 13,
+            }}
+          >
+            {stage.note}
+          </Paragraph>
+          <Space size={5}>
+            <ClockCircleOutlined style={{ color: "#94a3b8", fontSize: 12 }} />
+            <Text type="secondary" style={{ fontSize: 12 }}>
+              {stage.at
+                ? `${t("workflow.updated")} ${formatDateTime(stage.at)}`
+                : t("leave.approvalMap.noDate")}
+            </Text>
+          </Space>
+        </Space>
+      </div>
+    );
+  };
+
+  const renderMiniCard = (stage: ApprovalFlowStage, index: number) => {
+    const colors = getStageColor(stage.state);
+    return (
+      <div
+        key={stage.key}
+        style={{
+          minWidth: 0,
+          padding: "10px 12px",
+          borderRadius: 14,
+          border: `1px solid ${colors.border}`,
+          background: colors.surface,
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <span
+            aria-hidden="true"
+            style={{
+              display: "inline-flex",
+              color: colors.accent,
+              fontSize: 16,
+            }}
+          >
+            {getStageIcon(stage.state)}
+          </span>
+          <Text
+            style={{
+              minWidth: 0,
+              fontSize: 12,
+              fontWeight: 800,
+              color: "#0f172a",
+              letterSpacing: "0.02em",
+              textTransform: "uppercase",
+              overflowWrap: "anywhere",
+            }}
+          >
+            {getStageLabel(stage)}
+          </Text>
+        </div>
+        <Text
+          style={{
+            display: "block",
+            marginTop: 4,
+            fontSize: 11,
+            fontWeight: 600,
+            color: colors.accent,
+          }}
+        >
+          {t("workflow.step", { number: index + 1 })} ·{" "}
+          {getStateLabel(stage.state)}
+        </Text>
+      </div>
+    );
+  };
+
   return (
     <Card
       style={{
@@ -116,7 +322,7 @@ export default function ApprovalFlowMap({
         background: "linear-gradient(180deg, #ffffff 0%, #fffaf5 100%)",
         boxShadow: "0 18px 40px rgba(15, 23, 42, 0.06)",
       }}
-      bodyStyle={{ padding: 20 }}
+      bodyStyle={{ padding: isMobile ? 14 : 20 }}
     >
       <Space
         direction="vertical"
@@ -222,152 +428,50 @@ export default function ApprovalFlowMap({
         </Tag>
       </div>
 
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))",
-          gap: 14,
-        }}
-      >
-        {stages.map((stage, index) => {
-          const colors = getStageColor(stage.state);
-          return (
-            <div
-              key={stage.key}
-              style={{
-                position: "relative",
-                padding: 16,
-                borderRadius: 18,
-                border: `1px solid ${colors.border}`,
-                background: colors.surface,
-                minHeight: 140,
-                boxShadow:
-                  stage.state === "current"
-                    ? "0 8px 18px rgba(249, 115, 22, 0.10)"
-                    : "none",
-              }}
-              aria-current={stage.state === "current" ? "step" : undefined}
-            >
-              {index < stages.length - 1 ? (
-                <div
-                  style={{
-                    position: "absolute",
-                    top: 28,
-                    right: -10,
-                    width: 20,
-                    height: 2,
-                    background:
-                      "linear-gradient(90deg, rgba(249,115,22,0.35), rgba(148,163,184,0.25))",
-                  }}
-                />
-              ) : null}
-              <Space direction="vertical" size={10} style={{ width: "100%" }}>
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    gap: 10,
-                  }}
-                >
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 8,
-                      minWidth: 0,
-                    }}
-                  >
-                    <div
-                      style={{
-                        width: 34,
-                        height: 34,
-                        borderRadius: 999,
-                        background: "#fff",
-                        border: `1px solid ${colors.border}`,
-                        display: "grid",
-                        placeItems: "center",
-                        color: colors.accent,
-                      }}
-                    >
-                      {getStageIcon(stage.state)}
-                    </div>
-                    <Text
-                      type="secondary"
-                      style={{
-                        fontSize: 11,
-                        fontWeight: 700,
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      {t("workflow.step", { number: index + 1 })}
-                    </Text>
-                  </div>
-                  <Tag
-                    color={
-                      stage.state === "skipped" || stage.state === "cancelled"
-                        ? "default"
-                        : stage.state === "rejected"
-                          ? "red"
-                          : stage.state === "completed"
-                            ? "green"
-                            : "orange"
-                    }
-                  >
-                    {getStateLabel(stage.state)}
-                  </Tag>
-                </div>
-                <Text
-                  style={{
-                    fontSize: 15,
-                    fontWeight: 800,
-                    color: "#0f172a",
-                    letterSpacing: "0.02em",
-                    textTransform: "uppercase",
-                  }}
-                >
-                  {getStageLabel(stage)}
-                </Text>
-                {stage.detail ? (
-                  <Text
-                    style={{
-                      color: "#0f172a",
-                      fontSize: 13,
-                      fontWeight: 600,
-                      overflowWrap: "anywhere",
-                    }}
-                  >
-                    {stage.detail}
-                  </Text>
-                ) : null}
-                <Paragraph
-                  style={{
-                    marginBottom: 0,
-                    color: "#475569",
-                    minHeight: 44,
-                    padding: "8px 10px",
-                    borderRadius: 10,
-                    background: "rgba(255, 255, 255, 0.56)",
-                    fontSize: 13,
-                  }}
-                >
-                  {stage.note}
-                </Paragraph>
-                <Space size={5}>
-                  <ClockCircleOutlined
-                    style={{ color: "#94a3b8", fontSize: 12 }}
-                  />
-                  <Text type="secondary" style={{ fontSize: 12 }}>
-                    {stage.at
-                      ? `${t("workflow.updated")} ${formatDateTime(stage.at)}`
-                      : t("leave.approvalMap.noDate")}
-                  </Text>
-                </Space>
-              </Space>
-            </div>
-          );
-        })}
-      </div>
+      {compact ? (
+        // Steps stay in order; the focus stage spans both columns in its place.
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+            gap: 8,
+          }}
+        >
+          {stages.map((stage, index) =>
+            index === focusIndex ? (
+              <div key={stage.key} style={{ gridColumn: "1 / -1" }}>
+                {renderStageCard(stage, index)}
+              </div>
+            ) : (
+              renderMiniCard(stage, index)
+            ),
+          )}
+        </div>
+      ) : (
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))",
+            gap: 14,
+          }}
+        >
+          {stages.map((stage, index) => renderStageCard(stage, index))}
+        </div>
+      )}
+      {isMobile && (
+        <Button
+          type="link"
+          block
+          icon={
+            showAll ? <UpOutlined aria-hidden /> : <DownOutlined aria-hidden />
+          }
+          aria-expanded={showAll}
+          onClick={() => setShowAll((value) => !value)}
+          style={{ marginTop: 8, fontWeight: 600, color: "#ea580c" }}
+        >
+          {showAll ? t("workflow.hideDetails") : t("workflow.showDetails")}
+        </Button>
+      )}
     </Card>
   );
 }

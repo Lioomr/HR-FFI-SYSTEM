@@ -29,11 +29,13 @@ import DashboardPanel from "../../components/hr/dashboard/DashboardPanel";
 import ApprovalActions from "../../components/ceo/ApprovalActions";
 import ApprovalStatusTag from "../../components/ceo/ApprovalStatusTag";
 import RejectReasonModal from "../../components/ceo/RejectReasonModal";
+import StickyDecisionBar from "../../components/ceo/StickyDecisionBar";
 import { approvalStatusLabel } from "../../components/ceo/approvalStatusLabel";
 import TeamMemberCell from "../../components/manager/TeamMemberCell";
 import LeaveApprovalMap from "../../components/leaves/LeaveApprovalMap";
 import RequestObligationsPanel from "../../components/requests/RequestObligationsPanel";
-import { downloadBlob, openOrDownloadBlob } from "../../utils/download";
+import { useFilePreview } from "../../components/ui/useFilePreview";
+import { downloadBlob } from "../../utils/download";
 import { isApiError } from "../../services/api/apiTypes";
 import { isForbidden, isNotFound } from "../../services/api/httpErrors";
 import { requestAgeLabel } from "../../utils/requestAge";
@@ -99,6 +101,7 @@ export default function ManagerLeaveRequestDetailsPage() {
   const [pdfLoading, setPdfLoading] = useState(false);
   const [confirmingApprove, setConfirmingApprove] = useState(false);
   const [rejectOpen, setRejectOpen] = useState(false);
+  const { openPreview, previewModal } = useFilePreview();
 
   const loadData = useCallback(async () => {
     if (!id) return;
@@ -187,18 +190,22 @@ export default function ManagerLeaveRequestDetailsPage() {
     }
   };
 
-  const openDocument = async (download: boolean) => {
+  const previewDocument = () => {
+    if (!request) return;
+    openPreview({
+      title: t("common.document"),
+      filename: `leave_request_${request.id}_document`,
+      load: () => getManagerLeaveRequestDocumentBlob(request.id, false),
+    });
+  };
+
+  const downloadDocument = async () => {
     if (!request) return;
     setDocumentLoading(true);
     try {
-      const blob = await getManagerLeaveRequestDocumentBlob(
-        request.id,
-        download,
-      );
-      openOrDownloadBlob(
-        blob,
+      downloadBlob(
+        await getManagerLeaveRequestDocumentBlob(request.id, true),
         `leave_request_${request.id}_document`,
-        download,
       );
     } catch {
       notification.error({
@@ -356,8 +363,7 @@ export default function ManagerLeaveRequestDetailsPage() {
                       <Button
                         size="small"
                         icon={<EyeOutlined aria-hidden />}
-                        onClick={() => openDocument(false)}
-                        loading={documentLoading}
+                        onClick={previewDocument}
                         style={{ borderRadius: 8 }}
                       >
                         {t("common.preview")}
@@ -365,7 +371,7 @@ export default function ManagerLeaveRequestDetailsPage() {
                       <Button
                         size="small"
                         icon={<DownloadOutlined aria-hidden />}
-                        onClick={() => openDocument(true)}
+                        onClick={downloadDocument}
                         loading={documentLoading}
                         style={{ borderRadius: 8 }}
                       >
@@ -389,28 +395,19 @@ export default function ManagerLeaveRequestDetailsPage() {
               </div>
             </DashboardPanel>
 
-            <DashboardPanel
-              title={t("manager.leaveDetails.decisionSection")}
-              animDelay={120}
-            >
-              {canAction ? (
-                <ApprovalActions
-                  size="middle"
-                  subjectLabel={employeeName}
-                  approveLoading={processing && confirmingApprove}
-                  disabled={processing}
-                  onApprove={() => setConfirmingApprove(true)}
-                  onReject={() => setRejectOpen(true)}
-                />
-              ) : (
+            {!canAction && (
+              <DashboardPanel
+                title={t("manager.leaveDetails.decisionSection")}
+                animDelay={120}
+              >
                 <Alert
                   type="info"
                   showIcon
                   style={{ borderRadius: 10 }}
                   message={t("manager.leaveDetails.decisionClosed")}
                 />
-              )}
-            </DashboardPanel>
+              </DashboardPanel>
+            )}
           </Space>
         </Col>
 
@@ -469,6 +466,21 @@ export default function ManagerLeaveRequestDetailsPage() {
         onCancel={() => setRejectOpen(false)}
         onSubmit={submitReject}
       />
+
+      {previewModal}
+
+      {canAction && (
+        <StickyDecisionBar>
+          <ApprovalActions
+            size="large"
+            subjectLabel={employeeName}
+            approveLoading={processing && confirmingApprove}
+            disabled={processing}
+            onApprove={() => setConfirmingApprove(true)}
+            onReject={() => setRejectOpen(true)}
+          />
+        </StickyDecisionBar>
+      )}
     </div>
   );
 }

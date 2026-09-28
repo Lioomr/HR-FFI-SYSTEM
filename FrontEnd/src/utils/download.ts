@@ -25,24 +25,6 @@ export function downloadBlob(blob: Blob, filename: string): void {
   window.setTimeout(() => URL.revokeObjectURL(url), REVOKE_DELAY_MS);
 }
 
-export function openBlob(blob: Blob): void {
-  const url = URL.createObjectURL(blob);
-  window.open(url, "_blank", "noopener,noreferrer");
-  window.setTimeout(() => URL.revokeObjectURL(url), REVOKE_DELAY_MS);
-}
-
-export function openOrDownloadBlob(
-  blob: Blob,
-  filename: string,
-  download: boolean,
-): void {
-  if (download) {
-    downloadBlob(blob, filename);
-  } else {
-    openBlob(blob);
-  }
-}
-
 /**
  * Download endpoints often label their bytes `application/octet-stream` so the
  * browser saves rather than renders them. That defeats an in-browser preview,
@@ -71,39 +53,18 @@ export async function sniffInlineType(blob: Blob): Promise<string | null> {
 }
 
 /**
- * Opens `blob` in a new tab for a quick look. Uses the server MIME type when it
- * is one the browser renders inline, otherwise falls back to a content sniff.
- * Returns false when nothing previewable was found, leaving the caller to
- * download instead.
- *
- * Fetching the bytes is async, so by the time the type is known the click
- * gesture has expired and `window.open` would be blocked as a popup. Callers
- * therefore open a blank tab synchronously inside the handler and pass it here;
- * this navigates that tab once the blob is ready, and closes it on a miss.
+ * The MIME type `blob` can be previewed as (a PDF or an image), preferring the
+ * server's type and falling back to a content sniff; null when neither is
+ * previewable.
  */
-export async function previewBlob(
-  blob: Blob,
-  target?: Window | null,
-): Promise<boolean> {
+export async function previewableType(blob: Blob): Promise<string | null> {
   const serverType =
     blob.type && blob.type !== "application/octet-stream" ? blob.type : null;
-  const inlineServerType =
+  if (
     serverType &&
     (serverType === "application/pdf" || serverType.startsWith("image/"))
-      ? serverType
-      : null;
-  const type = inlineServerType ?? (await sniffInlineType(blob));
-  if (!type) {
-    target?.close();
-    return false;
+  ) {
+    return serverType;
   }
-  const typed = type === blob.type ? blob : new Blob([blob], { type });
-  const url = URL.createObjectURL(typed);
-  if (target && !target.closed) {
-    target.location.href = url;
-  } else {
-    window.open(url, "_blank", "noopener,noreferrer");
-  }
-  window.setTimeout(() => URL.revokeObjectURL(url), REVOKE_DELAY_MS);
-  return true;
+  return sniffInlineType(blob);
 }
