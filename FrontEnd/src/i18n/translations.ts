@@ -547,6 +547,8 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "common.duration": "Duration",
     "common.document": "Document",
     "common.preview": "Preview",
+    "filePreview.loadFailed": "Could not load the file. Try again or download it.",
+    "filePreview.unavailable": "This file cannot be previewed here. Download it to view.",
     "common.submittedOn": "Submitted On",
     "organization.switchedForLink": "Switched to {company} to open this link.",
     "organization.headOffice.badge": "Head Office View",
@@ -2103,6 +2105,8 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "ceo.approvals.rejectReasonPlaceholder":
       "Explain why this request is being rejected...",
     "ceo.approvals.rejectReasonRequired": "A rejection reason is required.",
+    "ceo.approvals.awaitingDecision": "Awaiting your decision",
+    "ceo.approvals.decisionBarLabel": "Decision actions",
 
     // CEO asset reviews
     "ceo.assets.damageSubtitle": "Damage reports escalated for your approval.",
@@ -3402,6 +3406,8 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "workflow.awaitingNextStep": "Awaiting the next step",
     "workflow.progressSummary": "{completed} of {total} stages completed",
     "workflow.step": "Step {number}",
+    "workflow.showDetails": "Show details",
+    "workflow.hideDetails": "Hide details",
     "workflow.handledBy": "Handled by {name}",
     "workflow.waitingFor": "Waiting for {name}",
     "workflow.updated": "Updated",
@@ -5558,6 +5564,8 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "common.duration": "المدة",
     "common.document": "المستند",
     "common.preview": "معاينة",
+    "filePreview.loadFailed": "تعذر تحميل الملف. حاول مرة أخرى أو قم بتنزيله.",
+    "filePreview.unavailable": "لا يمكن معاينة هذا الملف هنا. قم بتنزيله لعرضه.",
     "common.submittedOn": "تاريخ التقديم",
     "organization.switchedForLink": "تم التبديل إلى {company} لفتح هذا الرابط.",
     "organization.headOffice.badge": "عرض المكتب الرئيسي",
@@ -8071,6 +8079,8 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "ceo.approvals.rejectReasonLabel": "سبب الرفض",
     "ceo.approvals.rejectReasonPlaceholder": "اشرح سبب رفض هذا الطلب...",
     "ceo.approvals.rejectReasonRequired": "سبب الرفض مطلوب.",
+    "ceo.approvals.awaitingDecision": "بانتظار قرارك",
+    "ceo.approvals.decisionBarLabel": "إجراءات القرار",
 
     // مراجعات الأصول للمدير التنفيذي
     "ceo.assets.damageSubtitle": "بلاغات التلف المُصعّدة لموافقتك.",
@@ -8327,6 +8337,8 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "workflow.awaitingNextStep": "بانتظار الخطوة التالية",
     "workflow.progressSummary": "اكتملت {completed} من {total} مراحل",
     "workflow.step": "الخطوة {number}",
+    "workflow.showDetails": "عرض التفاصيل",
+    "workflow.hideDetails": "إخفاء التفاصيل",
     "workflow.handledBy": "تمت المعالجة بواسطة {name}",
     "workflow.waitingFor": "بانتظار {name}",
     "workflow.updated": "آخر تحديث",

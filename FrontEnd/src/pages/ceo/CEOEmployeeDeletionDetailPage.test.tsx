@@ -1,5 +1,11 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import {
+  render,
+  screen,
+  fireEvent,
+  waitFor,
+  within,
+} from "@testing-library/react";
 
 const navigateMock = vi.fn();
 vi.mock("react-router-dom", () => ({
@@ -59,18 +65,19 @@ beforeEach(() => {
 });
 
 describe("CEOEmployeeDeletionDetailPage", () => {
-  it("puts the decision above the record detail", async () => {
+  it("keeps the decision in the sticky decision bar", async () => {
     getRequest.mockResolvedValue(ok(request));
 
     render(<CEOEmployeeDeletionDetailPage />);
 
+    const bar = await screen.findByRole("region", { name: "Decision actions" });
     expect(
-      await screen.findByRole("button", {
+      within(bar).getByRole("button", {
         name: "Approve & Archive: Sara Ahmed",
       }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Reject: Sara Ahmed" }),
+      within(bar).getByRole("button", { name: "Reject: Sara Ahmed" }),
     ).toBeInTheDocument();
     expect(screen.getByText("Contract ended")).toBeInTheDocument();
   });
