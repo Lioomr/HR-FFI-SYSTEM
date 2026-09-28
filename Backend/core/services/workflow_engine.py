@@ -2208,6 +2208,8 @@ _PENDING_LABEL_AR = {
     "contract_rating": "تقييم عقد الموظف",
     "permission_request": "إذن انصراف",
     "annual_leave_payment_request": "تسوية الإجازة السنوية",
+    "job_offer": "عرض وظيفي",
+    "starting_work_acknowledgment": "مباشرة العمل",
 }
 
 
@@ -2228,6 +2230,8 @@ def build_pending_approval_item(workflow: WorkflowInstance, *, language: str = "
         "contract_rating": "Employee Contract Rating",
         "permission_request": "Exit Permission",
         "annual_leave_payment_request": "Annual Leave Settlement",
+        "job_offer": "Job Offer",
+        "starting_work_acknowledgment": "Starting Work",
     }
     review_path = _build_action_url_path(workflow_key, workflow.current_approver_role, obj.pk)
     if workflow_key == "annual_leave_payment_request":
@@ -2291,6 +2295,17 @@ def build_pending_approval_item(workflow: WorkflowInstance, *, language: str = "
         decision_display = getattr(obj, "get_decision_type_display", lambda: "HR decision")()
         action = f"العقد: {decision_display}" if is_ar else f"Contract: {decision_display}"
         request_type = "CONTRACT_DECISION"
+    elif workflow_key == "job_offer":
+        name = getattr(obj, "candidate_full_name", "") or f"Request #{obj.pk}"
+        position = getattr(obj, "position_title", "")
+        action = f"عرض وظيفي: {position}" if is_ar else f"Job offer: {position}"
+        request_type = "JOB_OFFER"
+    elif workflow_key == "starting_work_acknowledgment":
+        profile = getattr(obj, "employee_profile", None)
+        user = getattr(profile, "user", None)
+        name = getattr(profile, "full_name", "") or getattr(user, "email", f"Request #{obj.pk}")
+        action = "مباشرة العمل: التحقق من BioTime" if is_ar else "Starting work: BioTime verification"
+        request_type = "STARTING_WORK"
     else:
         profile = getattr(obj, "employee_profile", None)
         user = getattr(profile, "user", None)

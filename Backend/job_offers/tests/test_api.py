@@ -152,6 +152,19 @@ class JobOfferApiTests(APITestCase):
         offer.save(update_fields=["status", "response_token", "sent_at", "updated_at"])
         return offer
 
+    def test_pending_inbox_card_labels_job_offer_as_job_offer(self):
+        from core.services.workflow_engine import build_pending_approval_item, sync_workflow
+
+        offer = self.create_offer(approval_status=JobOffer.ApprovalStatus.PENDING_CEO)
+        workflow = sync_workflow(offer, actor=self.hr)
+        card = build_pending_approval_item(workflow)
+
+        self.assertEqual(card["request_type"], "JOB_OFFER")
+        self.assertEqual(card["request_type_label"], "Job Offer")
+        self.assertEqual(card["name"], "Candidate One")
+        self.assertEqual(card["action"], "Job offer: Project Engineer")
+        self.assertIn(f"/job-offers/{offer.id}", card["review_path"])
+
     def test_hr_can_create_and_update_draft_job_offer(self):
         self.authenticate_hr()
         response = self.client.post("/job-offers/", self.payload(), format="multipart", **self.headers)
