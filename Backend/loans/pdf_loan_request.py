@@ -12,7 +12,13 @@ from typing import Any, Callable
 
 from django.utils import timezone
 
-from core.pdf_forms import FormAssets, load_form_assets, log_signature_diagnostics, render_mapped_form
+from core.pdf_forms import (
+    FormAssets,
+    load_form_assets,
+    log_signature_diagnostics,
+    render_mapped_form,
+    request_company_code,
+)
 from core.pdf_signers import signer_signatures
 
 FIELD_MAP_FILENAME = "loan_request_blank_field_map.json"
@@ -76,7 +82,9 @@ REQUIRED_FIELD_KEYS = frozenset(
 )
 
 
-def load_loan_form_assets(template_path: str | Path | None = None) -> FormAssets | None:
+def load_loan_form_assets(
+    template_path: str | Path | None = None, *, company_code: str | None = None
+) -> FormAssets | None:
     """Resolve the template and the map deployed beside it.
 
     Keeping the files colocated prevents a deployed override PDF from being
@@ -88,6 +96,7 @@ def load_loan_form_assets(template_path: str | Path | None = None) -> FormAssets
         FIELD_MAP_FILENAME,
         aliases=TEMPLATE_ALIASES,
         required_keys=REQUIRED_FIELD_KEYS,
+        company_code=company_code,
     )
     if assets is None or template_path is None:
         return assets
@@ -330,7 +339,8 @@ def build_loan_request_signers(instance: Any) -> dict[str, Any]:
 def build_loan_request_pdf(instance: Any, fallback: Callable[[Any], bytes]) -> bytes:
     """Build the mapped form, falling back only when its paired asset is absent."""
 
-    assets = load_loan_form_assets()
+    company_code = request_company_code(instance)
+    assets = load_loan_form_assets(company_code=company_code) if company_code else load_loan_form_assets()
     if assets is None:
         return fallback(instance)
     signatures = signer_signatures(build_loan_request_signers(instance))

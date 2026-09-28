@@ -1,0 +1,287 @@
+{
+  "reference_no": {
+    "page": 1,
+    "x": 89,
+    "y": 737.89,
+    "width": 78,
+    "height": 18,
+    "font_size": 8
+  },
+  "offer_date": {
+    "page": 1,
+    "x": 390,
+    "y": 737.89,
+    "width": 120,
+    "height": 18,
+    "font_size": 7.4
+  },
+  "applicant_name": {
+    "page": 1,
+    "x": 102,
+    "y": 678.89,
+    "width": 406,
+    "height": 19,
+    "font_size": 7.6,
+    "shrink": true
+  },
+  "nationality": {
+    "page": 1,
+    "x": 102,
+    "y": 653.89,
+    "width": 406,
+    "height": 19,
+    "font_size": 7.6,
+    "shrink": true
+  },
+  "id_no": {
+    "page": 1,
+    "x": 102,
+    "y": 628.89,
+    "width": 406,
+    "height": 19,
+    "font_size": 7.6,
+    "shrink": true
+  },
+  "position": {
+    "page": 1,
+    "x": 137,
+    "y": 487.89,
+    "width": 96,
+    "height": 19,
+    "font_size": 7.2,
+    "shrink": true
+  },
+  "classification": {
+    "page": 1,
+    "x": 428,
+    "y": 487.89,
+    "width": 96,
+    "height": 19,
+    "font_size": 7.2,
+    "shrink": true
+  },
+  "department": {
+    "page": 1,
+    "x": 137,
+    "y": 462.89,
+    "width": 96,
+    "height": 19,
+    "font_size": 7.2,
+    "shrink": true
+  },
+  "work_location": {
+    "page": 1,
+    "x": 428,
+    "y": 462.89,
+    "width": 96,
+    "height": 19,
+    "font_size": 7.2,
+    "shrink": true
+  },
+  "basic_salary": {
+    "page": 1,
+    "x": 137,
+    "y": 403.89,
+    "width": 96,
+    "height": 19,
+    "font_size": 7.2,
+    "shrink": true
+  },
+  "housing_allowance": {
+    "page": 1,
+    "x": 428,
+    "y": 403.89,
+    "width": 96,
+    "height": 19,
+    "font_size": 7.2,
+    "shrink": true
+  },
+  "transportation_allowance": {
+    "page": 1,
+    "x": 137,
+    "y": 382.89,
+    "width": 96,
+    "height": 19,
+    "font_size": 7.2,
+    "shrink": true
+  },
+  "other_allowance": {
+    "page": 1,
+    "x": 428,
+    "y": 382.89,
+    "width": 96,
+    "height": 19,
+    "font_size": 7.2,
+    "shrink": true
+  },
+  "other_salary_item": {
+    "page": 1,
+    "x": 137,
+    "y": 361.89,
+    "width": 96,
+    "height": 19,
+    "font_size": 7.2,
+    "shrink": true
+  },
+  "total_paid_salary": {
+    "page": 1,
+    "x": 428,
+    "y": 361.89,
+    "width": 96,
+    "height": 19,
+    "font_size": 7.2,
+    "shrink": true
+  },
+  "vacation_days": {
+    "page": 1,
+    "x": 137,
+    "y": 318.89,
+    "width": 96,
+    "height": 19,
+    "font_size": 7.2,
+    "shrink": true
+  },
+  "tickets": {
+    "page": 1,
+    "x": 428,
+    "y": 318.89,
+    "width": 96,
+    "height": 19,
+    "font_size": 7.2,
+    "shrink": true
+  },
+  "contract_status": {
+    "page": 1,
+    "x": 137,
+    "y": 297.89,
+    "width": 96,
+    "height": 19,
+    "font_size": 7.2,
+    "shrink": true
+  },
+  "contract_type": {
+    "page": 1,
+    "x": 428,
+    "y": 297.89,
+    "width": 96,
+    "height": 19,
+    "font_size": 7.2,
+    "shrink": true
+  },
+  "medical_insurance": {
+    "page": 1,
+    "x": 137,
+    "y": 276.89,
+    "width": 96,
+    "height": 19,
+    "font_size": 7.2,
+    "shrink": true
+  },
+  "contract_duration": {
+    "page": 1,
+    "x": 428,
+    "y": 276.89,
+    "width": 96,
+    "height": 19,
+    "font_size": 7.2,
+    "shrink": true
+  },
+  "hr_signature_image": {
+    "page": 1,
+    "x": 23,
+    "y": 133.89,
+    "width": 258,
+    "height": 45,
+    "kind": "image",
+    "padding": 1,
+    "source": "job_offer.hr.signature"
+  },
+  "hr_name": {
+    "page": 1,
+    "x": 63,
+    "y": 114.89,
+    "width": 132,
+    "height": 14,
+    "font_size": 6.8,
+    "shrink": true
+  },
+  "hr_signature_date": {
+    "page": 1,
+    "x": 63,
+    "y": 92.89,
+    "width": 132,
+    "height": 14,
+    "font_size": 6.8,
+    "shrink": true
+  },
+  "ceo_signature_image": {
+    "page": 1,
+    "x": 314,
+    "y": 133.89,
+    "width": 258,
+    "height": 45,
+    "kind": "image",
+    "padding": 1,
+    "source": "job_offer.ceo.signature"
+  },
+  "ceo_name": {
+    "page": 1,
+    "x": 354,
+    "y": 114.89,
+    "width": 132,
+    "height": 14,
+    "font_size": 6.8,
+    "shrink": true
+  },
+  "ceo_signature_date": {
+    "page": 1,
+    "x": 354,
+    "y": 92.89,
+    "width": 132,
+    "height": 14,
+    "font_size": 6.8,
+    "shrink": true
+  },
+  "applicant_name_acceptance": {
+    "page": 1,
+    "x": 105,
+    "y": 45.89,
+    "width": 385,
+    "height": 14,
+    "font_size": 7.2,
+    "shrink": true
+  },
+  "applicant_decision": {
+    "page": 1,
+    "checkboxes": {
+      "agree": [
+        145,
+        31.889763779527698
+      ],
+      "reject": [
+        300,
+        31.889763779527698
+      ]
+    }
+  },
+  "applicant_decision_date": {
+    "page": 1,
+    "x": 470,
+    "y": 23.89,
+    "width": 62,
+    "height": 14,
+    "font_size": 6.8,
+    "shrink": true
+  },
+  "rejection_reason": {
+    "page": 1,
+    "x": 75,
+    "y": 4.89,
+    "width": 435,
+    "height": 14,
+    "font_size": 6.6,
+    "multiline": true,
+    "max_lines": 2,
+    "padding": 3
+  }
+}

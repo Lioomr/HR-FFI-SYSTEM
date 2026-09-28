@@ -1,0 +1,562 @@
+{
+  "template": "loan_request_blank.pdf",
+  "page_size": "A4",
+  "coordinate_origin": "bottom_left",
+  "version": 4,
+  "deployment": "This file is required beside loan_request_blank.pdf in every HR_TEMPLATES_DIR deployment.",
+  "sections": {
+    "employee_information": {
+      "title_en": "Employee Information",
+      "title_ar": "بيانات الموظف",
+      "y": 722
+    },
+    "loan_details": {
+      "title_en": "Loan Details",
+      "title_ar": "تفاصيل السلفة",
+      "y": 560
+    },
+    "previous_loan": {
+      "title_en": "Previous Loan Details",
+      "title_ar": "تفاصيل القرض السابق",
+      "y": 398
+    },
+    "reason": {
+      "title_en": "Reason / Details",
+      "title_ar": "السبب / التفاصيل",
+      "y": 280
+    },
+    "approvals": {
+      "title_en": "Approvals and Disbursement",
+      "title_ar": "الاعتمادات والصرف",
+      "y": 195
+    }
+  },
+  "signing_area": {
+    "x": 24,
+    "y": 9,
+    "width": 547,
+    "height": 179,
+    "roles": [
+      {
+        "key": "manager",
+        "label_en": "Manager",
+        "label_ar": "المدير",
+        "x": 24,
+        "width": 182.33,
+        "label_y": 168
+      },
+      {
+        "key": "hr",
+        "label_en": "HR",
+        "label_ar": "الموارد البشرية",
+        "x": 206.33,
+        "width": 182.33,
+        "label_y": 168
+      },
+      {
+        "key": "cfo",
+        "label_en": "CFO",
+        "label_ar": "المدير المالي",
+        "x": 388.66,
+        "width": 182.34,
+        "label_y": 168
+      },
+      {
+        "key": "ceo",
+        "label_en": "CEO",
+        "label_ar": "الرئيس التنفيذي",
+        "x": 24,
+        "width": 273.5,
+        "label_y": 82
+      },
+      {
+        "key": "disbursement",
+        "label_en": "Disbursement",
+        "label_ar": "الصرف",
+        "x": 297.5,
+        "width": 273.5,
+        "label_y": 82
+      }
+    ]
+  },
+  "fields": {
+    "reference_no": {
+      "page": 1,
+      "x": 89,
+      "y": 738,
+      "width": 78,
+      "height": 18,
+      "font_size": 8,
+      "align": "center"
+    },
+    "request_date": {
+      "page": 1,
+      "x": 290,
+      "y": 738,
+      "width": 74,
+      "height": 18,
+      "font_size": 7.4,
+      "align": "center"
+    },
+    "filed_date": {
+      "page": 1,
+      "x": 465,
+      "y": 738,
+      "width": 92,
+      "height": 18,
+      "font_size": 7.4,
+      "align": "center",
+      "source": "loan_request.filed_at"
+    },
+    "employee_name": {
+      "page": 1,
+      "x": 102,
+      "y": 692,
+      "width": 406,
+      "height": 19,
+      "font_size": 8.4,
+      "align": "center",
+      "label_en": "Employee name",
+      "label_ar": "اسم الموظف",
+      "label_x": 28,
+      "label_width": 151
+    },
+    "employee_number": {
+      "page": 1,
+      "x": 102,
+      "y": 671,
+      "width": 406,
+      "height": 19,
+      "font_size": 8.4,
+      "align": "center",
+      "label_en": "Employee number",
+      "label_ar": "الرقم الوظيفي",
+      "label_x": 28,
+      "label_width": 151
+    },
+    "department": {
+      "page": 1,
+      "x": 102,
+      "y": 650,
+      "width": 406,
+      "height": 19,
+      "font_size": 8.4,
+      "align": "center",
+      "label_en": "Department",
+      "label_ar": "الإدارة",
+      "label_x": 28,
+      "label_width": 151
+    },
+    "job_title": {
+      "page": 1,
+      "x": 102,
+      "y": 629,
+      "width": 406,
+      "height": 19,
+      "font_size": 8.4,
+      "align": "center",
+      "label_en": "Job title",
+      "label_ar": "المسمى الوظيفي",
+      "label_x": 28,
+      "label_width": 151
+    },
+    "mobile_number": {
+      "page": 1,
+      "x": 102,
+      "y": 608,
+      "width": 406,
+      "height": 19,
+      "font_size": 8.4,
+      "align": "center",
+      "label_en": "Mobile number",
+      "label_ar": "رقم الجوال",
+      "label_x": 28,
+      "label_width": 151
+    },
+    "basic_salary": {
+      "page": 1,
+      "x": 102,
+      "y": 587,
+      "width": 406,
+      "height": 19,
+      "font_size": 8.4,
+      "align": "center",
+      "label_en": "Basic salary",
+      "label_ar": "الراتب الأساسي",
+      "label_x": 28,
+      "label_width": 151
+    },
+    "loan_type": {
+      "page": 1,
+      "x": 102,
+      "y": 530,
+      "width": 406,
+      "height": 19,
+      "font_size": 8.4,
+      "align": "center",
+      "label_en": "Loan type",
+      "label_ar": "نوع السلفة",
+      "label_x": 28,
+      "label_width": 151
+    },
+    "requested_amount": {
+      "page": 1,
+      "x": 102,
+      "y": 509,
+      "width": 406,
+      "height": 19,
+      "font_size": 8.4,
+      "align": "center",
+      "label_en": "Requested amount",
+      "label_ar": "المبلغ المطلوب",
+      "label_x": 28,
+      "label_width": 151
+    },
+    "installment_months": {
+      "page": 1,
+      "x": 102,
+      "y": 488,
+      "width": 406,
+      "height": 19,
+      "font_size": 8.4,
+      "align": "center",
+      "label_en": "Installment months",
+      "label_ar": "عدد الأقساط",
+      "label_x": 28,
+      "label_width": 151
+    },
+    "monthly_deduction": {
+      "page": 1,
+      "x": 102,
+      "y": 467,
+      "width": 406,
+      "height": 19,
+      "font_size": 8.4,
+      "align": "center",
+      "label_en": "Monthly deduction",
+      "label_ar": "القسط الشهري",
+      "label_x": 28,
+      "label_width": 151
+    },
+    "deduction_start_date": {
+      "page": 1,
+      "x": 102,
+      "y": 446,
+      "width": 406,
+      "height": 19,
+      "font_size": 8.4,
+      "align": "center",
+      "label_en": "Deduction start date",
+      "label_ar": "بداية الاستقطاع",
+      "label_x": 28,
+      "label_width": 151
+    },
+    "payroll_reference": {
+      "page": 1,
+      "x": 102,
+      "y": 425,
+      "width": 406,
+      "height": 19,
+      "font_size": 8.4,
+      "align": "center",
+      "label_en": "Payroll reference",
+      "label_ar": "مرجع الرواتب",
+      "label_x": 28,
+      "label_width": 151
+    },
+    "previous_loan_status": {
+      "page": 1,
+      "x": 102,
+      "y": 368,
+      "width": 406,
+      "height": 19,
+      "font_size": 8.4,
+      "align": "center",
+      "label_en": "Previous loan status",
+      "label_ar": "حالة قرض سابق",
+      "label_x": 28,
+      "label_width": 151
+    },
+    "previous_loan_type": {
+      "page": 1,
+      "x": 102,
+      "y": 347,
+      "width": 406,
+      "height": 19,
+      "font_size": 8.4,
+      "align": "center",
+      "label_en": "Previous loan type",
+      "label_ar": "نوع القرض السابق",
+      "label_x": 28,
+      "label_width": 151
+    },
+    "previous_loan_value": {
+      "page": 1,
+      "x": 102,
+      "y": 326,
+      "width": 406,
+      "height": 19,
+      "font_size": 8.4,
+      "align": "center",
+      "label_en": "Previous loan amount",
+      "label_ar": "مبلغ القرض السابق",
+      "label_x": 28,
+      "label_width": 151
+    },
+    "previous_loan_end_date": {
+      "page": 1,
+      "x": 102,
+      "y": 305,
+      "width": 406,
+      "height": 19,
+      "font_size": 8.4,
+      "align": "center",
+      "label_en": "Previous loan end date",
+      "label_ar": "تاريخ نهاية القرض",
+      "label_x": 28,
+      "label_width": 151
+    },
+    "reason_details": {
+      "page": 1,
+      "x": 28,
+      "y": 212,
+      "width": 539,
+      "height": 55,
+      "font_size": 8.2,
+      "align": "left",
+      "multiline": true,
+      "max_lines": 4,
+      "padding": 6
+    },
+    "manager_approval_name": {
+      "page": 1,
+      "x": 32,
+      "y": 154,
+      "width": 166.33,
+      "height": 10,
+      "font_size": 6.2,
+      "align": "center"
+    },
+    "manager_approval_decision": {
+      "page": 1,
+      "x": 32,
+      "y": 142,
+      "width": 166.33,
+      "height": 9,
+      "font_size": 6.0,
+      "align": "center"
+    },
+    "manager_approval_date": {
+      "page": 1,
+      "x": 72,
+      "y": 89,
+      "width": 86.33000000000001,
+      "height": 14,
+      "font_size": 6.4,
+      "align": "center"
+    },
+    "manager_signature": {
+      "page": 1,
+      "x": 32,
+      "y": 108,
+      "width": 166.33,
+      "height": 32,
+      "font_size": 6.2,
+      "align": "center"
+    },
+    "hr_approval_name": {
+      "page": 1,
+      "x": 214.33,
+      "y": 154,
+      "width": 166.33,
+      "height": 10,
+      "font_size": 6.2,
+      "align": "center"
+    },
+    "hr_approval_decision": {
+      "page": 1,
+      "x": 214.33,
+      "y": 142,
+      "width": 166.33,
+      "height": 9,
+      "font_size": 6.0,
+      "align": "center"
+    },
+    "hr_approval_date": {
+      "page": 1,
+      "x": 254.33,
+      "y": 89,
+      "width": 86.33000000000001,
+      "height": 14,
+      "font_size": 6.4,
+      "align": "center"
+    },
+    "hr_signature": {
+      "page": 1,
+      "x": 214.33,
+      "y": 108,
+      "width": 166.33,
+      "height": 32,
+      "font_size": 6.2,
+      "align": "center"
+    },
+    "cfo_approval_name": {
+      "page": 1,
+      "x": 396.66,
+      "y": 154,
+      "width": 166.34,
+      "height": 10,
+      "font_size": 6.2,
+      "align": "center"
+    },
+    "cfo_approval_decision": {
+      "page": 1,
+      "x": 396.66,
+      "y": 142,
+      "width": 166.34,
+      "height": 9,
+      "font_size": 6.0,
+      "align": "center"
+    },
+    "cfo_approval_date": {
+      "page": 1,
+      "x": 436.66,
+      "y": 89,
+      "width": 86.34,
+      "height": 14,
+      "font_size": 6.4,
+      "align": "center"
+    },
+    "cfo_signature": {
+      "page": 1,
+      "x": 396.66,
+      "y": 108,
+      "width": 166.34,
+      "height": 32,
+      "font_size": 6.2,
+      "align": "center"
+    },
+    "ceo_approval_name": {
+      "page": 1,
+      "x": 32,
+      "y": 71,
+      "width": 257.5,
+      "height": 10,
+      "font_size": 6.2,
+      "align": "center"
+    },
+    "ceo_approval_decision": {
+      "page": 1,
+      "x": 32,
+      "y": 59,
+      "width": 257.5,
+      "height": 9,
+      "font_size": 6.0,
+      "align": "center"
+    },
+    "ceo_approval_date": {
+      "page": 1,
+      "x": 72,
+      "y": 12,
+      "width": 177.5,
+      "height": 14,
+      "font_size": 6.4,
+      "align": "center"
+    },
+    "ceo_signature": {
+      "page": 1,
+      "x": 32,
+      "y": 30,
+      "width": 257.5,
+      "height": 26,
+      "font_size": 6.2,
+      "align": "center"
+    },
+    "disbursement_name": {
+      "page": 1,
+      "x": 305.5,
+      "y": 71,
+      "width": 257.5,
+      "height": 10,
+      "font_size": 6.2,
+      "align": "center"
+    },
+    "disbursement_status": {
+      "page": 1,
+      "x": 305.5,
+      "y": 59,
+      "width": 257.5,
+      "height": 9,
+      "font_size": 6.0,
+      "align": "center"
+    },
+    "disbursement_date": {
+      "page": 1,
+      "x": 345.5,
+      "y": 12,
+      "width": 177.5,
+      "height": 14,
+      "font_size": 6.4,
+      "align": "center"
+    },
+    "disbursement_signature": {
+      "page": 1,
+      "x": 305.5,
+      "y": 30,
+      "width": 257.5,
+      "height": 26,
+      "font_size": 6.2,
+      "align": "center"
+    },
+    "manager_signature_image": {
+      "page": 1,
+      "x": 32,
+      "y": 108,
+      "width": 166.33,
+      "height": 32,
+      "kind": "image",
+      "padding": 4,
+      "source": "loan_request.signers.manager.signature"
+    },
+    "hr_signature_image": {
+      "page": 1,
+      "x": 214.33,
+      "y": 108,
+      "width": 166.33,
+      "height": 32,
+      "kind": "image",
+      "padding": 4,
+      "source": "loan_request.signers.hr.signature"
+    },
+    "cfo_signature_image": {
+      "page": 1,
+      "x": 396.66,
+      "y": 108,
+      "width": 166.34,
+      "height": 32,
+      "kind": "image",
+      "padding": 4,
+      "source": "loan_request.signers.cfo.signature"
+    },
+    "ceo_signature_image": {
+      "page": 1,
+      "x": 32,
+      "y": 30,
+      "width": 257.5,
+      "height": 26,
+      "kind": "image",
+      "padding": 4,
+      "source": "loan_request.signers.ceo.signature"
+    },
+    "disbursement_signature_image": {
+      "page": 1,
+      "x": 305.5,
+      "y": 30,
+      "width": 257.5,
+      "height": 26,
+      "kind": "image",
+      "padding": 4,
+      "source": "loan_request.signers.disbursement.signature"
+    }
+  }
+}

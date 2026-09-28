@@ -33,7 +33,7 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfgen import canvas
 
 from core.pdf import font_pair, shape_ar
-from core.views_templates import resolve_template_path
+from core.views_templates import get_template_search_dirs, resolve_template_path
 
 logger = logging.getLogger(__name__)
 
@@ -103,6 +103,7 @@ def load_form_assets(
     *,
     aliases: Iterable[str] | None = None,
     required_keys: Iterable[str] = (),
+    company_code: str | None = None,
 ) -> FormAssets | None:
     """Resolve a template and the map deployed alongside it, or return ``None``.
 
@@ -114,35 +115,88 @@ def load_form_assets(
     resolves to ``None`` so callers can take their documented fallback.
     """
 
-    template_path = resolve_template_path(template_filename, aliases=list(aliases or []))
+    safe_code = str(company_code or "").strip().upper()
+    company_template_required = bool(safe_code and safe_code != "FFI")
+    template_path = ""
+    company_fields: dict[str, dict[str, Any]] | None = None
+    company_meta: dict[str, Any] = {}
+    # Company-specific pairs live under company_templates/<company-code>/.
+    # Accept only a complete PDF/map pair, then try the next search directory.
+    if company_template_required:
+        if not safe_code.replace("_", "").replace("-", "").isalnum():
+            raise FileNotFoundError(f"No safe company PDF template code for {safe_code!r}.")
+        names = [template_filename, *(aliases or [])]
+        for directory in get_template_search_dirs():
+            for name in names:
+                candidate = Path(directory) / "company_templates" / safe_code / name
+                if not candidate.is_file():
+                    continue
+                candidate_map = candidate.with_name(map_filename)
+                try:
+                    payload = json.loads(candidate_map.read_text(encoding="utf-8"))
+                except (OSError, ValueError, TypeError):
+                    continue
+                fields, meta = _normalise_fields(payload)
+                missing = sorted(set(required_keys) - set(fields))
+                if fields and not missing:
+                    template_path = str(candidate)
+                    company_fields, company_meta = fields, meta
+                    break
+            if template_path:
+                break
+        if not template_path:
+            logger.error("pdf_form.company_template_unresolved", extra={"template": template_filename, "company": safe_code})
+            raise FileNotFoundError(
+                f"No complete company-specific template pair for {safe_code}: {template_filename} and {map_filename}."
+            )
+    else:
+        template_path = resolve_template_path(template_filename, aliases=list(aliases or []))
     if not template_path:
         logger.warning("pdf_form.template_unresolved", extra={"template": template_filename})
         return None
 
-    map_path = Path(template_path).with_name(map_filename)
-    try:
-        payload = json.loads(map_path.read_text(encoding="utf-8"))
-    except (OSError, ValueError, TypeError):
-        logger.warning(
-            "pdf_form.map_unreadable",
-            extra={"template": template_filename, "field_map": map_filename},
-        )
-        return None
+    if company_fields is not None:
+        fields, meta = company_fields, company_meta
+    else:
+        map_path = Path(template_path).with_name(map_filename)
+        try:
+            payload = json.loads(map_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError, TypeError):
+            logger.warning(
+                "pdf_form.map_unreadable",
+                extra={"template": template_filename, "field_map": map_filename},
+            )
+            return None
 
-    fields, meta = _normalise_fields(payload)
-    missing = sorted(set(required_keys) - set(fields))
-    if not fields or missing:
-        logger.warning(
-            "pdf_form.map_incomplete",
-            extra={"template": template_filename, "field_map": map_filename, "missing_fields": missing},
-        )
-        return None
+        fields, meta = _normalise_fields(payload)
+        missing = sorted(set(required_keys) - set(fields))
+        if not fields or missing:
+            logger.warning(
+                "pdf_form.map_incomplete",
+                extra={"template": template_filename, "field_map": map_filename, "missing_fields": missing},
+            )
+            return None
     return FormAssets(template_path=template_path, fields=fields, meta=meta)
 
 
 def _clean(value: Any) -> str:
     text = str(value if value is not None else "").strip()
     return "" if text in {"-", "None"} else text
+
+
+def request_company_code(instance: Any) -> str | None:
+    """Get the owning company code from a request or employee profile."""
+
+    profile = getattr(instance, "employee_profile", None) or getattr(instance, "profile", None)
+    employee = getattr(instance, "employee", None)
+    if profile is None and employee is not None:
+        try:
+            profile = employee.employee_profile
+        except (AttributeError, TypeError):
+            profile = None
+    company = getattr(instance, "company", None) or getattr(profile, "company", None)
+    code = getattr(company, "code", None)
+    return str(code).strip().upper() if code else None
 
 
 def _is_rtl(text: str) -> bool:

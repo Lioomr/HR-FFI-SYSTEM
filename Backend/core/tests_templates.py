@@ -1,5 +1,6 @@
 import os
 import tempfile
+from pathlib import Path
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
@@ -8,6 +9,7 @@ from rest_framework import status
 from rest_framework.test import APIClient
 
 from core.views_templates import TEMPLATE_CATALOG, TEMPLATES_DIR, get_template_search_dirs, resolve_template_path
+from organization.models import OrganizationNode, UserOrganizationAccess
 
 User = get_user_model()
 
@@ -28,6 +30,12 @@ class TemplateLibraryTests(TestCase):
 
         self.employee = User.objects.create_user(email="emp-templ@ffi.com", password="password")
         self.employee.groups.add(self.employee_group)
+
+        self.ffi, _ = OrganizationNode.objects.get_or_create(
+            code="FFI", defaults={"name": "FFI", "node_type": OrganizationNode.NodeType.COMPANY}
+        )
+        for user in (self.hr, self.admin, self.employee):
+            UserOrganizationAccess.objects.get_or_create(user=user, organization=self.ffi)
 
     def test_list_returns_catalog_for_hr(self):
         self.client.force_authenticate(user=self.hr)
@@ -79,3 +87,34 @@ class TemplateLibraryTests(TestCase):
         self.client.force_authenticate(user=self.employee)
         response = self.client.get("/api/core/templates/loan_request/download/")
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_download_uses_active_company_template(self):
+        company, _ = OrganizationNode.objects.get_or_create(
+            code="ATHROYA", defaults={"name": "Athroya", "node_type": OrganizationNode.NodeType.COMPANY}
+        )
+        UserOrganizationAccess.objects.get_or_create(user=self.hr, organization=company)
+        template = next(item for item in TEMPLATE_CATALOG if item["key"] == "leave_request")
+        with tempfile.TemporaryDirectory() as directory, override_settings(HR_TEMPLATES_DIR=directory):
+            branded = Path(directory) / "company_templates" / "ATHROYA" / template["filename"]
+            branded.parent.mkdir(parents=True)
+            branded.write_bytes(b"%PDF-ATHROYA")
+            self.client.force_authenticate(user=self.hr)
+            response = self.client.get(
+                f"/api/core/templates/{template['key']}/download/", HTTP_X_ACTIVE_COMPANY_ID=str(company.id)
+            )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(b"".join(response.streaming_content), b"%PDF-ATHROYA")
+
+    def test_non_ffi_download_does_not_fall_back_to_generic_template(self):
+        company = OrganizationNode.objects.create(
+            code="NO_VARIANT", name="No Variant Co", node_type=OrganizationNode.NodeType.COMPANY
+        )
+        UserOrganizationAccess.objects.get_or_create(user=self.hr, organization=company)
+        template = next(item for item in TEMPLATE_CATALOG if item["key"] == "leave_request")
+        with tempfile.TemporaryDirectory() as directory, override_settings(HR_TEMPLATES_DIR=directory):
+            (Path(directory) / template["filename"]).write_bytes(b"%PDF-FFI")
+            self.client.force_authenticate(user=self.hr)
+            response = self.client.get(
+                f"/api/core/templates/{template['key']}/download/", HTTP_X_ACTIVE_COMPANY_ID=str(company.id)
+            )
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)

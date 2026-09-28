@@ -38,9 +38,7 @@ def notifications():
 
 @pytest.fixture
 def company(db):
-    return OrganizationNode.objects.create(
-        code="PERM_A", name="Permission Company A", node_type=OrganizationNode.NodeType.COMPANY
-    )
+    return OrganizationNode.objects.get(code="FFI")
 
 
 @pytest.fixture
