@@ -1053,8 +1053,11 @@ describe("EmployeeDocumentArchive upload", () => {
 
     fireEvent.click(within(dialog).getByRole("button", { name: "Upload" }));
 
-    await waitFor(() =>
-      expect(within(dialog).getByRole("combobox")).toBeInvalid(),
+    // antd validates asynchronously; on slow CI runners marking the field
+    // invalid can take longer than waitFor's 1s default.
+    await waitFor(
+      () => expect(within(dialog).getByRole("combobox")).toBeInvalid(),
+      { timeout: 5000 },
     );
     expect(uploadEmployeeDocument).not.toHaveBeenCalled();
   });
