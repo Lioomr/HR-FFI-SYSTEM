@@ -18,6 +18,12 @@ vi.mock("../../services/api/employeesApi", () => ({
   deleteEmployeeDocument: vi.fn(),
 }));
 
+// PDFs go to the shared in-app viewer; capture what the archive hands it.
+const openPreviewMock = vi.fn();
+vi.mock("../ui/useFilePreview", () => ({
+  useFilePreview: () => ({ openPreview: openPreviewMock, previewModal: null }),
+}));
+
 import EmployeeDocumentArchive from "./EmployeeDocumentArchive";
 import * as employeesApi from "../../services/api/employeesApi";
 import type {
@@ -243,22 +249,10 @@ describe("EmployeeDocumentArchive OCR", () => {
 });
 
 describe("EmployeeDocumentArchive document preview", () => {
-  let nativePdfWindow: {
-    closed: boolean;
-    close: ReturnType<typeof vi.fn>;
-    location: { href: string };
-  };
-
   beforeEach(() => {
     vi.restoreAllMocks();
-    nativePdfWindow = {
-      closed: false,
-      close: vi.fn(),
-      location: { href: "" },
-    };
-    vi.spyOn(window, "open").mockReturnValue(
-      nativePdfWindow as unknown as Window,
-    );
+    openPreviewMock.mockReset();
+    vi.spyOn(window, "open").mockReturnValue(null);
     Object.defineProperty(URL, "createObjectURL", {
       configurable: true,
       value: vi.fn(() => "blob:employee-document-preview"),
@@ -285,12 +279,11 @@ describe("EmployeeDocumentArchive document preview", () => {
     await waitFor(() =>
       expect(downloadEmployeeDocument).toHaveBeenCalledWith(7, doc.id),
     );
-    await waitFor(() =>
-      expect(nativePdfWindow.location.href).toBe(
-        "blob:employee-document-preview",
-      ),
-    );
-    expect(window.open).toHaveBeenCalledWith("about:blank", "_blank");
+    await waitFor(() => expect(openPreviewMock).toHaveBeenCalledTimes(1));
+    const request = openPreviewMock.mock.calls[0][0];
+    expect(request.title).toBe("Preview document: passport.pdf");
+    expect((await request.load()).type).toBe("application/pdf");
+    expect(window.open).not.toHaveBeenCalled();
   });
 
   it("renders a fetched common image in the preview dialog", async () => {
@@ -332,7 +325,7 @@ describe("EmployeeDocumentArchive document preview", () => {
       screen.queryByTestId("document-preview-pdf"),
     ).not.toBeInTheDocument();
     expect(URL.createObjectURL).not.toHaveBeenCalled();
-    expect(nativePdfWindow.close).toHaveBeenCalledTimes(1);
+    expect(openPreviewMock).not.toHaveBeenCalled();
   });
 
   it("revokes the private object URL when the preview closes", async () => {
