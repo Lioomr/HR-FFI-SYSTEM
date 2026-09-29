@@ -92,6 +92,7 @@ const HR_STATUS_OPTIONS: ContractRatingStatus[] = [
   "PENDING_CEO",
   "DECIDED",
   "MANUAL_RESOLUTION_REQUIRED",
+  "CANCELLED",
 ];
 
 /** The CEO list is scoped server-side to PENDING_CEO + own decisions. */
@@ -106,7 +107,8 @@ type ActionScope = "gate" | "comment" | "decision" | "acknowledge";
 
 function statusTone(status: ContractRatingStatus): ApprovalStatusTone {
   if (status === "DECIDED") return "approved";
-  if (status === "MANUAL_RESOLUTION_REQUIRED") return "rejected";
+  if (status === "MANUAL_RESOLUTION_REQUIRED" || status === "CANCELLED")
+    return "rejected";
   if (status.startsWith("PENDING")) return "pending";
   return "inProgress";
 }

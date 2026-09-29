@@ -34,6 +34,7 @@ export const RATING_STATUS_COLORS: Record<ContractRatingStatus, string> = {
   PENDING_CEO: "gold",
   DECIDED: "green",
   MANUAL_RESOLUTION_REQUIRED: "volcano",
+  CANCELLED: "default",
 };
 
 export const GRADE_COLORS: Record<RatingGrade, string> = {

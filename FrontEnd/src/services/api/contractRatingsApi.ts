@@ -31,7 +31,8 @@ export type ContractRatingStatus =
   | "WAITING_EMPLOYEE"
   | "PENDING_CEO"
   | "DECIDED"
-  | "MANUAL_RESOLUTION_REQUIRED";
+  | "MANUAL_RESOLUTION_REQUIRED"
+  | "CANCELLED";
 
 /** HR's one-time routing choice; blank until HR decides the gate. */
 export type RatingMode = "RATE" | "SKIP_TO_CEO";
