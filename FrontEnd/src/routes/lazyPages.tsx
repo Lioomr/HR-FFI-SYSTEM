@@ -207,6 +207,12 @@ export const HrLeaveBalancesPage = lazy(
 export const AttendancePolicyPage = lazy(
   () => import("../pages/hr/AttendancePolicyPage"),
 );
+export const PenaltiesListPage = lazy(
+  () => import("../pages/shared/penalties/PenaltiesListPage"),
+);
+export const PenaltyDetailPage = lazy(
+  () => import("../pages/shared/penalties/PenaltyDetailPage"),
+);
 
 // ─── Manager ────────────────────────────────────────────────────────────────
 export const ManagerDashboardPage = lazy(
