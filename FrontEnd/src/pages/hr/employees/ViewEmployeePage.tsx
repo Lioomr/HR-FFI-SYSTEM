@@ -4,7 +4,6 @@ import {
   Alert,
   Button,
   Card,
-  Descriptions,
   Space,
   Modal,
   Select,
@@ -16,7 +15,6 @@ import {
   Tabs,
   Tag,
   Typography,
-  Divider,
 } from "antd";
 import {
   ArrowLeftOutlined,
@@ -31,7 +29,20 @@ import {
   PhoneOutlined,
   SafetyCertificateOutlined,
   InboxOutlined,
+  ApartmentOutlined,
+  BankOutlined,
+  CalendarOutlined,
+  ClockCircleOutlined,
+  FileDoneOutlined,
+  FileTextOutlined,
+  GlobalOutlined,
+  IdcardOutlined,
+  PlusCircleOutlined,
+  SolutionOutlined,
+  TeamOutlined,
+  WalletOutlined,
 } from "@ant-design/icons";
+import "./ViewEmployeePage.css";
 import { getCountryFlag } from "../../../utils/countries";
 import EmployeeLeaveBalances from "./components/EmployeeLeaveBalances";
 import EmployeeDocumentArchive from "../../../components/employees/EmployeeDocumentArchive";
@@ -91,26 +102,121 @@ const formatDate = (value: any): string => {
   return formatValue(value);
 };
 
-function getExpiryStatus(
-  dateStr: string | undefined,
-): "expired" | "warning" | "ok" | "unknown" {
-  if (!dateStr) return "unknown";
+const ALLOWANCE_FIELDS = [
+  ["employees.form.transportation", "transportation_allowance"],
+  ["employees.form.accommodation", "accommodation_allowance"],
+  ["employees.form.telephone", "telephone_allowance"],
+  ["employees.form.petrol", "petrol_allowance"],
+  ["employees.form.other", "other_allowance"],
+] as const;
+
+type ExpiryStatus = "expired" | "warning" | "ok" | "unknown";
+
+function getExpiryInfo(dateStr: string | undefined): {
+  status: ExpiryStatus;
+  days: number | null;
+} {
+  if (!dateStr) return { status: "unknown", days: null };
   const expiry = new Date(dateStr);
-  const now = new Date();
-  const diffDays = Math.floor((expiry.getTime() - now.getTime()) / 86400000);
-  if (diffDays < 0) return "expired";
-  if (diffDays <= 60) return "warning";
-  return "ok";
+  if (Number.isNaN(expiry.getTime())) return { status: "unknown", days: null };
+  const days = Math.floor((expiry.getTime() - Date.now()) / 86400000);
+  if (days < 0) return { status: "expired", days };
+  if (days <= 60) return { status: "warning", days };
+  return { status: "ok", days };
 }
 
-function ExpiryTag({ status }: { status: ReturnType<typeof getExpiryStatus> }) {
+function ExpiryTag({ status }: { status: ExpiryStatus }) {
   const { t } = useI18n();
-  if (status === "expired") return <Tag color="error">{t("status.expired", "Expired")}</Tag>;
+  if (status === "expired")
+    return <Tag color="error">{t("status.expired", "Expired")}</Tag>;
   if (status === "warning") {
-    return <Tag color="warning">{t("status.expiringSoon", "Expiring Soon")}</Tag>;
+    return (
+      <Tag color="warning">{t("status.expiringSoon", "Expiring Soon")}</Tag>
+    );
   }
-  if (status === "ok") return <Tag color="success">{t("status.valid", "Valid")}</Tag>;
+  if (status === "ok")
+    return <Tag color="success">{t("status.valid", "Valid")}</Tag>;
   return <Tag>{t("status.unknown", "Unknown")}</Tag>;
+}
+
+/** "N days left" / "Expired N days ago" for a dated document or contract. */
+function useExpiryHint() {
+  const { t } = useI18n();
+  return (days: number | null) => {
+    if (days === null) return null;
+    return days < 0
+      ? t("employees.view.expiredDaysAgo", { days: Math.abs(days) })
+      : t("employees.view.daysLeft", { days });
+  };
+}
+
+/** Whole years and months since the joining date, or null when unknown. */
+function getServiceLength(dateStr: string | undefined) {
+  if (!dateStr) return null;
+  const start = new Date(dateStr);
+  if (Number.isNaN(start.getTime())) return null;
+  const now = new Date();
+  let months =
+    (now.getFullYear() - start.getFullYear()) * 12 +
+    (now.getMonth() - start.getMonth());
+  if (now.getDate() < start.getDate()) months -= 1;
+  if (months < 0) return null;
+  return { years: Math.floor(months / 12), months: months % 12 };
+}
+
+function InfoField({
+  icon,
+  label,
+  children,
+  className,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <div className={`emp-field ${className ?? ""}`}>
+      <span className="emp-field__icon">{icon}</span>
+      <div className="emp-field__body">
+        <div className="emp-field__label">{label}</div>
+        <div className="emp-field__value">{children}</div>
+      </div>
+    </div>
+  );
+}
+
+function StatItem({
+  icon,
+  label,
+  value,
+  hint,
+  tone,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: React.ReactNode;
+  hint?: React.ReactNode;
+  tone?: ExpiryStatus;
+}) {
+  return (
+    <div className="emp-stat">
+      <span className="emp-stat__icon">{icon}</span>
+      <div className="emp-stat__body">
+        <div className="emp-stat__label">{label}</div>
+        <div
+          className={`emp-stat__value ${tone && !hint ? `emp-tone--${tone}` : ""}`}
+        >
+          {value}
+        </div>
+        {hint && (
+          <div className={`emp-stat__hint ${tone ? `emp-tone--${tone}` : ""}`}>
+            {hint}
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }
 
 function DocCard({
@@ -129,45 +235,30 @@ function DocCard({
   testId?: string;
 }) {
   const { t } = useI18n();
-  const status = getExpiryStatus(expiry);
-  const borderColor =
-    status === "expired"
-      ? "#ff4d4f"
-      : status === "warning"
-        ? "#faad14"
-        : "#f0f0f0";
+  const expiryHint = useExpiryHint();
+  const { status, days } = getExpiryInfo(expiry);
   return (
-    <div
-      data-testid={testId}
-      style={{
-        padding: 12,
-        background: "#fafafa",
-        borderRadius: 8,
-        border: `1px solid ${borderColor}`,
-      }}
-    >
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          marginBottom: 4,
-        }}
-      >
-        <Text strong>
-          <SafetyCertificateOutlined /> {label}
-        </Text>
-        <Space size={4}>
-          <ExpiryTag status={status} />
-          <Tag color={tagColor}>{tagLabel}</Tag>
-        </Space>
-      </div>
-      {number && (
-        <div style={{ fontSize: 13, color: "#595959", marginBottom: 4 }}>
-          {number}
+    <div data-testid={testId} className={`emp-doc emp-doc--${status}`}>
+      <span className="emp-doc__icon">
+        <SafetyCertificateOutlined />
+      </span>
+      <div className="emp-doc__body">
+        <div className="emp-doc__head">
+          <span className="emp-doc__label">{label}</span>
+          <Space size={4}>
+            <ExpiryTag status={status} />
+            <Tag color={tagColor}>{tagLabel}</Tag>
+          </Space>
         </div>
-      )}
-      <div style={{ fontSize: 12, color: "#8c8c8c" }}>
-        {t("hr.employees.expires", "Expires")}: {formatDate(expiry)}
+        {number && <div className="emp-doc__number">{number}</div>}
+        <div className="emp-doc__meta">
+          <span>
+            {t("hr.employees.expires", "Expires")}: {formatDate(expiry)}
+          </span>
+          {status !== "ok" && days !== null && (
+            <span className="emp-doc__days">{expiryHint(days)}</span>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -177,6 +268,7 @@ const { Title, Text } = Typography;
 
 export default function ViewEmployeePage() {
   const { t } = useI18n();
+  const expiryHint = useExpiryHint();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const activeOrganizationId = useAuthStore(
@@ -283,22 +375,25 @@ export default function ViewEmployeePage() {
     if (!isLinkModalOpen) return;
 
     let cancelled = false;
-    const timer = window.setTimeout(async () => {
-      setUsersLoading(true);
-      try {
-        const response = await listLinkCandidates({
-          ...(linkSearch.trim() ? { search: linkSearch.trim() } : {}),
-          limit: 20,
-        });
-        if (!cancelled) {
-          setLinkCandidates(isApiError(response) ? [] : response.data.items);
+    const timer = window.setTimeout(
+      async () => {
+        setUsersLoading(true);
+        try {
+          const response = await listLinkCandidates({
+            ...(linkSearch.trim() ? { search: linkSearch.trim() } : {}),
+            limit: 20,
+          });
+          if (!cancelled) {
+            setLinkCandidates(isApiError(response) ? [] : response.data.items);
+          }
+        } catch {
+          if (!cancelled) message.error(t("hr.employees.loadUsersFailed"));
+        } finally {
+          if (!cancelled) setUsersLoading(false);
         }
-      } catch {
-        if (!cancelled) message.error(t("hr.employees.loadUsersFailed"));
-      } finally {
-        if (!cancelled) setUsersLoading(false);
-      }
-    }, linkSearch ? 250 : 0);
+      },
+      linkSearch ? 250 : 0,
+    );
 
     return () => {
       cancelled = true;
@@ -434,8 +529,46 @@ export default function ViewEmployeePage() {
     );
   }
 
+  const joinDate = (employee as any).join_date || employee.hire_date;
+  const serviceLength = getServiceLength(joinDate);
+  const contractInfo = getExpiryInfo((employee as any).contract_expiry);
+  const documents = [
+    {
+      label: t("employees.form.passport"),
+      tagLabel: t("employees.form.passport"),
+      tagColor: "cyan",
+      number: formatValue(employee.passport || (employee as any).passport_no),
+      expiry: (employee as any).passport_expiry,
+    },
+    {
+      label: t("employees.form.nationalId"),
+      tagLabel: t("employees.view.idTag"),
+      tagColor: "blue",
+      number: formatValue((employee as any).national_id),
+      expiry: (employee as any).id_expiry,
+    },
+    {
+      label: t("employees.form.healthCard"),
+      tagLabel: t("employees.view.healthTag"),
+      tagColor: "green",
+      number: formatValue((employee as any).health_card),
+      expiry: (employee as any).health_card_expiry,
+    },
+    {
+      label: t("employees.form.workLicense"),
+      tagLabel: t("employees.form.workLicenseTag"),
+      tagColor: "purple",
+      expiry: employee.work_license_expiry,
+      testId: "work-license-expiry-card",
+    },
+  ];
+  const docsNeedingAttention = documents.filter((doc) => {
+    const { status } = getExpiryInfo(doc.expiry);
+    return status === "expired" || status === "warning";
+  }).length;
+
   return (
-    <div>
+    <div className="emp-profile">
       <PageHeader
         title={t("hr.employees.view")}
         breadcrumb={t("layout.hrManagement")}
@@ -530,51 +663,20 @@ export default function ViewEmployeePage() {
         />
       )}
 
-      {/* Hero Banner */}
-      <Card
-        style={{
-          borderRadius: 16,
-          border: "none",
-          boxShadow: "0 2px 16px rgba(0,0,0,0.06)",
-          marginBottom: 24,
-          background: "linear-gradient(135deg, #fff7f0 0%, #fff 100%)",
-        }}
-      >
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 20,
-            flexWrap: "wrap",
-          }}
-        >
-          <Avatar
-            size={88}
-            style={{
-              backgroundColor: "#f56a00",
-              fontSize: 36,
-              flexShrink: 0,
-              boxShadow: "0 0 0 4px #fff2e8",
-            }}
-          >
+      <section className="emp-hero">
+        <div className="emp-hero__cover" />
+        <div className="emp-hero__body">
+          <Avatar size={104} className="emp-hero__avatar">
             {employee.full_name?.charAt(0).toUpperCase()}
           </Avatar>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <Title level={3} style={{ margin: 0 }}>
+          <div className="emp-hero__identity">
+            <Title level={3} className="emp-hero__name">
               {employee.full_name}
             </Title>
-            <Text type="secondary" style={{ fontSize: 15 }}>
+            <Text className="emp-hero__position">
               {employee.position || "—"}
             </Text>
-            <div
-              style={{
-                marginTop: 10,
-                display: "flex",
-                gap: 8,
-                flexWrap: "wrap",
-                alignItems: "center",
-              }}
-            >
+            <div className="emp-hero__chips">
               {employee.department && (
                 <Tag color="orange">{employee.department}</Tag>
               )}
@@ -593,332 +695,319 @@ export default function ViewEmployeePage() {
                   employee.employment_status || "ACTIVE",
                 )}
               </Tag>
-              <Tag
-                style={{
-                  fontFamily: "monospace",
-                  background: "#f5f5f5",
-                  border: "1px solid #d9d9d9",
-                  color: "#595959",
-                }}
-              >
+              <Tag className="emp-hero__id-tag" dir="ltr">
                 #{employee.employee_id}
               </Tag>
               {!employee.user_id && (
                 <Tag color="warning">{t("hr.employees.notLinked")}</Tag>
               )}
             </div>
+          </div>
+          <div className="emp-hero__contact">
             {employee.mobile && (
-              <div style={{ marginTop: 8 }}>
-                <Space>
-                  <PhoneOutlined style={{ color: "#bfbfbf" }} />
-                  <a
-                    href={`tel:${employee.mobile}`}
-                    style={{ fontSize: 13, color: "inherit" }}
-                  >
-                    {employee.mobile}
-                  </a>
-                </Space>
-              </div>
+              <a
+                className="emp-contact-pill"
+                href={`tel:${employee.mobile}`}
+                dir="ltr"
+              >
+                <PhoneOutlined />
+                <span>{employee.mobile}</span>
+              </a>
+            )}
+            {employee.user_id && employee.email && (
+              <a className="emp-contact-pill" href={`mailto:${employee.email}`}>
+                <MailOutlined />
+                <span>{employee.email}</span>
+              </a>
             )}
           </div>
         </div>
-      </Card>
+        <div className="emp-hero__stats">
+          <StatItem
+            icon={<CalendarOutlined />}
+            label={t("employees.form.joiningDate")}
+            value={formatDate(joinDate)}
+            hint={
+              serviceLength &&
+              (serviceLength.years > 0
+                ? t("employees.view.serviceYearsMonths", serviceLength)
+                : t("employees.view.serviceMonths", serviceLength))
+            }
+          />
+          <StatItem
+            icon={<FileDoneOutlined />}
+            label={t("employees.form.contractExpiry")}
+            value={formatDate((employee as any).contract_expiry)}
+            hint={expiryHint(contractInfo.days)}
+            tone={contractInfo.status}
+          />
+          <StatItem
+            icon={<ApartmentOutlined />}
+            label={t("employees.view.directManager")}
+            value={formatValue(
+              employee.manager_profile_name || employee.manager_name,
+            )}
+          />
+          <StatItem
+            icon={<SafetyCertificateOutlined />}
+            label={t("employees.view.documentsStatus")}
+            value={
+              docsNeedingAttention > 0
+                ? t("employees.view.docsNeedAttention", {
+                    count: docsNeedingAttention,
+                  })
+                : t("employees.view.docsAllValid")
+            }
+            tone={docsNeedingAttention > 0 ? "warning" : "ok"}
+          />
+        </div>
+      </section>
 
-      <div style={{ paddingBottom: 24 }}>
-        <Row gutter={24}>
-          {/* Left Column: Main Tabs */}
-          <Col xs={24} lg={17}>
-            <Card
-              style={{
-                borderRadius: 16,
-                border: "none",
-                boxShadow: "0 4px 12px rgba(0,0,0,0.03)",
-              }}
-            >
-              <Tabs
-                defaultActiveKey="1"
-                items={[
-                  {
-                    key: "1",
-                    label: (
-                      <span>
-                        <UserOutlined />
-                        {t("hr.employees.personalInfo")}
-                      </span>
-                    ),
-                    children: (
-                      <Descriptions
-                        column={{ xs: 1, sm: 2 }}
-                        layout="vertical"
-                        style={{ marginTop: 16 }}
+      <Row gutter={[20, 20]}>
+        {/* Main Tabs */}
+        <Col xs={24} lg={16} xxl={17}>
+          <Card className="emp-panel">
+            <Tabs
+              defaultActiveKey="1"
+              items={[
+                {
+                  key: "1",
+                  label: (
+                    <span>
+                      <UserOutlined />
+                      {t("hr.employees.personalInfo")}
+                    </span>
+                  ),
+                  children: (
+                    <div className="emp-fields">
+                      <InfoField
+                        icon={<UserOutlined />}
+                        label={t("hr.employees.fullName")}
                       >
-                        <Descriptions.Item label={t("hr.employees.fullName")}>
-                          {formatValue(employee.full_name)}
-                        </Descriptions.Item>
-                        <Descriptions.Item
-                          label={t("employees.form.dateOfBirth")}
-                        >
-                          {formatDate((employee as any).date_of_birth)}
-                        </Descriptions.Item>
-                        <Descriptions.Item
-                          label={t("employees.form.nationality")}
-                        >
-                          <Space>
-                            <span>
-                              {getCountryFlag((employee as any).nationality)}
-                            </span>
-                            {formatValue((employee as any).nationality)}
-                          </Space>
-                        </Descriptions.Item>
-                        <Descriptions.Item
-                          label={t("employees.form.empNumber")}
-                        >
-                          {formatValue((employee as any).employee_number)}
-                        </Descriptions.Item>
-                        <Descriptions.Item label={t("employees.form.mobile")}>
-                          <Space>
-                            <PhoneOutlined style={{ color: "#bfbfbf" }} />
-                            {formatValue(employee.mobile)}
-                          </Space>
-                        </Descriptions.Item>
-                        <Descriptions.Item
-                          label={t("hr.employees.linkedAccount")}
-                        >
-                          {employee.user_id ? (
-                            <Space>
-                              <MailOutlined style={{ color: "#bfbfbf" }} />
-                              <span style={{ color: "#1890ff" }}>
-                                {employee.email}
-                              </span>
-                            </Space>
-                          ) : (
-                            <Tag color="warning">
-                              {t("hr.employees.notLinked")}
-                            </Tag>
-                          )}
-                        </Descriptions.Item>
-                      </Descriptions>
-                    ),
-                  },
-                  {
-                    key: "2",
-                    label: (
-                      <span>
-                        <ContainerOutlined />
-                        {t("hr.employees.employmentInfo")}
-                      </span>
-                    ),
-                    children: (
-                      <Descriptions
-                        column={{ xs: 1, sm: 2 }}
-                        layout="vertical"
-                        style={{ marginTop: 16 }}
+                        {formatValue(employee.full_name)}
+                      </InfoField>
+                      <InfoField
+                        icon={<CalendarOutlined />}
+                        label={t("employees.form.dateOfBirth")}
                       >
-                        <Descriptions.Item
-                          label={t("employees.form.department")}
+                        {formatDate((employee as any).date_of_birth)}
+                      </InfoField>
+                      <InfoField
+                        icon={<GlobalOutlined />}
+                        label={t("employees.form.nationality")}
+                      >
+                        <Space size={6}>
+                          <span>
+                            {getCountryFlag((employee as any).nationality)}
+                          </span>
+                          {formatValue((employee as any).nationality)}
+                        </Space>
+                      </InfoField>
+                      <InfoField
+                        icon={<IdcardOutlined />}
+                        label={t("employees.form.empNumber")}
+                      >
+                        {formatValue((employee as any).employee_number)}
+                      </InfoField>
+                      <InfoField
+                        icon={<PhoneOutlined />}
+                        label={t("employees.form.mobile")}
+                      >
+                        <span dir="ltr">{formatValue(employee.mobile)}</span>
+                      </InfoField>
+                      <InfoField
+                        icon={<MailOutlined />}
+                        label={t("hr.employees.linkedAccount")}
+                      >
+                        {employee.user_id ? (
+                          <a href={`mailto:${employee.email}`}>
+                            {employee.email}
+                          </a>
+                        ) : (
+                          <Tag color="warning">
+                            {t("hr.employees.notLinked")}
+                          </Tag>
+                        )}
+                      </InfoField>
+                    </div>
+                  ),
+                },
+                {
+                  key: "2",
+                  label: (
+                    <span>
+                      <ContainerOutlined />
+                      {t("hr.employees.employmentInfo")}
+                    </span>
+                  ),
+                  children: (
+                    <div className="emp-fields">
+                      <InfoField
+                        icon={<ApartmentOutlined />}
+                        label={t("employees.form.department")}
+                      >
+                        {formatValue(employee.department)}
+                      </InfoField>
+                      <InfoField
+                        icon={<SolutionOutlined />}
+                        label={t("employees.form.position")}
+                      >
+                        {formatValue(employee.position)}
+                      </InfoField>
+                      <InfoField
+                        icon={<TeamOutlined />}
+                        label={t("employees.form.taskGroup")}
+                      >
+                        {formatValue(employee.task_group)}
+                      </InfoField>
+                      <InfoField
+                        icon={<BankOutlined />}
+                        label={t("employees.form.sponsor")}
+                      >
+                        {formatValue(employee.sponsor)}
+                      </InfoField>
+                      <InfoField
+                        icon={<FileTextOutlined />}
+                        label={t("employees.form.jobOffer")}
+                      >
+                        {formatValue((employee as any).job_offer)}
+                      </InfoField>
+                      <InfoField
+                        icon={<CalendarOutlined />}
+                        label={t("employees.form.joiningDate")}
+                      >
+                        {formatDate(joinDate)}
+                      </InfoField>
+                      <InfoField
+                        icon={<CalendarOutlined />}
+                        label={t("employees.form.contractDate")}
+                      >
+                        {formatDate((employee as any).contract_date)}
+                      </InfoField>
+                      <InfoField
+                        icon={<FileDoneOutlined />}
+                        label={t("employees.form.contractExpiry")}
+                      >
+                        {formatDate((employee as any).contract_expiry)}
+                      </InfoField>
+                      <InfoField
+                        icon={<ClockCircleOutlined />}
+                        label={t("employees.form.allowedOvertime")}
+                      >
+                        {formatValue((employee as any).allowed_overtime)}{" "}
+                        {t("hr.employees.hours")}
+                      </InfoField>
+                    </div>
+                  ),
+                },
+                {
+                  key: "3",
+                  label: (
+                    <span>
+                      <DollarOutlined />
+                      {t("hr.employees.salaryDetails")}
+                    </span>
+                  ),
+                  children: (
+                    <div>
+                      <div className="emp-fields">
+                        <InfoField
+                          icon={<WalletOutlined />}
+                          label={t("employees.form.basicSalary")}
                         >
-                          {formatValue(employee.department)}
-                        </Descriptions.Item>
-                        <Descriptions.Item label={t("employees.form.position")}>
-                          {formatValue(employee.position)}
-                        </Descriptions.Item>
-                        <Descriptions.Item
-                          label={t("employees.form.taskGroup")}
+                          {formatCurrency((employee as any).basic_salary)}
+                        </InfoField>
+                        <InfoField
+                          icon={<DollarOutlined />}
+                          label={t("employees.form.totalSalary")}
+                          className="emp-salary-total"
                         >
-                          {formatValue(employee.task_group)}
-                        </Descriptions.Item>
-                        <Descriptions.Item label={t("employees.form.sponsor")}>
-                          {formatValue(employee.sponsor)}
-                        </Descriptions.Item>
-                        <Descriptions.Item label={t("employees.form.jobOffer")}>
-                          {formatValue((employee as any).job_offer)}
-                        </Descriptions.Item>
-                        <Descriptions.Item
-                          label={t("employees.form.joiningDate")}
-                        >
-                          {formatDate(
-                            (employee as any).join_date || employee.hire_date,
-                          )}
-                        </Descriptions.Item>
-                        <Descriptions.Item
-                          label={t("employees.form.contractDate")}
-                        >
-                          {formatDate((employee as any).contract_date)}
-                        </Descriptions.Item>
-                        <Descriptions.Item
-                          label={t("employees.form.contractExpiry")}
-                        >
-                          {formatDate((employee as any).contract_expiry)}
-                        </Descriptions.Item>
-                        <Descriptions.Item
-                          label={t("employees.form.allowedOvertime")}
-                        >
-                          {formatValue((employee as any).allowed_overtime)}{" "}
-                          {t("hr.employees.hours")}
-                        </Descriptions.Item>
-                      </Descriptions>
-                    ),
-                  },
-                  {
-                    key: "3",
-                    label: (
-                      <span>
-                        <DollarOutlined />
-                        {t("hr.employees.salaryDetails")}
-                      </span>
-                    ),
-                    children: (
-                      <div>
-                        <Descriptions
-                          column={{ xs: 1, sm: 2 }}
-                          layout="vertical"
-                          style={{ marginTop: 16 }}
-                        >
-                          <Descriptions.Item
-                            label={t("employees.form.basicSalary")}
-                          >
-                            {formatCurrency((employee as any).basic_salary)}
-                          </Descriptions.Item>
-                          <Descriptions.Item
-                            label={t("employees.form.totalSalary")}
-                          >
-                            <AmountWithSAR
-                              amount={(employee as any).total_salary}
-                              size={16}
-                              color="#52c41a"
-                              fontWeight="bold"
-                              style={{ fontSize: 16 }}
-                            />
-                          </Descriptions.Item>
-                        </Descriptions>
-
-                        <Divider
-                          style={{
-                            margin: "12px 0",
-                            fontSize: 13,
-                            color: "#8c8c8c",
-                          }}
-                        >
-                          {t("employees.form.allowances")}
-                        </Divider>
-
-                        <Descriptions
-                          column={{ xs: 1, sm: 2, md: 3 }}
-                          layout="vertical"
-                          size="small"
-                        >
-                          <Descriptions.Item
-                            label={t("employees.form.transportation")}
-                          >
-                            {formatCurrency(
-                              (employee as any).transportation_allowance,
-                            )}
-                          </Descriptions.Item>
-                          <Descriptions.Item
-                            label={t("employees.form.accommodation")}
-                          >
-                            {formatCurrency(
-                              (employee as any).accommodation_allowance,
-                            )}
-                          </Descriptions.Item>
-                          <Descriptions.Item
-                            label={t("employees.form.telephone")}
-                          >
-                            {formatCurrency(
-                              (employee as any).telephone_allowance,
-                            )}
-                          </Descriptions.Item>
-                          <Descriptions.Item label={t("employees.form.petrol")}>
-                            {formatCurrency((employee as any).petrol_allowance)}
-                          </Descriptions.Item>
-                          <Descriptions.Item label={t("employees.form.other")}>
-                            {formatCurrency((employee as any).other_allowance)}
-                          </Descriptions.Item>
-                        </Descriptions>
+                          <AmountWithSAR
+                            amount={(employee as any).total_salary}
+                            size={16}
+                            color="#16a34a"
+                            fontWeight="bold"
+                            style={{ fontSize: 16 }}
+                          />
+                        </InfoField>
                       </div>
-                    ),
-                  },
-                  {
-                    key: "4",
-                    label: (
-                      <span>
-                        <ContainerOutlined />
-                        {t("hr.employees.leaveBalances")}
-                      </span>
-                    ),
-                    children: <EmployeeLeaveBalances employeeId={Number(id)} />,
-                  },
-                  {
-                    key: "5",
-                    label: (
-                      <span>
-                        <InboxOutlined />
-                        {t("archive.tabLabel", "Document Archive")}
-                      </span>
-                    ),
-                    children: (
-                      <EmployeeDocumentArchive
-                        employeeId={Number(id)}
-                        canManageDocuments={canManageDocuments}
-                      />
-                    ),
-                  },
-                ]}
-              />
-            </Card>
-          </Col>
 
-          {/* Right Column: Documents only */}
-          <Col xs={24} lg={7}>
-            <Card
-              title={
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <FolderOpenOutlined style={{ color: "#fa8c16" }} />
-                  <span>{t("hr.employees.documents")}</span>
-                </div>
-              }
-              style={{
-                borderRadius: 16,
-                border: "none",
-                boxShadow: "0 4px 12px rgba(0,0,0,0.03)",
-              }}
-            >
-              <Space direction="vertical" style={{ width: "100%" }} size={12}>
-                <DocCard
-                  label={t("employees.form.passport")}
-                  tagLabel={t("employees.form.passport")}
-                  tagColor="cyan"
-                  number={formatValue(
-                    employee.passport || (employee as any).passport_no,
-                  )}
-                  expiry={(employee as any).passport_expiry}
-                />
-                <DocCard
-                  label={t("employees.form.nationalId")}
-                  tagLabel={t("employees.view.idTag")}
-                  tagColor="blue"
-                  number={formatValue((employee as any).national_id)}
-                  expiry={(employee as any).id_expiry}
-                />
-                <DocCard
-                  label={t("employees.form.healthCard")}
-                  tagLabel={t("employees.view.healthTag")}
-                  tagColor="green"
-                  number={formatValue((employee as any).health_card)}
-                  expiry={(employee as any).health_card_expiry}
-                />
-                <DocCard
-                  label={t("employees.form.workLicense")}
-                  tagLabel={t("employees.form.workLicenseTag")}
-                  tagColor="purple"
-                  expiry={employee.work_license_expiry}
-                  testId="work-license-expiry-card"
-                />
-              </Space>
-            </Card>
-          </Col>
-        </Row>
-      </div>
+                      <div className="emp-section-title">
+                        {t("employees.form.allowances")}
+                      </div>
+
+                      <div className="emp-fields">
+                        {ALLOWANCE_FIELDS.map(([labelKey, field]) => (
+                          <InfoField
+                            key={field}
+                            icon={<PlusCircleOutlined />}
+                            label={t(labelKey)}
+                          >
+                            {formatCurrency((employee as any)[field])}
+                          </InfoField>
+                        ))}
+                      </div>
+                    </div>
+                  ),
+                },
+                {
+                  key: "4",
+                  label: (
+                    <span>
+                      <ContainerOutlined />
+                      {t("hr.employees.leaveBalances")}
+                    </span>
+                  ),
+                  children: <EmployeeLeaveBalances employeeId={Number(id)} />,
+                },
+                {
+                  key: "5",
+                  label: (
+                    <span>
+                      <InboxOutlined />
+                      {t("archive.tabLabel", "Document Archive")}
+                    </span>
+                  ),
+                  children: (
+                    <EmployeeDocumentArchive
+                      employeeId={Number(id)}
+                      canManageDocuments={canManageDocuments}
+                    />
+                  ),
+                },
+              ]}
+            />
+          </Card>
+        </Col>
+
+        {/* Documents */}
+        <Col xs={24} lg={8} xxl={7}>
+          <Card
+            className="emp-panel emp-docs"
+            title={
+              <div className="emp-docs__title">
+                <FolderOpenOutlined />
+                <span>{t("hr.employees.documents")}</span>
+              </div>
+            }
+            extra={
+              docsNeedingAttention > 0 ? (
+                <Tag color="warning" style={{ margin: 0, borderRadius: 999 }}>
+                  {t("employees.view.docsNeedAttention", {
+                    count: docsNeedingAttention,
+                  })}
+                </Tag>
+              ) : undefined
+            }
+          >
+            <div className="emp-docs__list">
+              {documents.map((doc) => (
+                <DocCard key={doc.tagLabel} {...doc} />
+              ))}
+            </div>
+          </Card>
+        </Col>
+      </Row>
 
       <Modal
         title={t("hr.employees.connectUserTitle")}
