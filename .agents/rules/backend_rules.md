@@ -35,6 +35,10 @@ Never skip permission checks. Every view/action must have the appropriate `permi
 
 Leave, Loan, and Asset approval flows use the shared `core` workflow engine. Do not reinvent approval logic — extend `WorkflowDefinition`. Read `.agents/context/workflow_engine.md`.
 
+## Notifications (Required)
+
+Every notification about a company-owned record must name that record's company: pass `related_object=`, `company=`, or `company_id=` to `dispatch_notification_channels()` / `create_notification()`, and use a plain app path as `action_url`. The dispatcher then adds `?company=<id>`, so WhatsApp, email, and bell links open in the right company, and the bell lists the notification there. Read the "Rules for New Notifications" in `.agents/context/notifications.md`.
+
 ## BioTime
 
 The attendance sync (`biotime_client.py`, `services.py`) has specific singleton and error-handling rules. Read `.agents/context/biotime_integration.md` before touching attendance/BioTime code.

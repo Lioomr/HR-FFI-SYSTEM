@@ -141,6 +141,17 @@ pre-check yourself, or you can create duplicate notifications on a redelivery. F
 - Add new WhatsApp templates to `WHATSAPP_TEMPLATE_REGISTRY` and `EVOLUTION_TEMPLATE_RENDERERS`.
 - Keep WhatsApp text Arabic first, English second.
 - Do not reintroduce Bird WhatsApp provider paths or Bird WhatsApp env vars.
+- **Every notification about a company-owned record must name that record's company**, so its WhatsApp, email and
+  bell links open in that company and the bell lists it there. Send it through `dispatch_notification_channels()` or
+  `create_notification()` and pass `related_object=<record>` (preferred, when the model has `company`),
+  `company=<OrganizationNode>`, or `company_id=<id>`. Do not rely on the recipient's own company: a reviewer can
+  belong to a different company than the request.
+- Set `action_url` / `action_path` (and any `action_url` in WhatsApp variables or email context) to a plain app path
+  such as `/hr/leave/requests/{id}`. Do not add `?company=` yourself; the dispatcher adds it. Links built outside the
+  dispatcher (sending WhatsApp or email directly) miss this and open in the user's default company.
+- Test a new notification with a recipient whose own company differs from the record's. Assert that
+  `notification.company_id` and the link's `company=` value both equal the record's company (see
+  `test_pending_approval_links_open_the_request_company` in `Backend/in_app_notifications/tests.py`).
 
 ## Company in Notification Links
 

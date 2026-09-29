@@ -18,7 +18,7 @@ For architecture, feature planning, or work crossing modules, read [`system_map.
 | `api_design.md` | ~2.5K | REST envelope, pagination, error shape, kebab-case URLs |
 | `file_uploads.md` | ~3K | `PrivateUploadStorage`, `private_uploads/`, signed URL, attachments |
 | `i18n.md` | ~1.8K | `useI18n`, `translations.ts`, `name_en`/`name_ar`, bilingual |
-| `notifications.md` | ~5.1K | notifications, Bird email, Evolution WhatsApp, TextBee SMS, template, `notify_users_for_pending_status` |
+| `notifications.md` | ~6.5K | notifications, Bird email, Evolution WhatsApp, TextBee SMS, template, `notify_users_for_pending_status`, notification links, `?company=` deep links, bell company |
 | `pdf_template_library.md` | ~2.2K | PDF templates, `/hr/templates`, blank forms, leave/loan PDF download, template overlay |
 | `workflow_engine.md` | ~10.8K | `WorkflowDefinition`, approval trail/history, Current Requests, leave request detail, delegation, request obligations, `sync_workflow` |
 | `biotime_integration.md` | ~2.8K | BioTime, ZKTeme 8.5, `biotime_client.py`, `sync_biotime`, singleton |
