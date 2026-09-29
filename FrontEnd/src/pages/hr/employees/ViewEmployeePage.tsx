@@ -250,10 +250,16 @@ function DocCard({
             <Tag color={tagColor}>{tagLabel}</Tag>
           </Space>
         </div>
-        {number && <div className="emp-doc__number">{number}</div>}
+        {number && number !== "—" && (
+          <div className="emp-doc__number" dir="ltr">
+            <IdcardOutlined aria-hidden="true" />
+            <span>{number}</span>
+          </div>
+        )}
         <div className="emp-doc__meta">
           <span>
-            {t("hr.employees.expires", "Expires")}: {formatDate(expiry)}
+            {t("hr.employees.expires", "Expires")}:{" "}
+            <bdi className="emp-doc__expiry-date">{formatDate(expiry)}</bdi>
           </span>
           {status !== "ok" && days !== null && (
             <span className="emp-doc__days">{expiryHint(days)}</span>

@@ -312,24 +312,29 @@ a.emp-contact-pill:hover {
 .emp-docs__list {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
 }
 
 .emp-doc {
   --doc-color: var(--emp-neutral);
   --doc-soft: var(--emp-neutral-soft);
   display: flex;
-  gap: 12px;
-  padding: 12px 14px;
+  gap: 14px;
+  padding: 16px;
   border: 1px solid var(--emp-border);
-  border-inline-start: 3px solid var(--doc-color);
-  border-radius: 12px;
-  background: var(--surface-0);
-  transition: box-shadow var(--transition-fast);
+  border-inline-start: 4px solid var(--doc-color);
+  border-radius: 14px;
+  background: linear-gradient(135deg, var(--surface-0) 75%, var(--doc-soft));
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.025);
+  transition:
+    border-color var(--transition-fast),
+    box-shadow var(--transition-fast);
 }
 
 .emp-doc:hover {
-  box-shadow: var(--shadow-sm);
+  border-color: #cbd5e1;
+  border-inline-start-color: var(--doc-color);
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.07);
 }
 
 .emp-doc--ok {
@@ -351,9 +356,9 @@ a.emp-contact-pill:hover {
   display: grid;
   flex-shrink: 0;
   place-items: center;
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
+  width: 38px;
+  height: 38px;
+  border-radius: 11px;
   background: var(--doc-soft);
   color: var(--doc-color);
   font-size: 16px;
@@ -369,11 +374,12 @@ a.emp-contact-pill:hover {
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 4px 8px;
+  gap: 8px;
 }
 
 .emp-doc__label {
   color: var(--text-primary);
+  font-size: 15px;
   font-weight: 700;
 }
 
@@ -383,10 +389,33 @@ a.emp-contact-pill:hover {
 }
 
 .emp-doc__number {
-  margin-top: 2px;
-  color: var(--text-secondary);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+  margin-top: 12px;
+  padding: 7px 10px;
+  border: 1px solid #dce4ee;
+  border-radius: 8px;
+  background: #f4f7fb;
+  color: #17243a;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 13px;
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  letter-spacing: 0.025em;
+  line-height: 1.4;
+}
+
+.emp-doc__number .anticon {
+  flex-shrink: 0;
+  color: var(--doc-color);
+  font-size: 16px;
+}
+
+.emp-doc__number span {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .emp-doc__meta {
@@ -394,14 +423,22 @@ a.emp-contact-pill:hover {
   flex-wrap: wrap;
   justify-content: space-between;
   gap: 2px 8px;
-  margin-top: 4px;
-  color: var(--text-muted);
+  margin-top: 12px;
+  padding-top: 9px;
+  border-top: 1px solid var(--emp-border);
+  color: var(--text-secondary);
   font-size: 12px;
+  line-height: 1.5;
+}
+
+.emp-doc__expiry-date {
+  color: #334155;
+  font-weight: 700;
 }
 
 .emp-doc__days {
   color: var(--doc-color);
-  font-weight: 500;
+  font-weight: 700;
 }
 
 .emp-tone--ok {
