@@ -328,8 +328,11 @@ def sync_attendance_candidates(result):
 def _is_absence_eligible(record):
     from attendance.leave_resolution import with_leave_resolution
     from attendance.models import AttendanceDailyResult, AttendanceRecord
+    from attendance.schedule import is_working_day
 
     if record.status != AttendanceRecord.Status.ABSENT or record.source != AttendanceRecord.Source.SYSTEM:
+        return False
+    if not is_working_day(record.employee_profile, record.date):
         return False
     if record.check_in_at or record.check_out_at:
         return False
@@ -399,7 +402,7 @@ def sync_absence_candidates(records):
     from attendance.schedule import is_working_day
 
     for record in records:
-        if record.date < effective_from() or record.status != "ABSENT" or record.source != "SYSTEM":
+        if record.date < effective_from() or not _is_absence_eligible(record):
             continue
         profile = record.employee_profile
         cycle_start, _cycle_end = get_contract_year_cycle(profile, record.date)
@@ -428,27 +431,33 @@ def sync_absence_candidates(records):
             if previous is None:
                 break
             streak.insert(0, previous)
-        days = len(streak)
+        # The printed continuous-absence bands use elapsed days, not working
+        # days. An off-day may bridge two verified missed shifts but never
+        # supplies absence evidence by itself.
+        continuous_calendar_days = (record.date - streak[0].date).days + 1
+        missed_shifts = len(streak)
         total = len(rows)
-        if days == 15:
+        if continuous_calendar_days == 15:
             # The printed bands stop at 14 and resume only when absence
             # exceeds 15 days. Day 15 adds no invented schedule action.
             continue
         code = (
             "W15"
-            if days >= 16
+            if continuous_calendar_days >= 16
             else "W16"
             if total >= 31
             else "W14"
-            if days >= 11
+            if continuous_calendar_days >= 11
             else "W13"
-            if days >= 7
+            if continuous_calendar_days >= 7
             else "W12"
-            if days >= 2
+            if continuous_calendar_days >= 2
             else "W11"
         )
         threshold = {"W11": 1, "W12": 2, "W13": 7, "W14": 11, "W15": 16}.get(code)
-        anchor = streak[threshold - 1] if threshold else rows[30]
+        anchor = (
+            next(row for row in streak if (row.date - streak[0].date).days + 1 >= threshold) if threshold else rows[30]
+        )
         pending = (
             PenaltyRecord.objects.filter(
                 attendance_record__in=streak, source_kind="absence", status=PenaltyRecord.Status.PENDING_HR_MARK
@@ -464,6 +473,10 @@ def sync_absence_candidates(records):
             record.date,
             "absence",
             attendance_record=anchor,
-            note=f"System absence: {days} consecutive working days, {total} in this contract year. HR must confirm no written permission, acceptable excuse or covering leave and any required warning.",
-            evidence={"absence_days": days, "contract_year_absence_days": total},
+            note=f"System absence: {continuous_calendar_days} continuous calendar days between missed scheduled shifts, {missed_shifts} missed shifts, {total} missed shifts in this contract year. HR must confirm no written permission, acceptable excuse or covering leave and any required warning.",
+            evidence={
+                "absence_days": missed_shifts,
+                "continuous_calendar_days": continuous_calendar_days,
+                "contract_year_absence_days": total,
+            },
         )

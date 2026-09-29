@@ -639,7 +639,8 @@ class PenaltyScheduleTests(TestCase):
     def test_absence_spell_advances_one_candidate_and_reclassifies_after_correction(self):
         days = []
         current = date(2026, 9, 29)
-        while len(days) < 7:
+        through = current + timedelta(days=6)
+        while current <= through:
             if is_working_day(self.profile, current):
                 days.append(current)
             current += date.resolution
@@ -656,14 +657,16 @@ class PenaltyScheduleTests(TestCase):
             sync_absence_candidates([row])
         candidate = PenaltyRecord.objects.get(source_kind="absence")
         self.assertEqual(candidate.catalog.code, "W13")
-        self.assertEqual(candidate.evidence["absence_days"], 7)
+        self.assertEqual(candidate.evidence["absence_days"], len(rows))
+        self.assertEqual(candidate.evidence["continuous_calendar_days"], 7)
 
         rows[-1].status = AttendanceRecord.Status.PRESENT
         with self.captureOnCommitCallbacks(execute=True):
             rows[-1].save(update_fields=["status"])
         candidate.refresh_from_db()
         self.assertEqual(candidate.catalog.code, "W12")
-        self.assertEqual(candidate.evidence["absence_days"], 6)
+        self.assertEqual(candidate.evidence["absence_days"], len(rows) - 1)
+        self.assertEqual(candidate.evidence["continuous_calendar_days"], (rows[-2].date - rows[0].date).days + 1)
         self.assertEqual(candidate.status, PenaltyRecord.Status.PENDING_HR_MARK)
 
         with self.captureOnCommitCallbacks(execute=True):
@@ -673,3 +676,66 @@ class PenaltyScheduleTests(TestCase):
         candidate.refresh_from_db()
         self.assertEqual(candidate.catalog.code, "W11")
         self.assertEqual(candidate.evidence["absence_days"], 1)
+        self.assertEqual(candidate.evidence["continuous_calendar_days"], 1)
+
+    def test_off_days_bridge_calendar_spell_but_never_supply_absence_evidence(self):
+        self.profile.is_saudi = True
+        self.profile.save(update_fields=["is_saudi"])
+        start = date(2026, 9, 29)
+        pair = None
+        for offset in range(20):
+            first = start + timedelta(days=offset)
+            later = first + timedelta(days=3)
+            if (
+                is_working_day(self.profile, first)
+                and is_working_day(self.profile, later)
+                and all(not is_working_day(self.profile, first + timedelta(days=gap)) for gap in (1, 2))
+            ):
+                pair = first, later
+                break
+        self.assertIsNotNone(pair)
+        first, later = pair
+        off_day = first + timedelta(days=1)
+        false_absence = AttendanceRecord.objects.create(
+            employee_profile=self.profile,
+            date=off_day,
+            source=AttendanceRecord.Source.SYSTEM,
+            status=AttendanceRecord.Status.ABSENT,
+        )
+        sync_absence_candidates([false_absence])
+        self.assertFalse(PenaltyRecord.objects.exists())
+        for day in (first, later):
+            row = AttendanceRecord.objects.create(
+                employee_profile=self.profile,
+                date=day,
+                source=AttendanceRecord.Source.SYSTEM,
+                status=AttendanceRecord.Status.ABSENT,
+            )
+            sync_absence_candidates([row])
+        candidate = PenaltyRecord.objects.get(source_kind="absence")
+        self.assertEqual(candidate.catalog.code, "W12")
+        self.assertEqual(candidate.evidence["continuous_calendar_days"], 4)
+        self.assertEqual(candidate.evidence["absence_days"], 2)
+        self.assertEqual(candidate.evidence["contract_year_absence_days"], 2)
+
+    def test_calendar_day_fifteen_has_no_new_band_and_day_sixteen_opens_w15(self):
+        start = date(2026, 9, 29)
+        for offset in range(16):
+            day = start + timedelta(days=offset)
+            if not is_working_day(self.profile, day):
+                continue
+            row = AttendanceRecord.objects.create(
+                employee_profile=self.profile,
+                date=day,
+                source=AttendanceRecord.Source.SYSTEM,
+                status=AttendanceRecord.Status.ABSENT,
+            )
+            sync_absence_candidates([row])
+            if offset == 14:
+                candidate = PenaltyRecord.objects.get(source_kind="absence")
+                self.assertEqual(candidate.catalog.code, "W14")
+            if offset == 15:
+                candidate = PenaltyRecord.objects.get(source_kind="absence")
+                self.assertEqual(candidate.catalog.code, "W15")
+                self.assertEqual(candidate.evidence["continuous_calendar_days"], 16)
+        self.assertEqual(PenaltyRecord.objects.filter(source_kind="absence").count(), 1)
