@@ -87,6 +87,7 @@ const statusColors: Record<ContractDecisionStatus, string> = {
   REJECTED: "red",
   AUTO_RENEWAL_FAILED: "volcano",
   MANUAL_RESOLUTION_REQUIRED: "volcano",
+  CANCELLED: "default",
 };
 
 const STATUS_CHIP_TONES: Record<ContractDecisionStatus, ChipTone> = {
@@ -98,6 +99,7 @@ const STATUS_CHIP_TONES: Record<ContractDecisionStatus, ChipTone> = {
   REJECTED: "critical",
   AUTO_RENEWAL_FAILED: "severe",
   MANUAL_RESOLUTION_REQUIRED: "severe",
+  CANCELLED: "neutral",
 };
 
 /** The backend's `status_label` is English-only, so labels follow the UI language. */
@@ -110,6 +112,7 @@ const STATUS_LABEL_KEYS: Record<ContractDecisionStatus, string> = {
   REJECTED: "contractDecisions.rejected",
   AUTO_RENEWAL_FAILED: "contractDecisions.renewalFailed",
   MANUAL_RESOLUTION_REQUIRED: "contractDecisions.manualResolution",
+  CANCELLED: "contractDecisions.cancelled",
 };
 
 const DECISION_TYPE_LABEL_KEYS: Record<ContractDecisionType, string> = {

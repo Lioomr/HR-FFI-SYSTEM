@@ -17,7 +17,8 @@ export type ContractDecisionStatus =
   | "REJECTED"
   | "AUTO_RENEWED"
   | "AUTO_RENEWAL_FAILED"
-  | "MANUAL_RESOLUTION_REQUIRED";
+  | "MANUAL_RESOLUTION_REQUIRED"
+  | "CANCELLED";
 
 /**
  * The six components the backend sums into `total_salary`
