@@ -38,6 +38,7 @@ from organization.services import (
     filter_queryset_by_company_scope,
     get_active_company_for_request,
 )
+from penalties.payroll import finalize_penalty_deductions, sync_penalty_deductions
 
 from .models import PayrollRun, PayrollRunItem, Payslip
 from .permissions import IsEmployeeOnly
@@ -637,6 +638,7 @@ def _generate_payroll_items(run, request=None):
     # Attendance penalties are claimed by the draft after its items exist; the
     # same sync runs again at finalization for penalties that arrive later.
     sync_attendance_deductions(run, request=request)
+    sync_penalty_deductions(run, request=request)
 
 
 class PayrollRunViewSet(
@@ -803,6 +805,7 @@ class PayrollRunViewSet(
             # Include penalties that became pending after draft creation, then
             # lock every claim together with the run.
             finalize_attendance_deductions(run, request=request)
+            finalize_penalty_deductions(run, request=request)
             run.status = PayrollRun.Status.COMPLETED
             run.save(update_fields=["status", "updated_at"])
         audit(request, "payroll_run_finalized", entity="PayrollRun", entity_id=run.id)

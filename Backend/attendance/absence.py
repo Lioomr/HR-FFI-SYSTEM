@@ -169,6 +169,17 @@ def mark_absentees_for_date(target_date: date_type, *, force: bool = False) -> d
             # ignore_conflicts guards against a race with a late BioTime punch
             # creating the same (employee, date) row.
             AttendanceRecord.objects.bulk_create(to_create, ignore_conflicts=True)
+            from penalties.services import sync_absence_candidates
+
+            saved_absences = list(
+                AttendanceRecord.objects.select_related("employee_profile", "employee_profile__company").filter(
+                    date=target_date,
+                    source=AttendanceRecord.Source.SYSTEM,
+                    status=AttendanceRecord.Status.ABSENT,
+                    employee_profile_id__in=[row.employee_profile_id for row in to_create],
+                )
+            )
+            sync_absence_candidates(saved_absences)
         # Count what is actually in the table now, so a lost race is not
         # reported as a creation.
         result["created"] = AttendanceRecord.objects.filter(

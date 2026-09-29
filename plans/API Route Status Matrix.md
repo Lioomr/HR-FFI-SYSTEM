@@ -6,6 +6,17 @@
 **Gate 3 status:** **Pass**; the employee mobile client now consumes these routes. No route, permission, or response contract was changed — the 2026-07-28 edits record verification only.  
 **Purpose:** reconciled mobile endpoint index. Django URL resolution, views, serializers, permissions, and tests are authoritative.
 
+## Penalties (2026-09-29)
+
+The new active-company-scoped `/api/penalties/` family implements the prospective bilingual schedule. Full request, response, status, and payroll contract: `plans/Penalties API.md`.
+
+| Area | Actual route and method | Status | Verified behavior / required action |
+|---|---|---|---|
+| Catalog and records | `GET /api/penalties/catalog/`; `GET/POST /api/penalties/`; `GET /api/penalties/{id}/` | Current | Catalog is shared across companies; records use the selected company. Employees see only their own records; HRManager/SystemAdmin can manage company records. Manual POST excludes automatic work-time rows. |
+| Attendance HR marking | `POST /api/penalties/{id}/mark-disruption/` | Current | W01–W06 require disrupted/not_disrupted or excused; W07–W16 require confirmed or excused. Candidate remains outside payroll until issue and separate payroll review. |
+| Employee response and HR resolution | `POST /api/penalties/{id}/acknowledge/`; `POST .../{id}/dispute/`; `POST .../{id}/resolve/` | Current | Non-attendance owner response only. Acknowledgement may precede dispute; unresolved disputes block future claims. Post-final dispute and resolution never alter finalized payroll. |
+| Payroll review | `POST /api/penalties/{id}/payroll-review/` | Current | HRManager/SystemAdmin approve or hold monetary deductions. Approved total deduction is claimed idempotently by a draft and frozen at finalization. |
+
 ## Employee mobile MVP routes
 
 ### Attendance leave resolution (2026-09-10)

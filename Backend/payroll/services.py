@@ -17,7 +17,7 @@ deduction is an attendance-policy manual-review exception, never a credit.
 
 from __future__ import annotations
 
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 
 from django.db import transaction
 from django.db.models import Q
@@ -45,13 +45,14 @@ def sync_attendance_deductions(run, *, request=None) -> dict:
     """Bring a DRAFT run's attendance claims up to date, exactly once per change."""
     run = PayrollRun.objects.select_for_update().get(pk=run.pk)
     if run.status != PayrollRun.Status.DRAFT:
-        raise PayrollRunNotDraftError(f"Payroll run {run.pk} is {run.status}; only DRAFT runs accept attendance claims.")
+        raise PayrollRunNotDraftError(
+            f"Payroll run {run.pk} is {run.status}; only DRAFT runs accept attendance claims."
+        )
 
     # A held row is always re-examined (so a zero-value leftover is released);
     # only monetary pending penalties are ever newly claimed.
     candidates = Q(payroll_run=run) | (
-        Q(company_id=run.company_id, status=Status.PENDING, payroll_run__isnull=True, amount__gt=0)
-        & _due_for_run(run)
+        Q(company_id=run.company_id, status=Status.PENDING, payroll_run__isnull=True, amount__gt=0) & _due_for_run(run)
     )
     counts = {"claimed": 0, "adjusted": 0, "released": 0}
     profile_ids = sorted(
@@ -73,6 +74,34 @@ def sync_attendance_deductions(run, *, request=None) -> dict:
         .filter(candidates, employee_profile_id__in=profile_ids)
         .order_by("pk")
     )
+    # Article 70 caps each fine and the total disciplinary fines deducted in
+    # this payroll month at five days' wages. New schedule claims occupy the
+    # same bucket; their separate unworked-time withholding does not.
+    from penalties.models import PenaltyDeduction
+
+    used_fines = {profile_id: ZERO for profile_id in profile_ids}
+    for profile_id, fine in PenaltyDeduction.objects.filter(
+        payroll_run=run, employee_profile_id__in=profile_ids, claimed_amount__gt=0
+    ).values_list("employee_profile_id", "penalty__amount"):
+        used_fines[profile_id] += fine
+    selected = set()
+    for deduction in sorted(
+        deductions,
+        key=lambda row: (row.status != Status.CLAIMED or row.payroll_run_id != run.pk, row.pk),
+    ):
+        if not (
+            deduction.status in {Status.PENDING, Status.CLAIMED}
+            and deduction.amount > 0
+            and deduction.violation.lifecycle == AttendanceLateViolation.Lifecycle.ACTIVE
+        ):
+            continue
+        profile = profiles[deduction.employee_profile_id]
+        cap = ((profile.total_salary or ZERO) / Decimal("30") * Decimal("5")).quantize(
+            Decimal("0.01"), rounding=ROUND_HALF_UP
+        )
+        if deduction.amount <= cap and used_fines[profile.pk] + deduction.amount <= cap:
+            selected.add(deduction.pk)
+            used_fines[profile.pk] += deduction.amount
     items = list(PayrollRunItem.objects.select_for_update().filter(payroll_run=run).order_by("pk"))
     items_by_id = {item.pk: item for item in items}
     items_by_employee_id = {item.employee_id: item for item in items}
@@ -88,11 +117,7 @@ def sync_attendance_deductions(run, *, request=None) -> dict:
             continue
         profile = profiles[deduction.employee_profile_id]
         # A first-occurrence warning is never a payroll deduction.
-        chargeable = (
-            deduction.status != Status.VOID
-            and deduction.amount > 0
-            and deduction.violation.lifecycle == AttendanceLateViolation.Lifecycle.ACTIVE
-        )
+        chargeable = deduction.pk in selected
         held = deduction.payroll_run_id == run.pk
         if held:
             item = items_by_id.get(deduction.payroll_run_item_id)
@@ -128,7 +153,11 @@ def sync_attendance_deductions(run, *, request=None) -> dict:
         else:
             deduction.payroll_run = None
             deduction.payroll_run_item = None
-            deduction.status = Status.VOID
+            deduction.status = (
+                Status.PENDING
+                if deduction.amount > 0 and deduction.violation.lifecycle == AttendanceLateViolation.Lifecycle.ACTIVE
+                else Status.VOID
+            )
             action, key = "attendance_penalty_released_from_payroll", "released"
         deduction.claimed_amount = target
         deduction.save(update_fields=["payroll_run", "payroll_run_item", "status", "claimed_amount", "updated_at"])
@@ -180,7 +209,11 @@ def finalize_attendance_deductions(run, *, request=None) -> dict:
             "attendance_penalty_applied_to_payroll",
             entity="AttendancePayrollDeduction",
             entity_id=claim.id,
-            metadata={"payroll_run_id": run.pk, "violation_id": claim.violation_id, "amount": str(claim.claimed_amount)},
+            metadata={
+                "payroll_run_id": run.pk,
+                "violation_id": claim.violation_id,
+                "amount": str(claim.claimed_amount),
+            },
         )
     counts["applied"] = len(claims)
     return counts
