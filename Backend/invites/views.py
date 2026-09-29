@@ -276,9 +276,7 @@ def _ensure_invited_employee_profile(
 
     if phone_number:
         matched_profile = (
-            EmployeeProfile.objects.filter(
-                company=company, mobile=phone_number, user__isnull=True, is_archived=False
-            )
+            EmployeeProfile.objects.filter(company=company, mobile=phone_number, user__isnull=True, is_archived=False)
             .order_by("id")
             .first()
         )
@@ -365,9 +363,7 @@ class InvitesListCreateView(APIView):
 
         search = request.query_params.get("search", "").strip()
         if search:
-            qs = qs.filter(
-                Q(email__icontains=search) | Q(phone_number__icontains=search) | Q(role__icontains=search)
-            )
+            qs = qs.filter(Q(email__icontains=search) | Q(phone_number__icontains=search) | Q(role__icontains=search))
 
         paginator = InvitesPagination()
         paginator.pending_count = pending_count
@@ -399,6 +395,35 @@ class InvitesListCreateView(APIView):
         expires_at = now + timedelta(hours=expires_in_hours)
         company = get_active_company_for_request(request)
 
+        # Accepting an unlinked invite used to create a new employee with a random ID,
+        # duplicating the record HR had already created. Tie the account to that record.
+        employee_profile = None
+        if role != "SystemAdmin":
+            profile_id = s.validated_data.get("employee_profile_id")
+            if not profile_id:
+                return error(
+                    "Validation error",
+                    errors={"employee_profile_id": ["Select the employee this invitation is for."]},
+                    status=422,
+                )
+            employee_profile = (
+                EmployeeProfile.objects.select_for_update()
+                .filter(pk=profile_id, company=company, is_archived=False)
+                .first()
+            )
+            if employee_profile is None:
+                return error(
+                    "Validation error",
+                    errors={"employee_profile_id": ["Employee not found in the selected company."]},
+                    status=422,
+                )
+            if employee_profile.user_id:
+                return error(
+                    "Validation error",
+                    errors={"employee_profile_id": ["This employee already has an account."]},
+                    status=422,
+                )
+
         invite = Invite.objects.create(
             email=email,
             phone_number=phone_number,
@@ -410,6 +435,7 @@ class InvitesListCreateView(APIView):
             expires_at=expires_at,
             created_by=request.user,
             company=company,
+            employee_profile=employee_profile,
         )
 
         audit(
@@ -626,7 +652,9 @@ class InviteAcceptView(APIView):
             or invite.company.node_type != OrganizationNode.NodeType.COMPANY
             or not invite.company.is_active
         ):
-            return error("Validation error", errors={"token": ["Invitation has no active company context."]}, status=422)
+            return error(
+                "Validation error", errors={"token": ["Invitation has no active company context."]}, status=422
+            )
         email: str = s.validated_data["email"]
         phone_number: str = s.validated_data.get("phone_number", "")
         submitted_phone_number: str = s.validated_data.get("submitted_phone_number", "")
@@ -635,6 +663,12 @@ class InviteAcceptView(APIView):
 
         if User.objects.filter(email__iexact=email).exists():
             return error("Validation error", errors={"email": ["Email is already registered."]}, status=422)
+        if invite.employee_profile_id is None and invite.role != "SystemAdmin":
+            return error(
+                "Validation error",
+                errors={"token": ["This invitation is not linked to an employee. Ask HR to send a new invitation."]},
+                status=422,
+            )
 
         try:
             with transaction.atomic():

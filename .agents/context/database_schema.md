@@ -59,6 +59,10 @@ Backend: Django 5.2 + PostgreSQL 16. All domain models carry a `company` FK for 
 
 ### invites
 - `Invite` — `email`, `role`, `token` (UUID), `status` (PENDING|ACCEPTED|EXPIRED), `expiry`, `resend_count`
+  - `employee_profile` links the invite to an existing `EmployeeProfile` in the invite's company. Manual invites
+    must set it for every role except SystemAdmin (HR picks an employee without an account); accepting links the
+    new user to that profile. Unlinked non-SystemAdmin invites are rejected on accept, so an invite never creates a
+    new employee. Job-offer invites set it automatically.
 
 ## Schema Rules
 

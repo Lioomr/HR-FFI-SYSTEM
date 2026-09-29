@@ -41,6 +41,10 @@ class InvitePermissionTests(TestCase):
             full_name="Regular Employee",
         )
         self.employee_user.groups.add(self.employee_group)
+        # HR creates the employee first; the invitation gives that record an account.
+        self.invitee_profile = EmployeeProfile.objects.create(
+            company=self.company, employee_id="INV-0001", full_name="Invitee One"
+        )
 
     @patch("invites.views.send_user_invite_email")
     def test_hr_manager_can_create_invite(self, send_email):
@@ -49,7 +53,7 @@ class InvitePermissionTests(TestCase):
 
         response = self.client.post(
             "/invites/",
-            {"email": "new-user@test.com", "role": "Employee"},
+            {"email": "new-user@test.com", "role": "Employee", "employee_profile_id": self.invitee_profile.id},
             format="json",
         )
 
@@ -91,7 +95,12 @@ class InvitePermissionTests(TestCase):
 
         response = self.client.post(
             "/invites/",
-            {"channel": "whatsapp", "phone_number": "201013530963", "role": "Employee"},
+            {
+                "channel": "whatsapp",
+                "phone_number": "201013530963",
+                "role": "Employee",
+                "employee_profile_id": self.invitee_profile.id,
+            },
             format="json",
         )
 
@@ -142,6 +151,7 @@ class InvitePermissionTests(TestCase):
                 "phone_number": "+201515091693",
                 "email": "Expected.WA@TEST.COM",
                 "role": "Employee",
+                "employee_profile_id": self.invitee_profile.id,
             },
             format="json",
         )
@@ -174,6 +184,7 @@ class InvitePermissionTests(TestCase):
                 "phone_number": "+201515091694",
                 "email": self.employee_user.email,
                 "role": "Employee",
+                "employee_profile_id": self.invitee_profile.id,
             },
             format="json",
         )
@@ -196,7 +207,12 @@ class InvitePermissionTests(TestCase):
 
         response = self.client.post(
             "/invites/",
-            {"channel": "whatsapp", "phone_number": "+201515091691", "role": "Employee"},
+            {
+                "channel": "whatsapp",
+                "phone_number": "+201515091691",
+                "role": "Employee",
+                "employee_profile_id": self.invitee_profile.id,
+            },
             format="json",
         )
 
@@ -229,7 +245,12 @@ class InvitePermissionTests(TestCase):
 
         response = self.client.post(
             "/invites/",
-            {"channel": "whatsapp", "phone_number": "+201515091692", "role": "Employee"},
+            {
+                "channel": "whatsapp",
+                "phone_number": "+201515091692",
+                "role": "Employee",
+                "employee_profile_id": self.invitee_profile.id,
+            },
             format="json",
         )
 
@@ -325,7 +346,7 @@ class InvitePermissionTests(TestCase):
 
         response = self.client.post(
             "/invites/",
-            {"channel": "whatsapp", "role": "Employee"},
+            {"channel": "whatsapp", "role": "Employee", "employee_profile_id": self.invitee_profile.id},
             format="json",
         )
 
@@ -337,7 +358,7 @@ class InvitePermissionTests(TestCase):
 
         response = self.client.post(
             "/invites/",
-            {"channel": "email", "role": "Employee"},
+            {"channel": "email", "role": "Employee", "employee_profile_id": self.invitee_profile.id},
             format="json",
         )
 
@@ -380,6 +401,7 @@ class InvitePermissionTests(TestCase):
             expires_at=now + timedelta(hours=72),
             created_by=self.hr_user,
             company=self.company,
+            employee_profile=self.invitee_profile,
         )
         self.client.force_authenticate(user=self.hr_user)
 
@@ -400,6 +422,7 @@ class InvitePermissionTests(TestCase):
             expires_at=now + timedelta(hours=72),
             created_by=self.hr_user,
             company=self.company,
+            employee_profile=self.invitee_profile,
         )
         Invite.objects.create(
             email="another-pending@test.com",
@@ -410,6 +433,7 @@ class InvitePermissionTests(TestCase):
             expires_at=now + timedelta(hours=72),
             created_by=self.hr_user,
             company=self.company,
+            employee_profile=self.invitee_profile,
         )
         other_company = OrganizationNode.objects.create(
             code="INVITE_OTHER_COMPANY",
@@ -475,6 +499,7 @@ class InvitePermissionTests(TestCase):
             expires_at=now + timedelta(hours=72),
             created_by=self.hr_user,
             company=self.company,
+            employee_profile=self.invitee_profile,
             last_delivery_channel=Invite.Channel.WHATSAPP,
             last_delivery_sent=False,
             last_delivery_provider="evolution_whatsapp",
@@ -505,7 +530,7 @@ class InvitePermissionTests(TestCase):
 
         response = self.client.post(
             "/invites/",
-            {"email": "blocked-user@test.com", "role": "Employee"},
+            {"email": "blocked-user@test.com", "role": "Employee", "employee_profile_id": self.invitee_profile.id},
             format="json",
         )
 
@@ -523,6 +548,7 @@ class InvitePermissionTests(TestCase):
             expires_at=now + timedelta(hours=72),
             created_by=self.hr_user,
             company=self.company,
+            employee_profile=self.invitee_profile,
         )
 
         response = self.client.post(
@@ -553,6 +579,7 @@ class InvitePermissionTests(TestCase):
             expires_at=now + timedelta(hours=72),
             created_by=self.hr_user,
             company=self.company,
+            employee_profile=self.invitee_profile,
         )
 
         response = self.client.post(
@@ -611,6 +638,7 @@ class InvitePermissionTests(TestCase):
             expires_at=now + timedelta(hours=72),
             created_by=self.hr_user,
             company=self.company,
+            employee_profile=self.invitee_profile,
         )
 
         response = self.client.post(
@@ -646,6 +674,7 @@ class InvitePermissionTests(TestCase):
             expires_at=now + timedelta(hours=72),
             created_by=self.hr_user,
             company=self.company,
+            employee_profile=self.invitee_profile,
         )
 
         response = self.client.post(
@@ -714,6 +743,7 @@ class InvitePermissionTests(TestCase):
             expires_at=now + timedelta(hours=72),
             created_by=self.hr_user,
             company=self.company,
+            employee_profile=self.invitee_profile,
         )
 
         response = self.client.get("/invites/accept/", {"token": invite.token})
@@ -735,6 +765,7 @@ class InvitePermissionTests(TestCase):
             expires_at=now + timedelta(hours=72),
             created_by=self.hr_user,
             company=self.company,
+            employee_profile=self.invitee_profile,
         )
 
         response = self.client.post(
@@ -771,6 +802,7 @@ class InvitePermissionTests(TestCase):
             expires_at=now + timedelta(hours=72),
             created_by=self.hr_user,
             company=self.company,
+            employee_profile=self.invitee_profile,
         )
         self.client.force_authenticate(user=self.hr_user)
 
@@ -809,6 +841,7 @@ class InvitePermissionTests(TestCase):
             expires_at=now + timedelta(hours=72),
             created_by=self.hr_user,
             company=self.company,
+            employee_profile=self.invitee_profile,
         )
         self.client.force_authenticate(user=self.hr_user)
 
@@ -827,3 +860,76 @@ class InvitePermissionTests(TestCase):
         self.assertFalse(invite.last_delivery_sent)
         self.assertTrue(invite.provider_submitted)
         self.assertEqual(invite.delivery_status, Invite.DeliveryStatus.QUEUED)
+
+
+@override_settings(SECURE_SSL_REDIRECT=False, ALLOWED_HOSTS=["testserver", "localhost", "127.0.0.1"])
+class InviteEmployeeLinkTests(TestCase):
+    """Invitations give an existing employee an account; they never create a new employee."""
+
+    setUp = InvitePermissionTests.setUp
+
+    def _post_invite(self, **extra):
+        self.client.force_authenticate(user=self.hr_user)
+        return self.client.post("/invites/", {"email": "linked@test.com", "role": "Employee", **extra}, format="json")
+
+    def test_invite_requires_an_employee(self):
+        response = self._post_invite()
+        self.assertEqual(response.status_code, 422)
+        self.assertEqual(response.data["errors"][0]["field"], "employee_profile_id")
+        self.assertFalse(Invite.objects.exists())
+
+    def test_invite_rejects_employee_with_account_or_from_another_company(self):
+        self.invitee_profile.user = self.employee_user
+        self.invitee_profile.save(update_fields=["user"])
+        self.assertEqual(self._post_invite(employee_profile_id=self.invitee_profile.id).status_code, 422)
+
+        other = OrganizationNode.objects.create(
+            code="OTHER_CO", name="Other", node_type=OrganizationNode.NodeType.COMPANY
+        )
+        foreign = EmployeeProfile.objects.create(company=other, employee_id="OTH-1", full_name="Foreign")
+        self.assertEqual(self._post_invite(employee_profile_id=foreign.id).status_code, 422)
+        self.assertFalse(Invite.objects.exists())
+
+    @patch("invites.views.send_user_invite_email")
+    def test_accepting_links_the_selected_employee_without_creating_one(self, send_email):
+        send_email.return_value = {"success": True, "provider": "bird", "message_id": "e", "status_code": 202}
+        self.assertEqual(self._post_invite(employee_profile_id=self.invitee_profile.id).status_code, 201)
+        invite = Invite.objects.get(email="linked@test.com")
+        self.assertEqual(invite.employee_profile_id, self.invitee_profile.id)
+        profiles_before = EmployeeProfile.objects.count()
+
+        self.client.force_authenticate(user=None)
+        response = self.client.post(
+            "/invites/accept/",
+            {"token": invite.token, "full_name": "Invitee Typed Differently", "password": "StrongPass123!"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(EmployeeProfile.objects.count(), profiles_before)
+        self.invitee_profile.refresh_from_db()
+        self.assertEqual(self.invitee_profile.user.email, "linked@test.com")
+
+    def test_unlinked_legacy_invite_cannot_create_an_employee(self):
+        now = timezone.now()
+        invite = Invite.objects.create(
+            email="legacy@test.com",
+            role="Employee",
+            token=Invite.generate_token(),
+            status=Invite.Status.SENT,
+            sent_at=now,
+            expires_at=now + timedelta(hours=72),
+            created_by=self.hr_user,
+            company=self.company,
+        )
+        profiles_before = EmployeeProfile.objects.count()
+
+        response = self.client.post(
+            "/invites/accept/",
+            {"token": invite.token, "full_name": "Legacy", "password": "StrongPass123!"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 422)
+        self.assertFalse(User.objects.filter(email="legacy@test.com").exists())
+        self.assertEqual(EmployeeProfile.objects.count(), profiles_before)
