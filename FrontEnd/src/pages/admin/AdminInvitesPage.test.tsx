@@ -8,8 +8,13 @@ vi.mock("../../services/api/invitesApi", () => ({
   revokeInvite: vi.fn(),
 }));
 
+vi.mock("../../services/api/employeesApi", () => ({
+  listEmployees: vi.fn(),
+}));
+
 import AdminInvitesPage from "./AdminInvitesPage";
 import * as invitesApi from "../../services/api/invitesApi";
+import * as employeesApi from "../../services/api/employeesApi";
 import type { InviteDto } from "../../services/api/apiTypes";
 import { useI18nStore } from "../../i18n/i18nStore";
 import { useAuthStore } from "../../auth/authStore";
@@ -126,15 +131,32 @@ function createdInvite(overrides: Partial<InviteDto> = {}): {
   };
 }
 
+const listEmployees = employeesApi.listEmployees as unknown as ReturnType<
+  typeof vi.fn
+>;
+
 beforeEach(() => {
   listInvites.mockReset();
   createInvite.mockReset();
+  listEmployees.mockResolvedValue({
+    status: "success",
+    data: {
+      results: [{ id: 7, full_name: "Sara Ali", employee_id: "FFI-7" }],
+      count: 1,
+    },
+  });
   useI18nStore.getState().setLanguage("en");
   useAuthStore.setState({
     isAuthenticated: true,
     user: { id: "1", email: "hr@ffi.test", role: "HRManager" },
   } as any);
 });
+
+/** Picks the employee the invitation gives an account to. */
+async function chooseEmployee() {
+  fireEvent.mouseDown(document.querySelector("#employee_profile_id")!);
+  fireEvent.click(await screen.findByTitle("Sara Ali (FFI-7)"));
+}
 
 /** Renders the page and waits for the initial invite load to settle. */
 async function renderPage(items: InviteDto[] = [], pendingCount?: number) {
@@ -178,6 +200,7 @@ describe("AdminInvitesPage — WhatsApp invite creation", () => {
     await renderPage();
     createInvite.mockResolvedValue(createdInvite());
 
+    await chooseEmployee();
     await chooseWhatsappChannel();
     typePhone("512345678");
     submitInvite();
@@ -187,6 +210,7 @@ describe("AdminInvitesPage — WhatsApp invite creation", () => {
         channel: "whatsapp",
         phone_number: "+966512345678",
         role: "Employee",
+        employee_profile_id: 7,
       }),
     );
   });
@@ -215,6 +239,7 @@ describe("AdminInvitesPage — WhatsApp invite creation", () => {
       }),
     );
 
+    await chooseEmployee();
     typeEmail("someone@ffi.test");
     submitInvite();
 
@@ -223,7 +248,23 @@ describe("AdminInvitesPage — WhatsApp invite creation", () => {
         channel: "email",
         email: "someone@ffi.test",
         role: "Employee",
+        employee_profile_id: 7,
       }),
+    );
+  });
+
+  it("will not send an invitation until HR picks the employee", async () => {
+    await renderPage();
+
+    typeEmail("someone@ffi.test");
+    submitInvite();
+
+    expect(
+      await screen.findByText("Select the employee this invitation is for"),
+    ).toBeInTheDocument();
+    expect(createInvite).not.toHaveBeenCalled();
+    expect(listEmployees).toHaveBeenCalledWith(
+      expect.objectContaining({ account: "unlinked" }),
     );
   });
 });
