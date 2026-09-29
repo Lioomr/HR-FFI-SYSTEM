@@ -346,10 +346,43 @@ def _is_absence_eligible(record):
     return bool(resolved and resolved.effective_status == AttendanceRecord.Status.ABSENT)
 
 
+def _continuous_absence_streak(profile, record, by_date, cycle_start):
+    from attendance.schedule import is_working_day
+
+    streak = [record]
+    cursor = record.date
+    while cursor > cycle_start:
+        cursor -= date.resolution
+        if not is_working_day(profile, cursor):
+            continue
+        previous = by_date.get(cursor)
+        if previous is None:
+            break
+        streak.insert(0, previous)
+    return streak
+
+
+def _absence_band(continuous_calendar_days, contract_year_missed_shifts):
+    if continuous_calendar_days >= 16:
+        return "W15"
+    if contract_year_missed_shifts >= 31:
+        return "W16"
+    if continuous_calendar_days == 15:
+        return None  # The printed continuous band has no day-15 action.
+    if continuous_calendar_days >= 11:
+        return "W14"
+    if continuous_calendar_days >= 7:
+        return "W13"
+    if continuous_calendar_days >= 2:
+        return "W12"
+    return "W11"
+
+
 @transaction.atomic
 def reconcile_absence_candidates(profile, changed_date):
     """Re-rate pending absence bands after punch, record or leave corrections."""
     from attendance.models import AttendanceRecord
+    from attendance.schedule import is_working_day
 
     if (
         changed_date < effective_from()
@@ -358,7 +391,16 @@ def reconcile_absence_candidates(profile, changed_date):
         return
     cycle_start, cycle_end = get_contract_year_cycle(profile, changed_date)
     cycle_start = max(cycle_start or effective_from(), effective_from())
-    cycle_end = cycle_end or changed_date
+    if cycle_end is None:
+        # Profiles without a recorded contract start still have prospective
+        # candidates after the changed day; include them in correction review.
+        latest_candidate_on = (
+            PenaltyRecord.objects.filter(employee_profile=profile, source_kind="absence")
+            .order_by("-occurred_on")
+            .values_list("occurred_on", flat=True)
+            .first()
+        )
+        cycle_end = max(changed_date, latest_candidate_on or changed_date)
     rows = list(
         AttendanceRecord.objects.filter(
             employee_profile=profile,
@@ -370,25 +412,45 @@ def reconcile_absence_candidates(profile, changed_date):
     )
     eligible = [row for row in rows if _is_absence_eligible(row)]
     eligible_dates = {row.date for row in eligible}
+    eligible_by_date = {row.date: row for row in eligible}
     for candidate in PenaltyRecord.objects.select_for_update().filter(
         employee_profile=profile,
         source_kind="absence",
         occurred_on__gte=cycle_start,
         occurred_on__lte=cycle_end,
     ):
-        if candidate.occurred_on not in eligible_dates or candidate.attendance_record_id not in {
-            row.pk for row in eligible
-        }:
+        if candidate.attendance_record_id not in {row.pk for row in eligible}:
             _invalidate_record(candidate)
-        elif candidate.status == PenaltyRecord.Status.ISSUED:
-            original_days = (candidate.evidence or {}).get("absence_days", 0)
-            current_days = sum(
-                1 for row in eligible if candidate.attendance_record.date <= row.date <= candidate.occurred_on
+        elif candidate.status == PenaltyRecord.Status.PENDING_HR_MARK:
+            # Its last observed day may have been corrected; the remaining
+            # spell endpoint below will re-rate this unissued candidate.
+            continue
+        elif candidate.occurred_on not in eligible_dates:
+            _invalidate_record(candidate)
+        elif candidate.status in {
+            PenaltyRecord.Status.ISSUED,
+            PenaltyRecord.Status.DISPUTED,
+            PenaltyRecord.Status.APPLIED,
+        }:
+            streak = _continuous_absence_streak(
+                profile, eligible_by_date[candidate.occurred_on], eligible_by_date, cycle_start
             )
-            if current_days < original_days:
+            calendar_days = (candidate.occurred_on - streak[0].date).days + 1
+            missed_shifts_through_occurrence = sum(row.date <= candidate.occurred_on for row in eligible)
+            if _absence_band(calendar_days, missed_shifts_through_occurrence) != candidate.catalog.code:
                 _invalidate_record(candidate)
     if eligible:
-        sync_absence_candidates(eligible)
+        # Replaying every day would reopen earlier levels already represented
+        # by an issued record. Reconcile only each spell's latest evidence.
+        endpoints = []
+        for index, row in enumerate(eligible):
+            next_row = eligible[index + 1] if index + 1 < len(eligible) else None
+            if next_row is None or any(
+                is_working_day(profile, row.date + date.resolution * gap)
+                for gap in range(1, (next_row.date - row.date).days)
+            ):
+                endpoints.append(row)
+        sync_absence_candidates(endpoints)
 
 
 def sync_absence_candidates(records):
@@ -399,7 +461,6 @@ def sync_absence_candidates(records):
     never produces one penalty per absent day.
     """
     from attendance.models import AttendanceRecord
-    from attendance.schedule import is_working_day
 
     for record in records:
         if record.date < effective_from() or not _is_absence_eligible(record):
@@ -421,39 +482,25 @@ def sync_absence_candidates(records):
         if not rows:
             continue
         by_date = {row.date: row for row in rows}
-        streak = [record]
-        cursor = record.date
-        while cursor > cycle_start:
-            cursor -= date.resolution
-            if not is_working_day(profile, cursor):
-                continue
-            previous = by_date.get(cursor)
-            if previous is None:
-                break
-            streak.insert(0, previous)
+        streak = _continuous_absence_streak(profile, record, by_date, cycle_start)
         # The printed continuous-absence bands use elapsed days, not working
         # days. An off-day may bridge two verified missed shifts but never
         # supplies absence evidence by itself.
         continuous_calendar_days = (record.date - streak[0].date).days + 1
         missed_shifts = len(streak)
         total = len(rows)
-        if continuous_calendar_days == 15:
-            # The printed bands stop at 14 and resume only when absence
-            # exceeds 15 days. Day 15 adds no invented schedule action.
+        code = _absence_band(continuous_calendar_days, total)
+        if code is None:
             continue
-        code = (
-            "W15"
-            if continuous_calendar_days >= 16
-            else "W16"
-            if total >= 31
-            else "W14"
-            if continuous_calendar_days >= 11
-            else "W13"
-            if continuous_calendar_days >= 7
-            else "W12"
-            if continuous_calendar_days >= 2
-            else "W11"
-        )
+        if PenaltyRecord.objects.filter(
+            employee_profile=profile,
+            source_kind="absence",
+            catalog__code=code,
+            status__in=[PenaltyRecord.Status.ISSUED, PenaltyRecord.Status.DISPUTED, PenaltyRecord.Status.APPLIED],
+            occurred_on__gte=streak[0].date,
+            occurred_on__lte=record.date,
+        ).exists():
+            continue
         threshold = {"W11": 1, "W12": 2, "W13": 7, "W14": 11, "W15": 16}.get(code)
         anchor = (
             next(row for row in streak if (row.date - streak[0].date).days + 1 >= threshold) if threshold else rows[30]
@@ -477,6 +524,7 @@ def sync_absence_candidates(records):
             evidence={
                 "absence_days": missed_shifts,
                 "continuous_calendar_days": continuous_calendar_days,
+                "spell_start_on": streak[0].date.isoformat(),
                 "contract_year_absence_days": total,
             },
         )
