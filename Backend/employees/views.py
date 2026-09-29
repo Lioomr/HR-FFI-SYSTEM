@@ -211,9 +211,7 @@ def _find_duplicate_employee(company, *, national_id, mobile):
     """
     national_id = (national_id or "").strip()
     if national_id:
-        match = EmployeeProfile.objects.filter(
-            company=company, national_id=national_id, is_archived=False
-        ).first()
+        match = EmployeeProfile.objects.filter(company=company, national_id=national_id, is_archived=False).first()
         if match is not None:
             return match
 
@@ -630,6 +628,10 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
                 | Q(passport_no__icontains=search)
                 | Q(national_id__icontains=search)
             )
+
+        # Employees who can still receive an invitation (no user account yet).
+        if params.get("account") == "unlinked":
+            qs = qs.filter(user__isnull=True)
 
         department = params.get("department")
         if department:
@@ -1651,9 +1653,7 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
         # unrelated stale relationship must not block this safe user unlink.
         unlinking_only = serializer.validated_data == {"user": None}
         stale_manager = bool(
-            instance.manager_profile_id
-            and instance.manager_profile
-            and not instance.manager_profile.user_id
+            instance.manager_profile_id and instance.manager_profile and not instance.manager_profile.user_id
         )
         if unlinking_only and stale_manager:
             EmployeeProfile.objects.filter(pk=instance.pk).update(

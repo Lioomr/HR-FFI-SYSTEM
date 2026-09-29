@@ -22,6 +22,8 @@ class InviteCreateSerializer(serializers.Serializer):
     channel = serializers.ChoiceField(choices=Invite.Channel.choices, required=False, default=Invite.Channel.EMAIL)
     role = serializers.CharField()
     expires_in_hours = serializers.IntegerField(min_value=1, required=False)
+    # The existing employee record the account belongs to; required for every role but SystemAdmin.
+    employee_profile_id = serializers.IntegerField(required=False, allow_null=True)
 
     def validate_role(self, value: str) -> str:
         if value not in ALLOWED_ROLES:

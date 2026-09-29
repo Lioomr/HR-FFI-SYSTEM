@@ -2388,6 +2388,12 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "admin.invites.expires": "Expires At",
     "admin.invites.invitedBy": "Invited By",
     "admin.invites.channel": "Channel",
+    "admin.invites.employee": "Employee",
+    "admin.invites.employeePlaceholder": "Search employees without an account",
+    "admin.invites.employeeRequired":
+      "Select the employee this invitation is for",
+    "admin.invites.employeeHint":
+      "Create the employee first. The invitation gives that employee an account; it never creates a new employee.",
     "admin.invites.channelWhatsapp": "WhatsApp",
     "admin.invites.recipient": "Recipient",
     "admin.invites.phoneNumber": "Phone Number",
@@ -7422,6 +7428,11 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "admin.invites.resend": "إعادة الإرسال",
     "admin.invites.revoke": "سحب",
     "admin.invites.channel": "قناة الإرسال",
+    "admin.invites.employee": "الموظف",
+    "admin.invites.employeePlaceholder": "ابحث عن موظف ليس لديه حساب",
+    "admin.invites.employeeRequired": "اختر الموظف المرسل له الدعوة",
+    "admin.invites.employeeHint":
+      "أنشئ الموظف أولاً. الدعوة تمنح هذا الموظف حساباً ولا تنشئ موظفاً جديداً.",
     "admin.invites.channelWhatsapp": "واتساب",
     "admin.invites.recipient": "المُستلِم",
     "admin.invites.phoneNumber": "رقم الهاتف",
