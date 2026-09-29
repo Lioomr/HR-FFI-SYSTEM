@@ -15,6 +15,11 @@ export type PenaltyPayrollStatus =
   | "claimed"
   | "applied"
   | "void";
+export type PenaltyMarkDecision =
+  | "disrupted"
+  | "not_disrupted"
+  | "confirmed"
+  | "excused";
 export type PenaltyAction = "warning" | "deduction" | string;
 export type PenaltyCatalogLevel = {
   occurrence: number;
@@ -67,7 +72,7 @@ export type PenaltyRecord = {
   employee_response?: PenaltyResponse | null;
   dispute_reason?: string | null;
   resolution?: {
-    decision: "waive" | "uphold" | "disrupted" | "not_disrupted" | "excused";
+    decision: "waive" | "uphold" | PenaltyMarkDecision;
     reason?: string;
     note?: string;
     resolved_at?: string;
@@ -132,7 +137,7 @@ export async function createPenalty(payload: {
 export async function markPenaltyDisruption(
   id: number,
   payload: {
-    disruption: "disrupted" | "not_disrupted" | "excused";
+    disruption: PenaltyMarkDecision;
     note: string;
   },
 ): Promise<ApiResponse<PenaltyRecord>> {

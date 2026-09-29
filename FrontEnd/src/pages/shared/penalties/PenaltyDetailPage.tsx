@@ -21,6 +21,7 @@ import {
   markPenaltyDisruption,
   resolvePenalty,
   reviewPenaltyPayroll,
+  type PenaltyMarkDecision,
   type PenaltyRecord,
 } from "../../../services/api/penaltiesApi";
 import { getDetailedHttpErrorMessage } from "../../../services/api/userErrorMessages";
@@ -28,9 +29,7 @@ import { useI18n } from "../../../i18n/useI18n";
 import PenaltyStatusTag from "./PenaltyStatusTag";
 
 type Decision =
-  | "disrupted"
-  | "not_disrupted"
-  | "excused"
+  | PenaltyMarkDecision
   | "uphold"
   | "waive"
   | "approve"
@@ -88,6 +87,7 @@ export default function PenaltyDetailPage({
             ? await disputePenalty(record.id, note.trim())
             : decision === "disrupted" ||
                 decision === "not_disrupted" ||
+                decision === "confirmed" ||
                 decision === "excused"
               ? await markPenaltyDisruption(record.id, {
                   disruption: decision,
@@ -137,6 +137,7 @@ export default function PenaltyDetailPage({
     record.employee_response?.decision !== "disputed";
   const hrCanMark =
     role === "hr" && isAttendance && record.status === "pending_hr_mark";
+  const hasDisruptionBranches = /^W0[1-6]$/.test(record.catalog_code);
   const hrCanResolve = role === "hr" && record.status === "disputed";
   const hrCanReviewPayroll =
     role === "hr" &&
@@ -150,6 +151,7 @@ export default function PenaltyDetailPage({
     decision === "dispute" ||
     decision === "disrupted" ||
     decision === "not_disrupted" ||
+    decision === "confirmed" ||
     decision === "excused" ||
     decision === "uphold" ||
     decision === "waive" ||
@@ -287,6 +289,18 @@ export default function PenaltyDetailPage({
         hrCanResolve ||
         hrCanReviewPayroll) && (
         <Card title={t("penalties.availableActions")}>
+          {hrCanMark && (
+            <Alert
+              type="info"
+              showIcon
+              title={t(
+                hasDisruptionBranches
+                  ? "penalties.markBranchHint"
+                  : "penalties.markConfirmHint",
+              )}
+              style={{ marginBottom: 16 }}
+            />
+          )}
           <Space wrap>
             {employeeCanRespond && (
               <>
@@ -302,12 +316,26 @@ export default function PenaltyDetailPage({
             )}
             {hrCanMark && (
               <>
-                <Button type="primary" onClick={() => setDecision("disrupted")}>
-                  {t("penalties.disrupted")}
-                </Button>
-                <Button onClick={() => setDecision("not_disrupted")}>
-                  {t("penalties.notDisrupted")}
-                </Button>
+                {hasDisruptionBranches ? (
+                  <>
+                    <Button
+                      type="primary"
+                      onClick={() => setDecision("disrupted")}
+                    >
+                      {t("penalties.disrupted")}
+                    </Button>
+                    <Button onClick={() => setDecision("not_disrupted")}>
+                      {t("penalties.notDisrupted")}
+                    </Button>
+                  </>
+                ) : (
+                  <Button
+                    type="primary"
+                    onClick={() => setDecision("confirmed")}
+                  >
+                    {t("penalties.confirmed")}
+                  </Button>
+                )}
                 <Button onClick={() => setDecision("excused")}>
                   {t("penalties.excused")}
                 </Button>
