@@ -393,3 +393,73 @@ describe("AdminInvitesPage — delivery reporting", () => {
     ).not.toBeInTheDocument();
   });
 });
+
+describe("AdminInvitesPage — employee picker search", () => {
+  const essam = {
+    status: "success",
+    data: {
+      results: [{ id: 9, full_name: "Essam Kamel", employee_id: "ASECO-9" }],
+      count: 1,
+    },
+  };
+
+  it("keeps the chosen employee's name after the list reloads without them", async () => {
+    await renderPage();
+    const input = document.querySelector<HTMLInputElement>(
+      "#employee_profile_id",
+    )!;
+    fireEvent.mouseDown(input);
+    listEmployees.mockResolvedValueOnce(essam);
+    fireEvent.change(input, { target: { value: "es" } });
+    fireEvent.click(await screen.findByTitle("Essam Kamel (ASECO-9)"));
+
+    // Closing reloads the unfiltered list, which does not include Essam.
+    fireEvent.keyDown(input, {
+      key: "Escape",
+      code: "Escape",
+      keyCode: 27,
+      which: 27,
+    });
+    input.blur();
+    await waitFor(() =>
+      expect(listEmployees).toHaveBeenLastCalledWith(
+        expect.objectContaining({ search: undefined }),
+      ),
+    );
+    await waitFor(() =>
+      expect(document.querySelector(".ant-select-content")?.textContent).toBe(
+        "Essam Kamel (ASECO-9)",
+      ),
+    );
+  });
+
+  it("ignores an older search response that arrives after a newer one", async () => {
+    await renderPage();
+    const input = document.querySelector<HTMLInputElement>(
+      "#employee_profile_id",
+    )!;
+    fireEvent.mouseDown(input);
+    let resolveSlow!: (value: unknown) => void;
+    listEmployees
+      .mockImplementationOnce(
+        () => new Promise((resolve) => (resolveSlow = resolve)),
+      )
+      .mockResolvedValueOnce(essam);
+
+    fireEvent.change(input, { target: { value: "e" } });
+    fireEvent.change(input, { target: { value: "es" } });
+    expect(await screen.findByTitle("Essam Kamel (ASECO-9)")).toBeTruthy();
+
+    resolveSlow({
+      status: "success",
+      data: {
+        results: [{ id: 5, full_name: "Old Result", employee_id: "OLD-5" }],
+        count: 1,
+      },
+    });
+    await waitFor(() =>
+      expect(screen.queryByTitle("Old Result (OLD-5)")).toBeNull(),
+    );
+    expect(screen.getByTitle("Essam Kamel (ASECO-9)")).toBeTruthy();
+  });
+});
