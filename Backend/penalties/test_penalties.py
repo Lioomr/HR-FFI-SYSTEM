@@ -20,7 +20,13 @@ from .catalog import CATALOG
 from .models import PenaltyCatalog, PenaltyDeduction, PenaltyRecord
 from .notifications import notify_penalty
 from .payroll import finalize_penalty_deductions, sync_penalty_deductions
-from .services import issue, sync_absence_candidates, sync_attendance_candidates
+from .services import (
+    _absence_band,
+    issue,
+    reconcile_absence_candidates,
+    sync_absence_candidates,
+    sync_attendance_candidates,
+)
 
 
 @override_settings(PENALTIES_EFFECTIVE_FROM="2026-09-29")
@@ -663,6 +669,7 @@ class PenaltyScheduleTests(TestCase):
         rows[-1].status = AttendanceRecord.Status.PRESENT
         with self.captureOnCommitCallbacks(execute=True):
             rows[-1].save(update_fields=["status"])
+        reconcile_absence_candidates(self.profile, rows[-1].date)
         candidate.refresh_from_db()
         self.assertEqual(candidate.catalog.code, "W12")
         self.assertEqual(candidate.evidence["absence_days"], len(rows) - 1)
@@ -673,6 +680,7 @@ class PenaltyScheduleTests(TestCase):
             for row in rows[1:]:
                 row.status = AttendanceRecord.Status.PRESENT
                 row.save(update_fields=["status"])
+        reconcile_absence_candidates(self.profile, rows[-1].date)
         candidate.refresh_from_db()
         self.assertEqual(candidate.catalog.code, "W11")
         self.assertEqual(candidate.evidence["absence_days"], 1)
@@ -739,3 +747,64 @@ class PenaltyScheduleTests(TestCase):
                 self.assertEqual(candidate.catalog.code, "W15")
                 self.assertEqual(candidate.evidence["continuous_calendar_days"], 16)
         self.assertEqual(PenaltyRecord.objects.filter(source_kind="absence").count(), 1)
+
+    def test_w16_intermittent_total_still_applies_on_continuous_day_fifteen(self):
+        self.assertIsNone(_absence_band(15, 30))
+        self.assertEqual(_absence_band(15, 31), "W16")
+        self.assertEqual(_absence_band(16, 31), "W15")
+
+    def test_issued_absence_band_uses_full_spell_not_threshold_anchor_on_correction(self):
+        start = date(2026, 10, 6)
+        unrelated = AttendanceRecord.objects.create(
+            employee_profile=self.profile,
+            date=date(2026, 9, 29),
+            source=AttendanceRecord.Source.SYSTEM,
+            status=AttendanceRecord.Status.ABSENT,
+        )
+        rows = []
+        for offset in range(8):
+            day = start + timedelta(days=offset)
+            if not is_working_day(self.profile, day):
+                continue
+            row = AttendanceRecord.objects.create(
+                employee_profile=self.profile,
+                date=day,
+                source=AttendanceRecord.Source.SYSTEM,
+                status=AttendanceRecord.Status.ABSENT,
+            )
+            rows.append(row)
+            sync_absence_candidates([row])
+            if offset == 5:
+                issued_w12 = PenaltyRecord.objects.get(
+                    source_kind="absence", status=PenaltyRecord.Status.PENDING_HR_MARK
+                )
+                self.assertEqual(issued_w12.catalog.code, "W12")
+                issue(issued_w12)
+        issued_w13 = PenaltyRecord.objects.get(source_kind="absence", status=PenaltyRecord.Status.PENDING_HR_MARK)
+        self.assertEqual(issued_w13.catalog.code, "W13")
+        self.assertGreater(issued_w13.attendance_record.date, rows[0].date)
+        issue(issued_w13)
+        self.assertEqual(issued_w13.evidence["continuous_calendar_days"], 8)
+        self.assertEqual(issued_w13.evidence["spell_start_on"], start.isoformat())
+
+        # A correction to a separate, earlier day triggers reconciliation but
+        # must not measure W13 from its later threshold anchor.
+        unrelated.status = AttendanceRecord.Status.PRESENT
+        with self.captureOnCommitCallbacks(execute=True):
+            unrelated.save(update_fields=["status"])
+        reconcile_absence_candidates(self.profile, unrelated.date)
+        issued_w12.refresh_from_db()
+        issued_w13.refresh_from_db()
+        self.assertEqual(issued_w12.status, PenaltyRecord.Status.ISSUED)
+        self.assertEqual(issued_w13.status, PenaltyRecord.Status.ISSUED)
+        self.assertEqual(PenaltyRecord.objects.filter(source_kind="absence").count(), 2)
+
+        # Removing the W13 threshold anchor genuinely breaks support.
+        anchor = issued_w13.attendance_record
+        anchor.status = AttendanceRecord.Status.PRESENT
+        with self.captureOnCommitCallbacks(execute=True):
+            anchor.save(update_fields=["status"])
+        reconcile_absence_candidates(self.profile, anchor.date)
+        issued_w13.refresh_from_db()
+        self.assertEqual(issued_w13.status, PenaltyRecord.Status.WAIVED)
+        self.assertEqual(PenaltyDeduction.objects.get(penalty=issued_w13).status, PenaltyDeduction.Status.VOID)
