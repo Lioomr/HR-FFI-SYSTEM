@@ -62,6 +62,14 @@ describe("penalties API contract", () => {
       "/api/penalties/42/mark-disruption/",
       { disruption: "not_disrupted", note: "No impact" },
     );
+    await markPenaltyDisruption(42, {
+      disruption: "confirmed",
+      note: "No permission",
+    });
+    expect(post).toHaveBeenLastCalledWith(
+      "/api/penalties/42/mark-disruption/",
+      { disruption: "confirmed", note: "No permission" },
+    );
     await resolvePenalty(42, { decision: "waive", note: "Evidence accepted" });
     expect(post).toHaveBeenLastCalledWith("/api/penalties/42/resolve/", {
       decision: "waive",

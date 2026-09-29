@@ -102,6 +102,8 @@ describe("penalty detail actions", () => {
   it("submits the selected attendance branch to HR marking", async () => {
     const pending = {
       ...record,
+      catalog_code: "W02",
+      category: "work_time",
       source: "automatic",
       status: "pending_hr_mark" as const,
     };
@@ -114,6 +116,20 @@ describe("penalty detail actions", () => {
       data: { ...pending, status: "issued" },
     });
     render(<PenaltyDetailPage role="hr" />);
+    expect(
+      await screen.findByText(
+        /Select whether this lateness disrupted other workers/,
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Disrupted work" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Excuse incident" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Confirm attendance violation" }),
+    ).not.toBeInTheDocument();
     fireEvent.click(
       await screen.findByRole("button", { name: "No work disruption" }),
     );
@@ -125,6 +141,52 @@ describe("penalty detail actions", () => {
       expect(penaltiesApi.markPenaltyDisruption).toHaveBeenCalledWith(7, {
         disruption: "not_disrupted",
         note: "No other workers delayed",
+      }),
+    );
+  });
+
+  it("confirms a non-branch attendance row without offering disruption choices", async () => {
+    const pending = {
+      ...record,
+      catalog_code: "W08",
+      category: "work_time",
+      source: "automatic",
+      status: "pending_hr_mark" as const,
+    };
+    vi.mocked(penaltiesApi.getPenalty).mockResolvedValue({
+      status: "success",
+      data: pending,
+    });
+    vi.mocked(penaltiesApi.markPenaltyDisruption).mockResolvedValue({
+      status: "success",
+      data: { ...pending, status: "issued" },
+    });
+    render(<PenaltyDetailPage role="hr" />);
+    expect(
+      await screen.findByText(
+        /Confirm only after verifying the attendance facts/,
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Excuse incident" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Disrupted work" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "No work disruption" }),
+    ).not.toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Confirm attendance violation" }),
+    );
+    fireEvent.change(screen.getByRole("textbox"), {
+      target: { value: "No permission or excuse" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Submit" }));
+    await waitFor(() =>
+      expect(penaltiesApi.markPenaltyDisruption).toHaveBeenCalledWith(7, {
+        disruption: "confirmed",
+        note: "No permission or excuse",
       }),
     );
   });
