@@ -13,6 +13,7 @@ from organization.models import OrganizationNode, UserOrganizationAccess
 
 from .contract_expiry import (
     auto_renew_decision,
+    cancel_stale_contract_decisions,
     ensure_contract_decision,
     finalize_decision,
     notify_hr_final,
@@ -511,3 +512,63 @@ class ContractExpiryWorkflowTests(TestCase):
         )
 
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    @patch("employees.contract_expiry._dispatch")
+    def test_archived_employee_decision_is_cancelled_instead_of_auto_renewed(self, _dispatch):
+        decision, _ = ensure_contract_decision(self.profile)
+        original_expiry = self.profile.contract_expiry
+        EmployeeProfile.objects.filter(pk=self.profile.pk).update(is_archived=True, archived_at=timezone.now())
+
+        summary = process_contract_expiry(today=original_expiry - timedelta(days=30), now=timezone.now())
+
+        decision.refresh_from_db()
+        self.profile.refresh_from_db()
+        self.assertEqual(summary["cancelled"], 1)
+        self.assertEqual(summary["auto_renewed"], 0)
+        self.assertEqual(decision.status, ContractDecision.Status.CANCELLED)
+        self.assertEqual(self.profile.contract_expiry, original_expiry)
+        self.assertEqual(ContractDecision.objects.filter(employee_profile=self.profile, status="PENDING_HR").count(), 0)
+
+    @patch("employees.contract_expiry._dispatch")
+    def test_contract_renewed_on_the_profile_cancels_the_old_decision(self, _dispatch):
+        old, _ = ensure_contract_decision(self.profile)
+        self.profile.contract_date = self.profile.contract_expiry + timedelta(days=1)
+        self.profile.contract_expiry = self.profile.contract_expiry + timedelta(days=365)
+        self.profile.save(update_fields=["contract_date", "contract_expiry", "updated_at"])
+
+        process_contract_expiry(today=timezone.localdate(), now=timezone.now())
+
+        old.refresh_from_db()
+        self.assertEqual(old.status, ContractDecision.Status.CANCELLED)
+        current = ContractDecision.objects.get(
+            employee_profile=self.profile, original_contract_expiry=self.profile.contract_expiry
+        )
+        self.assertEqual(current.status, ContractDecision.Status.PENDING_HR)
+
+    def test_cancelling_a_stale_decision_cancels_its_open_rating(self):
+        from contract_ratings.models import ContractRating
+        from contract_ratings.services import ensure_contract_rating
+
+        rating, created = ensure_contract_rating(self.profile)
+        self.assertTrue(created)
+        self.profile.contract_expiry = self.profile.contract_expiry + timedelta(days=365)
+        self.profile.save(update_fields=["contract_expiry", "updated_at"])
+
+        self.assertEqual(cancel_stale_contract_decisions(self.profile), 1)
+
+        rating.refresh_from_db()
+        self.assertEqual(rating.status, ContractRating.Status.CANCELLED)
+        self.assertEqual(rating.contract_decision.status, ContractDecision.Status.CANCELLED)
+
+    def test_a_decided_rating_keeps_its_decision_open(self):
+        from contract_ratings.models import ContractRating
+        from contract_ratings.services import ensure_contract_rating
+
+        rating, _ = ensure_contract_rating(self.profile)
+        ContractRating.objects.filter(pk=rating.pk).update(status=ContractRating.Status.DECIDED)
+        self.profile.contract_expiry = self.profile.contract_expiry + timedelta(days=365)
+        self.profile.save(update_fields=["contract_expiry", "updated_at"])
+
+        self.assertEqual(cancel_stale_contract_decisions(self.profile), 0)
+        rating.contract_decision.refresh_from_db()
+        self.assertEqual(rating.contract_decision.status, ContractDecision.Status.PENDING_HR)

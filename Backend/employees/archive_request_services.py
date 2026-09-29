@@ -18,6 +18,7 @@ from core.services.workflow_engine import begin_recorded_transition, record_work
 from leaves.models import LeaveRequest
 from loans.models import LoanRequest
 
+from .contract_expiry import cancel_stale_contract_decisions
 from .models import EmployeeDeletionRequest
 from .services.archiving import retire_biotime_mapping_and_archive_profile
 
@@ -137,6 +138,7 @@ def apply_archive_approval(instance: EmployeeDeletionRequest, *, actor) -> tuple
         record_workflow_transition(
             locked, start, action=Action.APPROVE, actor=actor, note=locked.reason or "", approver_role="ceo"
         )
+        cancel_stale_contract_decisions(profile, actor=actor)
 
     locked.refresh_from_db()
     return locked, profile, execution_snapshot
