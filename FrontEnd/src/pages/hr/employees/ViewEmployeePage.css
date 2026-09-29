@@ -322,9 +322,8 @@ a.emp-contact-pill:hover {
   gap: 14px;
   padding: 16px;
   border: 1px solid var(--emp-border);
-  border-inline-start: 4px solid var(--doc-color);
   border-radius: 14px;
-  background: linear-gradient(135deg, var(--surface-0) 75%, var(--doc-soft));
+  background: var(--surface-0);
   box-shadow: 0 2px 8px rgba(15, 23, 42, 0.025);
   transition:
     border-color var(--transition-fast),
@@ -333,7 +332,6 @@ a.emp-contact-pill:hover {
 
 .emp-doc:hover {
   border-color: #cbd5e1;
-  border-inline-start-color: var(--doc-color);
   box-shadow: 0 6px 18px rgba(15, 23, 42, 0.07);
 }
 
@@ -399,11 +397,10 @@ a.emp-contact-pill:hover {
   border-radius: 8px;
   background: #f4f7fb;
   color: #17243a;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: inherit;
   font-size: 15px;
   font-variant-numeric: tabular-nums;
   font-weight: 700;
-  letter-spacing: 0.025em;
   line-height: 1.4;
 }
 
