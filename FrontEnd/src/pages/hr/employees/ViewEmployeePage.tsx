@@ -572,12 +572,6 @@ export default function ViewEmployeePage() {
       <PageHeader
         title={t("hr.employees.view")}
         breadcrumb={t("layout.hrManagement")}
-        subtitle={employee.full_name}
-        secondarySubtitle={
-          employee.mobile
-            ? `${t("employees.form.mobile", "Mobile Number")}: ${employee.mobile}`
-            : undefined
-        }
         actions={
           <Space>
             <Button icon={<ArrowLeftOutlined />} onClick={handleBack}>
@@ -666,7 +660,7 @@ export default function ViewEmployeePage() {
       <section className="emp-hero">
         <div className="emp-hero__cover" />
         <div className="emp-hero__body">
-          <Avatar size={104} className="emp-hero__avatar">
+          <Avatar size={76} className="emp-hero__avatar">
             {employee.full_name?.charAt(0).toUpperCase()}
           </Avatar>
           <div className="emp-hero__identity">
