@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Alert,
   Button,
@@ -249,8 +249,16 @@ export default function AdminInvitesPage() {
   const needsEmployee = Form.useWatch("role", form) !== "SystemAdmin";
   const [employeeOptions, setEmployeeOptions] = useState<EmployeeOption[]>([]);
   const [employeeSearching, setEmployeeSearching] = useState(false);
+  const [selectedEmployee, setSelectedEmployee] = useState<EmployeeOption>();
+  // Every keystroke, and the reset when the picker closes, starts a request.
+  // Only the latest one may set the options, or a slower filtered response
+  // leaves the list empty or stale under an empty search box.
+  const employeeSearchSeq = useRef(0);
+  const employeeSearchTerm = useRef("");
 
   const searchEmployees = useCallback(async (search: string) => {
+    const seq = ++employeeSearchSeq.current;
+    employeeSearchTerm.current = search;
     setEmployeeSearching(true);
     try {
       const res = await listEmployees({
@@ -258,7 +266,7 @@ export default function AdminInvitesPage() {
         search: toSearchParam(search),
         page_size: 20,
       });
-      if (!isApiError(res)) {
+      if (seq === employeeSearchSeq.current && !isApiError(res)) {
         setEmployeeOptions(
           res.data.results.map((employee) => ({
             value: Number(employee.id),
@@ -268,9 +276,16 @@ export default function AdminInvitesPage() {
         );
       }
     } finally {
-      setEmployeeSearching(false);
+      if (seq === employeeSearchSeq.current) setEmployeeSearching(false);
     }
   }, []);
+
+  // Keep the chosen employee's label when the list no longer contains them.
+  const pickerOptions =
+    selectedEmployee &&
+    !employeeOptions.some((option) => option.value === selectedEmployee.value)
+      ? [selectedEmployee, ...employeeOptions]
+      : employeeOptions;
 
   useEffect(() => {
     if (needsEmployee) searchEmployees("");
@@ -403,6 +418,7 @@ export default function AdminInvitesPage() {
         channel === "whatsapp" ? "phone_number" : "email",
         "employee_profile_id",
       ]);
+      setSelectedEmployee(undefined);
       if (needsEmployee) searchEmployees("");
       loadInvites(1, pagination.pageSize || 8);
     } catch (e: any) {
@@ -722,9 +738,15 @@ export default function AdminInvitesPage() {
                 filterOption={false}
                 loading={employeeSearching}
                 placeholder={t("admin.invites.employeePlaceholder")}
-                options={employeeOptions}
+                options={pickerOptions}
                 onSearch={searchEmployees}
+                onOpenChange={(open) => {
+                  // Picking an option clears the typed text without calling
+                  // onSearch, so reload the full list once the picker closes.
+                  if (!open && employeeSearchTerm.current) searchEmployees("");
+                }}
                 onChange={(_, option) => {
+                  setSelectedEmployee(option as EmployeeOption | undefined);
                   const mobile = (option as EmployeeOption | undefined)?.mobile;
                   if (mobile && !form.getFieldValue("phone_number")) {
                     form.setFieldValue("phone_number", mobile);
