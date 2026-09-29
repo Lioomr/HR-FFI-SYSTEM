@@ -162,6 +162,52 @@ beforeEach(() => {
 });
 
 describe("ContractDecisionsPage list", () => {
+  it("filters by status chip and searches the list by name or number", async () => {
+    listMock.mockResolvedValue(
+      listPayload([
+        decision({
+          id: 1,
+          employee: {
+            id: 101,
+            employee_id: "FFI-101",
+            full_name: "Sara Ali",
+            company_id: 1,
+          },
+        }),
+        decision({
+          id: 2,
+          employee: {
+            id: 102,
+            employee_id: "FFI-102",
+            full_name: "Omar Reda",
+            company_id: 1,
+          },
+        }),
+      ]),
+    );
+
+    renderAt("/hr/contract-decisions");
+    await screen.findAllByText("Sara Ali");
+
+    const chips = screen.getByRole("group", { name: "Show" });
+    fireEvent.click(
+      within(chips).getByRole("button", { name: "Pending CEO approval" }),
+    );
+    await waitFor(() =>
+      expect(listMock).toHaveBeenLastCalledWith(
+        expect.objectContaining({ status: "PENDING_CEO" }),
+      ),
+    );
+
+    fireEvent.change(screen.getByRole("textbox", { name: "Search" }), {
+      target: { value: "ffi-102" },
+    });
+    await waitFor(() =>
+      expect(screen.queryAllByText("Sara Ali")).toHaveLength(0),
+    );
+    expect(screen.getAllByText("Omar Reda").length).toBeGreaterThan(0);
+  });
+
   it("labels every backend status the filter offers", async () => {
     const statuses: ContractDecisionStatus[] = [
       "PENDING_HR",
