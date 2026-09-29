@@ -17,10 +17,19 @@ import {
   message,
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import { ArrowLeftOutlined, ReloadOutlined } from "@ant-design/icons";
+import {
+  ArrowLeftOutlined,
+  ReloadOutlined,
+  SearchOutlined,
+} from "@ant-design/icons";
 
 import PageHeader from "../../components/ui/PageHeader";
-import { WorkspaceCard } from "../../components/ui/workspace/Workspace";
+import {
+  FilterChips,
+  WorkspaceCard,
+  WorkspaceViews,
+  type ChipTone,
+} from "../../components/ui/workspace/Workspace";
 import ResponsiveTable from "../../components/ui/ResponsiveTable";
 import ErrorState from "../../components/ui/ErrorState";
 import LoadingState from "../../components/ui/LoadingState";
@@ -78,6 +87,17 @@ const statusColors: Record<ContractDecisionStatus, string> = {
   REJECTED: "red",
   AUTO_RENEWAL_FAILED: "volcano",
   MANUAL_RESOLUTION_REQUIRED: "volcano",
+};
+
+const STATUS_CHIP_TONES: Record<ContractDecisionStatus, ChipTone> = {
+  PENDING_HR: "warning",
+  PENDING_CEO: "pending",
+  APPROVED: "positive",
+  AUTO_APPROVED: "positive",
+  AUTO_RENEWED: "informational",
+  REJECTED: "critical",
+  AUTO_RENEWAL_FAILED: "severe",
+  MANUAL_RESOLUTION_REQUIRED: "severe",
 };
 
 /** The backend's `status_label` is English-only, so labels follow the UI language. */
@@ -168,6 +188,7 @@ export default function ContractDecisionsPage() {
   const [statusFilter, setStatusFilter] = useState<
     ContractDecisionStatus | undefined
   >(isCeo ? "PENDING_CEO" : "PENDING_HR");
+  const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [loadForbidden, setLoadForbidden] = useState(false);
@@ -364,19 +385,51 @@ export default function ContractDecisionsPage() {
       title: t("contractDecisions.employee"),
       key: "employee",
       render: (_, item) => (
-        <Link
-          to={employeeProfilePath(item.employee.id)}
-          style={{ color: "#f97316", fontWeight: 600, textDecoration: "none" }}
-        >
-          {item.employee.full_name}
-        </Link>
+        <span style={{ display: "inline-flex", flexDirection: "column" }}>
+          <Link
+            to={employeeProfilePath(item.employee.id)}
+            style={{
+              color: "#f97316",
+              fontWeight: 600,
+              textDecoration: "none",
+            }}
+          >
+            {item.employee.full_name}
+          </Link>
+          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+            {item.employee.employee_id}
+          </Typography.Text>
+        </span>
       ),
     },
     {
       title: t("contractDecisions.expiry"),
       dataIndex: "original_contract_expiry",
       responsive: ["sm"],
-      render: (value: string) => formatDateOnly(value),
+      render: (value: string) => {
+        const days = dayjs(value)
+          .startOf("day")
+          .diff(dayjs().startOf("day"), "day");
+        return (
+          <span style={{ display: "inline-flex", gap: 8, flexWrap: "wrap" }}>
+            <span style={{ whiteSpace: "nowrap" }}>
+              {formatDateOnly(value)}
+            </span>
+            {Number.isFinite(days) && (
+              <Tag
+                color={days < 0 ? "red" : days <= 30 ? "orange" : "default"}
+                style={{ marginInlineEnd: 0 }}
+              >
+                {days < 0
+                  ? t("employees.list.expiry.overdue", { days: -days })
+                  : days === 0
+                    ? t("employees.list.expiry.today")
+                    : t("employees.list.expiry.inDays", { days })}
+              </Tag>
+            )}
+          </span>
+        );
+      },
     },
     {
       title: t("contractDecisions.status"),
@@ -385,13 +438,17 @@ export default function ContractDecisionsPage() {
         <Tag color={statusColors[value] ?? "default"}>{statusLabel(item)}</Tag>
       ),
     },
-    {
-      title: t("contractDecisions.submitted"),
-      dataIndex: "submitted_at",
-      responsive: ["md"],
-      render: (value: string | null) =>
-        value ? formatDateTimeShort(value) : "—",
-    },
+    ...(statusFilter === "PENDING_HR"
+      ? []
+      : [
+          {
+            title: t("contractDecisions.submitted"),
+            dataIndex: "submitted_at",
+            responsive: ["md" as const],
+            render: (value: string | null) =>
+              value ? formatDateTimeShort(value) : "—",
+          },
+        ]),
     {
       title: t("common.actions"),
       key: "actions",
@@ -920,25 +977,20 @@ export default function ContractDecisionsPage() {
     );
   }
 
-  const statusFilterOptions: {
-    value: ContractDecisionStatus;
-    label: string;
-  }[] = [
-    { value: "PENDING_HR", label: t("contractDecisions.pendingHr") },
-    { value: "PENDING_CEO", label: t("contractDecisions.pendingCeo") },
-    { value: "APPROVED", label: t("contractDecisions.approved") },
-    { value: "AUTO_APPROVED", label: t("contractDecisions.autoApproved") },
-    { value: "AUTO_RENEWED", label: t("contractDecisions.autoRenewedShort") },
-    { value: "REJECTED", label: t("contractDecisions.rejected") },
-    {
-      value: "AUTO_RENEWAL_FAILED",
-      label: t("contractDecisions.renewalFailed"),
-    },
-    {
-      value: "MANUAL_RESOLUTION_REQUIRED",
-      label: t("contractDecisions.manualResolution"),
-    },
-  ];
+  const statusFilterOptions = (
+    Object.keys(STATUS_LABEL_KEYS) as ContractDecisionStatus[]
+  ).map((value) => ({ value, label: t(STATUS_LABEL_KEYS[value]) }));
+
+  // Name / employee-number search over the loaded list (the API filters by
+  // exact employee id only).
+  const query = search.trim().toLowerCase();
+  const visibleRecords = query
+    ? records.filter(
+        (item) =>
+          item.employee.full_name.toLowerCase().includes(query) ||
+          item.employee.employee_id.toLowerCase().includes(query),
+      )
+    : records;
 
   return (
     <>
@@ -960,26 +1012,44 @@ export default function ContractDecisionsPage() {
           </Button>
         }
       />
+      <WorkspaceViews>
+        <FilterChips
+          label={t("contractDecisions.filter")}
+          options={[
+            {
+              key: "all",
+              label: t("common.allRequests"),
+              active: !statusFilter,
+              onSelect: () => setStatusFilter(undefined),
+            },
+            ...statusFilterOptions.map((option) => ({
+              key: option.value,
+              label: option.label,
+              tone: STATUS_CHIP_TONES[option.value],
+              active: statusFilter === option.value,
+              onSelect: () => setStatusFilter(option.value),
+            })),
+          ]}
+        />
+      </WorkspaceViews>
       <WorkspaceCard
         toolbar={
-          <Select
-            value={statusFilter}
-            onChange={(value: ContractDecisionStatus | undefined) =>
-              setStatusFilter(value)
-            }
+          <Input
             allowClear
-            placeholder={t("contractDecisions.filter")}
-            className="ffi-toolbar__field"
-            style={{ maxWidth: 320 }}
-            aria-label={t("contractDecisions.filter")}
-            options={statusFilterOptions}
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            prefix={<SearchOutlined style={{ color: "var(--text-muted)" }} />}
+            placeholder={t("employees.list.searchPlaceholder")}
+            aria-label={t("common.search")}
+            className="ffi-toolbar__search"
+            style={{ maxWidth: 420 }}
           />
         }
         title={
           statusFilterOptions.find((option) => option.value === statusFilter)
             ?.label ?? t("common.allRequests")
         }
-        count={t("common.requestsCount", { count: records.length })}
+        count={t("common.requestsCount", { count: visibleRecords.length })}
         busy={loading && records.length > 0}
       >
         {loadError ? (
@@ -1005,10 +1075,14 @@ export default function ContractDecisionsPage() {
           rowKey="id"
           loading={loading}
           columns={columns}
-          dataSource={records}
+          dataSource={visibleRecords}
           scroll={{ x: "max-content" }}
           locale={{ emptyText: t("contractDecisions.empty") }}
-          pagination={{ pageSize: 20 }}
+          pagination={{
+            defaultPageSize: 20,
+            showSizeChanger: true,
+            pageSizeOptions: ["10", "20", "50", "100"],
+          }}
         />
       </WorkspaceCard>
       {renderHrModal()}

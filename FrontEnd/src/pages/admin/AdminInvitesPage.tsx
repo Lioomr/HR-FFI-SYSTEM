@@ -40,6 +40,7 @@ import {
   resendInvite,
   revokeInvite,
 } from "../../services/api/invitesApi";
+import { listEmployees } from "../../services/api/employeesApi";
 import type {
   CreateInviteRequest,
   InviteChannel,
@@ -83,7 +84,10 @@ type SendInviteValues = {
   email?: string;
   phone_number?: string;
   role: Role;
+  employee_profile_id?: number;
 };
+
+type EmployeeOption = { value: number; label: string; mobile?: string };
 
 // Manager is intentionally absent: the backend no longer accepts Manager invites.
 // Manager access is granted by assigning the person as a direct manager instead.
@@ -240,6 +244,37 @@ export default function AdminInvitesPage() {
   const channel =
     (Form.useWatch("channel", form) as InviteChannel | undefined) ?? "email";
   const isWhatsappChannel = channel === "whatsapp";
+  // Invitations give an existing employee an account, so HR must pick the
+  // employee first; only SystemAdmin accounts may exist without one.
+  const needsEmployee = Form.useWatch("role", form) !== "SystemAdmin";
+  const [employeeOptions, setEmployeeOptions] = useState<EmployeeOption[]>([]);
+  const [employeeSearching, setEmployeeSearching] = useState(false);
+
+  const searchEmployees = useCallback(async (search: string) => {
+    setEmployeeSearching(true);
+    try {
+      const res = await listEmployees({
+        account: "unlinked",
+        search: toSearchParam(search),
+        page_size: 20,
+      });
+      if (!isApiError(res)) {
+        setEmployeeOptions(
+          res.data.results.map((employee) => ({
+            value: Number(employee.id),
+            label: `${employee.full_name} (${employee.employee_id})`,
+            mobile: employee.mobile || undefined,
+          })),
+        );
+      }
+    } finally {
+      setEmployeeSearching(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (needsEmployee) searchEmployees("");
+  }, [needsEmployee, searchEmployees]);
 
   const [mode, setMode] = useState<UiMode>("loading");
   const [error, setError] = useState<string | null>(null);
@@ -320,8 +355,14 @@ export default function AdminInvitesPage() {
               channel,
               phone_number: values.phone_number?.trim(),
               role: values.role,
+              employee_profile_id: values.employee_profile_id,
             }
-          : { channel, email: values.email?.trim(), role: values.role };
+          : {
+              channel,
+              email: values.email?.trim(),
+              role: values.role,
+              employee_profile_id: values.employee_profile_id,
+            };
       const res = await createInvite(payload);
 
       if (isApiError(res)) {
@@ -358,7 +399,11 @@ export default function AdminInvitesPage() {
       } else {
         message.success(t("admin.invites.sentSuccess"));
       }
-      form.resetFields([channel === "whatsapp" ? "phone_number" : "email"]);
+      form.resetFields([
+        channel === "whatsapp" ? "phone_number" : "email",
+        "employee_profile_id",
+      ]);
+      if (needsEmployee) searchEmployees("");
       loadInvites(1, pagination.pageSize || 8);
     } catch (e: any) {
       if (e?.response?.status === 403) {
@@ -658,6 +703,36 @@ export default function AdminInvitesPage() {
           onFinish={sendInvite}
           initialValues={{ role: "Employee", channel: "email" }}
         >
+          {needsEmployee && (
+            <Form.Item
+              label={t("admin.invites.employee")}
+              name="employee_profile_id"
+              extra={t("admin.invites.employeeHint")}
+              rules={[
+                {
+                  required: true,
+                  message: t("admin.invites.employeeRequired"),
+                },
+              ]}
+            >
+              <Select
+                size="large"
+                showSearch
+                allowClear
+                filterOption={false}
+                loading={employeeSearching}
+                placeholder={t("admin.invites.employeePlaceholder")}
+                options={employeeOptions}
+                onSearch={searchEmployees}
+                onChange={(_, option) => {
+                  const mobile = (option as EmployeeOption | undefined)?.mobile;
+                  if (mobile && !form.getFieldValue("phone_number")) {
+                    form.setFieldValue("phone_number", mobile);
+                  }
+                }}
+              />
+            </Form.Item>
+          )}
           <Row gutter={16} align="bottom">
             <Col xs={24} md={5}>
               <Form.Item label={t("admin.invites.channel")} name="channel">

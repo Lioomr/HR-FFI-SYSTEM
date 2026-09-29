@@ -25,6 +25,8 @@ export type CreateInviteRequest = {
   phone_number?: string;
   role: Role;
   expires_in_hours?: number;
+  /** Existing employee the account belongs to; required for every role but SystemAdmin. */
+  employee_profile_id?: number;
 };
 
 export type InviteAcceptInfo = {

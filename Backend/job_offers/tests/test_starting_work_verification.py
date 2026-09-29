@@ -33,9 +33,9 @@ class StartingWorkVerificationTests(TestCase):
         self.addCleanup(self.media_root.cleanup)
 
         hr_group, _ = Group.objects.get_or_create(name="HRManager")
-        self.company = OrganizationNode.objects.create(
-            code="SWV_A", name="Verification Company A", node_type=OrganizationNode.NodeType.COMPANY
-        )
+        # Non-FFI companies need their own branded PDF templates, so the
+        # acknowledgment PDF is rendered for the seeded FFI company.
+        self.company = OrganizationNode.objects.get(code="FFI")
         self.other_company = OrganizationNode.objects.create(
             code="SWV_B", name="Verification Company B", node_type=OrganizationNode.NodeType.COMPANY
         )

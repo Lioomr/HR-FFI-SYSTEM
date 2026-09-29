@@ -101,6 +101,8 @@ export interface ListEmployeesParams {
   nationality?: string;
   join_date_order?: "asc" | "desc";
   archive_state?: "active" | "archived" | "all";
+  /** "unlinked": only employees without a user account (invite candidates). */
+  account?: "unlinked";
   /** Iqama (non-Saudi ID) or contract expiring within `expiring_days`, expired included. */
   expiring?: "iqama" | "contract";
   expiring_days?: number;
