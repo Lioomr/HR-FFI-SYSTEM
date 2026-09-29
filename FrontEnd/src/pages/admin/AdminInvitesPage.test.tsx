@@ -331,6 +331,26 @@ describe("AdminInvitesPage — recipient column", () => {
   });
 });
 
+describe("AdminInvitesPage — history search", () => {
+  it("keeps the page on screen and searches once typing pauses", async () => {
+    await renderPage([whatsappWithEmail]);
+    listInvites.mockClear();
+    const box = screen.getByPlaceholderText("Search by email or phone");
+
+    for (const value of ["z", "za", "zai"]) {
+      fireEvent.change(box, { target: { value } });
+    }
+
+    // The search box stays mounted instead of being swapped for a loader.
+    expect(screen.getByPlaceholderText("Search by email or phone")).toBe(box);
+    await waitFor(() => expect(listInvites).toHaveBeenCalledTimes(1));
+    expect(listInvites).toHaveBeenCalledWith(
+      expect.objectContaining({ search: "zai" }),
+    );
+    expect(screen.getByPlaceholderText("Search by email or phone")).toBe(box);
+  });
+});
+
 describe("AdminInvitesPage — pending total", () => {
   it("uses the company total returned by the API instead of the current page length", async () => {
     await renderPage([whatsappWithEmail], 3);

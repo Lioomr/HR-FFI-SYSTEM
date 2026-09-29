@@ -298,6 +298,8 @@ export default function AdminInvitesPage() {
 
   const [rows, setRows] = useState<InviteRow[]>([]);
   const [pendingCount, setPendingCount] = useState(0);
+  // `searchInput` follows the box; `search` follows it once typing pauses.
+  const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"All" | InviteStatus>("All");
   const [pagination, setPagination] = useState<TablePaginationConfig>({
@@ -305,10 +307,22 @@ export default function AdminInvitesPage() {
     pageSize: 8,
     total: 0,
   });
+  const [refreshing, setRefreshing] = useState(false);
+  const invitesLoaded = useRef(false);
+  const invitesRequestSeq = useRef(0);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setSearch(searchInput), 300);
+    return () => window.clearTimeout(timer);
+  }, [searchInput]);
 
   const loadInvites = useCallback(
     async (page = 1, pageSize = 8) => {
-      setMode("loading");
+      const seq = ++invitesRequestSeq.current;
+      // Only the first load replaces the page; later loads (search, filter,
+      // paging) keep the form and search box and show the table spinner.
+      if (invitesLoaded.current) setRefreshing(true);
+      else setMode("loading");
       setError(null);
       setUnauthorized(false);
 
@@ -319,6 +333,7 @@ export default function AdminInvitesPage() {
           search: toSearchParam(search),
           status: statusFilter === "All" ? undefined : statusFilter,
         });
+        if (seq !== invitesRequestSeq.current) return;
 
         if (isApiError(res)) {
           setError(res.message || "Failed to load invites.");
@@ -336,13 +351,17 @@ export default function AdminInvitesPage() {
           total: res.data.count ?? items.length,
         }));
         setMode(items.length === 0 ? "empty" : "ok");
+        invitesLoaded.current = true;
       } catch (err: any) {
+        if (seq !== invitesRequestSeq.current) return;
         if (err?.response?.status === 403) {
           setUnauthorized(true);
           return;
         }
         setError("Failed to load invites.");
         setMode("error");
+      } finally {
+        if (seq === invitesRequestSeq.current) setRefreshing(false);
       }
     },
     [search, statusFilter],
@@ -861,8 +880,8 @@ export default function AdminInvitesPage() {
             maxLength={MAX_SEARCH_LENGTH}
             placeholder={t("admin.invites.searchByEmailOrPhone")}
             style={{ flex: "1 1 200px", minWidth: 150 }}
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
           />
           <Select
             value={statusFilter}
@@ -893,6 +912,7 @@ export default function AdminInvitesPage() {
               rowKey="id"
               columns={columns}
               dataSource={rows}
+              loading={refreshing}
               scroll={{ x: 960 }}
               pagination={{
                 current: pagination.current,
