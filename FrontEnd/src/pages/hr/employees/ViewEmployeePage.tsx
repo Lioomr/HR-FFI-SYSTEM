@@ -95,9 +95,9 @@ const formatDate = (value: any): string => {
   if (!value) {
     return "—";
   }
-  // If already in YYYY-MM-DD format, return as is
+  // Keep the date portion of ISO and space-separated timestamps.
   if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}/.test(value)) {
-    return value.split("T")[0]; // Remove time component if present
+    return value.slice(0, 10);
   }
   return formatValue(value);
 };
@@ -557,7 +557,7 @@ export default function ViewEmployeePage() {
       label: t("employees.form.healthCard"),
       tagLabel: t("employees.view.healthTag"),
       tagColor: "green",
-      number: formatValue((employee as any).health_card),
+      number: formatDate((employee as any).health_card),
       expiry: (employee as any).health_card_expiry,
     },
     {
