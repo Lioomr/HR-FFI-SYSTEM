@@ -252,6 +252,26 @@ _CONTRACT_CEO_MESSAGE = (
 
 #: key -> {"title": (en, ar), "message": (en, ar)}
 MESSAGES: dict[str, dict[str, tuple[str, str]]] = {
+    "penalty.issued": {
+        "title": ("Penalty record available", "سجل جزاء متاح"),
+        "message": ("Review penalty record #{record_id} in the secure app.", "يرجى مراجعة سجل الجزاء رقم {record_id} في التطبيق الآمن."),
+    },
+    "penalty.waived": {
+        "title": ("Penalty record updated", "تم تحديث سجل الجزاء"),
+        "message": ("Review penalty record #{record_id} in the secure app.", "يرجى مراجعة سجل الجزاء رقم {record_id} في التطبيق الآمن."),
+    },
+    "penalty.disputed": {
+        "title": ("Penalty dispute needs review", "اعتراض على جزاء بانتظار المراجعة"),
+        "message": ("Review penalty dispute #{record_id} in the secure app.", "يرجى مراجعة الاعتراض على الجزاء رقم {record_id} في التطبيق الآمن."),
+    },
+    "penalty.resolved": {
+        "title": ("Penalty dispute updated", "تم تحديث اعتراض الجزاء"),
+        "message": ("Review penalty record #{record_id} in the secure app.", "يرجى مراجعة سجل الجزاء رقم {record_id} في التطبيق الآمن."),
+    },
+    "penalty.manual_review": {
+        "title": ("Penalty requires HR review", "جزاء يتطلب مراجعة الموارد البشرية"),
+        "message": ("Review penalty record #{record_id} in the secure app.", "يرجى مراجعة سجل الجزاء رقم {record_id} في التطبيق الآمن."),
+    },
     "approval.pending": {
         "title": ("{request_type} requires your review", "{request_type} بانتظار مراجعتك"),
         "message": (

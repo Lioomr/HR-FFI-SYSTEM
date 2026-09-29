@@ -9,6 +9,10 @@ from django.core.exceptions import ImproperlyConfigured
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+# Schedule penalties start with this rollout. Earlier attendance history keeps
+# its existing policy and is never backfilled into the new penalty ledger.
+PENALTIES_EFFECTIVE_FROM = os.environ.get("PENALTIES_EFFECTIVE_FROM", "2026-09-29")
+
 try:
     from dotenv import load_dotenv
 
@@ -142,6 +146,7 @@ INSTALLED_APPS = [
     "leaves",
     "assets",
     "attendance",
+    "penalties",
     "hr_reference",
     "announcements",
     "loans",

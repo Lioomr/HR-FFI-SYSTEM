@@ -259,6 +259,10 @@ class AttendancePolicyService:
         still count toward every later occurrence number.
         """
         with transaction.atomic():
+            from penalties.services import effective_from as penalties_effective_from
+            from penalties.services import sync_attendance_candidates
+
+            penalty_cutover = penalties_effective_from()
             profile = type(profile).objects.select_related("company", "user").select_for_update(of=("self",)).get(
                 pk=profile.pk
             )
@@ -327,7 +331,12 @@ class AttendancePolicyService:
                     },
                 )
                 violation = violations.get(result.date)
-                if violation is not None and _is_payroll_locked(violation):
+                if result.date >= penalty_cutover:
+                    # The schedule ledger is the only prospective penalty source.
+                    # Keep calculating attendance status/grace, but do not create
+                    # a second lifetime-rated violation, PDF or payroll claim.
+                    month_late_count += int(late)
+                elif violation is not None and _is_payroll_locked(violation):
                     # Payroll-locked history still counts toward both sequences.
                     occurrences += 1
                     month_late_count += 1
@@ -356,6 +365,8 @@ class AttendancePolicyService:
                 result.save(
                     update_fields=["status_input", "missing_minutes", "calculation_inputs", "calculated_at"]
                 )
+                if result.date >= penalty_cutover:
+                    sync_attendance_candidates(result)
             cls._resequence_from(profile, next_month, occurrences)
             return AttendanceDailyResult.objects.get(employee_profile=profile, date=work_date)
 
@@ -450,8 +461,11 @@ class AttendancePolicyService:
     @staticmethod
     def _resequence_from(profile, start_date, occurrences):
         """Renumber later open violations after an earlier month changed the lifetime count."""
+        from penalties.services import effective_from as penalties_effective_from
+
         later = AttendanceLateViolation.objects.select_for_update().filter(
-            employee_profile=profile, date__gte=start_date, lifecycle__in=COUNTED_LIFECYCLES
+            employee_profile=profile, date__gte=start_date, date__lt=penalties_effective_from(),
+            lifecycle__in=COUNTED_LIFECYCLES
         ).order_by("date", "id")
         for violation in later:
             occurrences += 1
