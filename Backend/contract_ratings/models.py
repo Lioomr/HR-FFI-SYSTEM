@@ -16,6 +16,7 @@ class ContractRating(models.Model):
         PENDING_CEO = "PENDING_CEO", _("Pending CEO decision")
         DECIDED = "DECIDED", _("Decided")
         MANUAL_RESOLUTION_REQUIRED = "MANUAL_RESOLUTION_REQUIRED", _("Manual resolution required")
+        CANCELLED = "CANCELLED", _("Cancelled")
 
     class RatingMode(models.TextChoices):
         RATE = "RATE", _("Full rating - manager and employee evaluate")

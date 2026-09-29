@@ -1325,6 +1325,10 @@ def _legacy_status_snapshot_for_contract_decision(instance):
         status = WorkflowInstance.Status.REJECTED
         terminal_at = instance.finalized_at or instance.updated_at
         current_stage = current_role = ""
+    elif instance.status == ContractDecision.Status.CANCELLED:
+        status = WorkflowInstance.Status.CANCELLED
+        terminal_at = instance.finalized_at or instance.updated_at
+        current_stage = current_role = ""
     elif instance.status == ContractDecision.Status.PENDING_CEO:
         status = WorkflowInstance.Status.IN_REVIEW
         current_stage, current_role = "ceo", "ceo"

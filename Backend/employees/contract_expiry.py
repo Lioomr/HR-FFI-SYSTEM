@@ -6,7 +6,7 @@ from decimal import Decimal
 
 from django.contrib.auth import get_user_model
 from django.db import IntegrityError, InterfaceError, OperationalError, transaction
-from django.db.models import Q
+from django.db.models import F, Q
 from django.utils import timezone
 from rest_framework.exceptions import ValidationError
 from rest_framework.fields import DecimalField
@@ -131,6 +131,77 @@ def ensure_contract_decision(profile: EmployeeProfile) -> tuple[ContractDecision
             approver_role="",
         )
     return decision, created
+
+
+# Statuses that still ask HR or the CEO to act on the contract.
+OPEN_DECISION_STATUSES = {
+    ContractDecision.Status.PENDING_HR,
+    ContractDecision.Status.PENDING_CEO,
+    ContractDecision.Status.MANUAL_RESOLUTION_REQUIRED,
+    ContractDecision.Status.AUTO_RENEWAL_FAILED,
+}
+
+
+def cancel_stale_contract_decisions(profile: EmployeeProfile, *, actor=None) -> int:
+    """Cancel open decisions that no longer describe the employee's live contract.
+
+    Archiving (or leaving ACTIVE employment) ends every open decision. Otherwise a
+    PENDING_HR/PENDING_CEO decision is stale once the profile's contract expiry was
+    changed outside the workflow, for example when HR edits the employee record to
+    renew it. A decided rating still owns its decision (a scheduled termination or
+    renewal runs later), so that decision is left alone.
+    """
+    employment_ended = profile.is_archived or profile.employment_status != EmployeeProfile.EmploymentStatus.ACTIVE
+    if employment_ended:
+        candidates = ContractDecision.objects.filter(employee_profile=profile, status__in=OPEN_DECISION_STATUSES)
+        reason = "Employee is no longer active."
+    else:
+        candidates = ContractDecision.objects.filter(
+            employee_profile=profile,
+            status__in=[ContractDecision.Status.PENDING_HR, ContractDecision.Status.PENDING_CEO],
+        ).exclude(original_contract_expiry=profile.contract_expiry)
+        reason = "The employee's contract dates were changed outside this decision."
+    cancelled = 0
+    for decision_id in list(candidates.values_list("id", flat=True)):
+        with transaction.atomic():
+            decision = ContractDecision.objects.select_for_update().get(pk=decision_id)
+            if decision.status not in OPEN_DECISION_STATUSES:
+                continue
+            rating = getattr(decision, "rating", None)
+            if rating is not None and rating.status == rating.Status.DECIDED:
+                continue
+            start = begin_recorded_transition(decision, actor=actor)
+            now = timezone.now()
+            decision.status = ContractDecision.Status.CANCELLED
+            decision.failure_reason = reason
+            decision.finalized_at = now
+            decision.finalized_by = actor
+            decision.finalized_by_system = actor is None
+            # Cancellation is housekeeping, not an outcome: no final notice is owed.
+            decision.final_notification_sent_at = now
+            decision.save()
+            if rating is not None:
+                rating.status = rating.Status.CANCELLED
+                rating.save(update_fields=["status", "updated_at"])
+            record_workflow_transition(
+                decision,
+                start,
+                action=WorkflowAction.Action.CANCEL,
+                actor=actor,
+                note=reason,
+                approver_role="",
+                metadata={"reason": reason, "contract_rating_id": rating.id if rating else None},
+            )
+            audit(
+                None,
+                "contract_decision_cancelled",
+                entity="ContractDecision",
+                entity_id=decision.id,
+                metadata={"reason": reason, "employee_profile_id": profile.id},
+                actor=actor,
+            )
+            cancelled += 1
+    return cancelled
 
 
 def _company_hr_recipients(company_id: int):
@@ -809,6 +880,9 @@ def auto_renew_decision(decision_id: int):
         # A rating cycle owns this contract; never auto-renew underneath it.
         return decision, False
     profile = EmployeeProfile.objects.select_for_update().get(pk=decision.employee_profile_id)
+    if profile.is_archived or profile.employment_status != EmployeeProfile.EmploymentStatus.ACTIVE:
+        # Never renew a contract for someone who has left; the sweep cancels the decision instead.
+        return decision, False
     workflow_start = begin_recorded_transition(decision)
     mismatch_reason = _snapshot_mismatch_reason(decision, profile)
     if mismatch_reason:
@@ -885,7 +959,28 @@ def process_contract_expiry(*, today=None, now=None) -> dict:
         "manual_resolutions": 0,
         "profile_failures": 0,
         "notification_failures": 0,
+        "cancelled": 0,
     }
+    stale_profile_ids = (
+        ContractDecision.objects.filter(status__in=OPEN_DECISION_STATUSES)
+        .filter(
+            Q(employee_profile__is_archived=True)
+            | ~Q(employee_profile__employment_status=EmployeeProfile.EmploymentStatus.ACTIVE)
+            | (
+                Q(status__in=[ContractDecision.Status.PENDING_HR, ContractDecision.Status.PENDING_CEO])
+                & ~Q(original_contract_expiry=F("employee_profile__contract_expiry"))
+            )
+        )
+        .values_list("employee_profile_id", flat=True)
+        .distinct()
+    )
+    for profile in EmployeeProfile.objects.filter(pk__in=list(stale_profile_ids)):
+        try:
+            summary["cancelled"] += cancel_stale_contract_decisions(profile)
+        except (OperationalError, InterfaceError):
+            raise
+        except Exception:
+            logger.exception("contract_decision_cancellation_failed", extra={"profile_id": profile.id})
     profiles = EmployeeProfile.objects.filter(
         is_archived=False,
         employment_status=EmployeeProfile.EmploymentStatus.ACTIVE,

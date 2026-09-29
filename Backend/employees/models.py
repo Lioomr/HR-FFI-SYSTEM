@@ -290,6 +290,7 @@ class ContractDecision(models.Model):
         AUTO_RENEWED = "AUTO_RENEWED", _("Automatically renewed")
         AUTO_RENEWAL_FAILED = "AUTO_RENEWAL_FAILED", _("Automatic renewal failed")
         MANUAL_RESOLUTION_REQUIRED = "MANUAL_RESOLUTION_REQUIRED", _("Manual resolution required")
+        CANCELLED = "CANCELLED", _("Cancelled")
 
     company = models.ForeignKey(
         OrganizationNode,

@@ -162,6 +162,8 @@ def _process_rating(rating_id, today, now):
     from .services import RESPONSE_STATES, _guard, _locked
 
     rating, profile = _locked(rating_id)
+    if rating.status == ContractRating.Status.CANCELLED:
+        return
     for key, entry in list(rating.notification_milestones.items()):
         if isinstance(entry, dict) and "audiences" in entry and not entry.get("sent_at"):
             _deliver(rating, key, entry)
