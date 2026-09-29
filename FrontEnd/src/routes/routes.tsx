@@ -84,6 +84,8 @@ import {
   HrLoanRequestDetailsPage,
   HrLeaveBalancesPage,
   AttendancePolicyPage,
+  PenaltiesListPage,
+  PenaltyDetailPage,
   ManagerDashboardPage,
   ManagerTeamRequestsPage,
   ManagerLeaveRequestDetailsPage,
@@ -248,6 +250,14 @@ export const routes = [
               {
                 path: "hr/attendance-policy",
                 element: <AttendancePolicyPage />,
+              },
+              {
+                path: "hr/penalties",
+                element: <PenaltiesListPage role="hr" />,
+              },
+              {
+                path: "hr/penalties/:id",
+                element: <PenaltyDetailPage role="hr" />,
               },
               { path: "hr/invites", element: <AdminInvitesPage /> },
 
@@ -473,6 +483,14 @@ export const routes = [
                   {
                     path: "employee/attendance",
                     element: <EmployeeAttendancePage />,
+                  },
+                  {
+                    path: "employee/penalties",
+                    element: <PenaltiesListPage role="employee" />,
+                  },
+                  {
+                    path: "employee/penalties/:id",
+                    element: <PenaltyDetailPage role="employee" />,
                   },
                   {
                     path: "employee/attendance-corrections",

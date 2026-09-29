@@ -213,6 +213,8 @@ function getTitle(
     return t("permissionRequests.list.hrTitle");
   if (pathname.startsWith("/hr/attendance-policy"))
     return t("hr.attendancePolicy.title");
+  if (pathname.startsWith("/hr/penalties")) return t("penalties.hrTitle");
+  if (pathname.startsWith("/employee/penalties")) return t("penalties.myTitle");
   if (pathname.startsWith("/hr")) return t("layout.hrManagement");
   if (pathname.startsWith("/manager/dashboard"))
     return t("layout.teamDashboard", "Team Dashboard");
@@ -829,6 +831,10 @@ export default function BaseLayout() {
                 </Link>
               ),
             },
+            {
+              key: "/hr/penalties",
+              label: <Link to="/hr/penalties">{t("layout.penalties")}</Link>,
+            },
           ],
         },
         {
@@ -1018,6 +1024,12 @@ export default function BaseLayout() {
           ),
         },
         {
+          key: "/employee/penalties",
+          label: (
+            <Link to="/employee/penalties">{t("layout.myPenalties")}</Link>
+          ),
+        },
+        {
           key: "/employee/assets",
           icon: <LaptopOutlined />,
           label: (
@@ -1058,6 +1070,12 @@ export default function BaseLayout() {
             <Link to="/employee/attendance">
               {t("layout.nav.myAttendance", "My Attendance")}
             </Link>
+          ),
+        },
+        {
+          key: "/employee/penalties",
+          label: (
+            <Link to="/employee/penalties">{t("layout.myPenalties")}</Link>
           ),
         },
         {
