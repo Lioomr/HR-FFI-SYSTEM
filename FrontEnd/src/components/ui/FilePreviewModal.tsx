@@ -16,6 +16,8 @@ type LoadedFile =
   | { status: "error" }
   | { status: "ready"; blob: Blob; type: string | null };
 
+const PDFJS_ASSETS = `${import.meta.env.BASE_URL}pdfjs`.replace("//", "/");
+
 // pdf.js is large, so it loads only when the first PDF is previewed.
 let pdfjsPromise: Promise<typeof import("pdfjs-dist")> | null = null;
 function loadPdfJs() {
@@ -52,6 +54,13 @@ function PdfPages({ blob }: { blob: Blob }) {
       const pdfjs = await loadPdfJs();
       const task = pdfjs.getDocument({
         data: new Uint8Array(await blob.arrayBuffer()),
+        // Without these, non-embedded and CID fonts (Arabic reports) render
+        // with wrong glyphs and spacing.
+        cMapUrl: `${PDFJS_ASSETS}/cmaps/`,
+        cMapPacked: true,
+        standardFontDataUrl: `${PDFJS_ASSETS}/standard_fonts/`,
+        iccUrl: `${PDFJS_ASSETS}/iccs/`,
+        wasmUrl: `${PDFJS_ASSETS}/wasm/`,
       });
       destroy = () => task.destroy();
       const doc = await task.promise;
