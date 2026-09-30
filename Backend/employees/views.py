@@ -2032,7 +2032,9 @@ class ContractDecisionViewSet(viewsets.ReadOnlyModelViewSet):
         return qs.none()
 
     def list(self, request, *args, **kwargs):
-        queryset = self.get_queryset()
+        from .contract_expiry import hr_action_not_due_q
+
+        queryset = self.get_queryset().exclude(hr_action_not_due_q(timezone.localdate()))
         status_value = request.query_params.get("status")
         if status_value:
             queryset = queryset.filter(status=status_value)

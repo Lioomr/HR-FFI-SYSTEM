@@ -41,7 +41,8 @@ from core.services import (
 )
 from core.services.workflow_engine import cached_workflow_definitions
 from core.tasks import send_error_report_email
-from employees.models import EmployeeDeletionRequest, EmployeeProfile
+from employees.contract_expiry import hr_action_due
+from employees.models import ContractDecision, EmployeeDeletionRequest, EmployeeProfile
 from employees.services.visa_expiry import VISA_EXPIRY_FIELD, annotate_visa_expiry
 from leaves.models import AnnualLeavePaymentRequest, LeaveRequest
 from loans.models import LoanRequest
@@ -108,9 +109,7 @@ def _safe_send_delegation_emails(rule: DelegationRule):
     ]
     from in_app_notifications.i18n import notification_text
 
-    delegation_text = notification_text(
-        "delegation.assigned", from_user=str(rule.from_user), to_user=str(rule.to_user)
-    )
+    delegation_text = notification_text("delegation.assigned", from_user=str(rule.from_user), to_user=str(rule.to_user))
     for user, recipient_role in users:
         dispatch_notification_channels(
             recipient=user,
@@ -291,6 +290,7 @@ def _collect_pending_request_items(request, *, limit: int | None) -> list[dict]:
     already_synced = _sync_pending_request_workflows_for_request(request)
     # Resolved once: it costs several queries and is the same for every item.
     active_company = get_active_company_for_request(request)
+    today = timezone.localdate()
     items = []
     workflows = get_pending_approvals_for_user(request.user, limit=limit)
     # One query per request type instead of one per workflow.
@@ -299,6 +299,8 @@ def _collect_pending_request_items(request, *, limit: int | None) -> list[dict]:
     for workflow in workflows:
         content_object = workflow.content_object
         if content_object is None or not _is_dashboard_object_in_active_scope(content_object, active_company):
+            continue
+        if isinstance(content_object, ContractDecision) and not hr_action_due(content_object, today):
             continue
         # Records the pre-sync just handled are current (and this workflow row
         # was read after it); re-syncing them would only repeat the same work.
@@ -347,9 +349,7 @@ class PendingRequestsView(APIView):
 
         paginator = PendingRequestsPagination()
         page = paginator.paginate_queryset(items, request)
-        return paginator.get_paginated_response(
-            page, counts_by_type=counts_by_type, total_count=total_count
-        )
+        return paginator.get_paginated_response(page, counts_by_type=counts_by_type, total_count=total_count)
 
 
 def _build_workforce_status(employee_qs):

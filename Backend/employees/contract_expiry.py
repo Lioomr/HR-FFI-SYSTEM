@@ -68,6 +68,29 @@ def has_contract_rating(decision_id: int) -> bool:
 
 #: The contract-rating flow creates a ``ContractRating`` once expiry is this close.
 CONTRACT_RATING_CREATION_DAYS = 90
+#: A PENDING_HR decision reaches HR's lists once the contract ends within this window.
+HR_ACTION_WINDOW_DAYS = 90
+
+
+def hr_action_not_due_q(today: date) -> Q:
+    """PENDING_HR decisions whose contract is not yet close enough for HR to act.
+
+    Decisions exist for every active contract so the reminders and automatic
+    renewal can run, but listing a contract that ends next year only buries
+    the ones that need a decision now. Other statuses always stay visible.
+    """
+    return Q(
+        status=ContractDecision.Status.PENDING_HR,
+        original_contract_expiry__gt=today + timedelta(days=HR_ACTION_WINDOW_DAYS),
+    )
+
+
+def hr_action_due(decision: ContractDecision, today: date) -> bool:
+    """In-memory form of ``hr_action_not_due_q`` for an already-loaded decision."""
+    return not (
+        decision.status == ContractDecision.Status.PENDING_HR
+        and decision.original_contract_expiry > today + timedelta(days=HR_ACTION_WINDOW_DAYS)
+    )
 
 
 def contract_rating_due(profile: EmployeeProfile, decision: ContractDecision, today: date) -> bool:

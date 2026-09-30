@@ -572,3 +572,29 @@ class ContractExpiryWorkflowTests(TestCase):
         self.assertEqual(cancel_stale_contract_decisions(self.profile), 0)
         rating.contract_decision.refresh_from_db()
         self.assertEqual(rating.contract_decision.status, ContractDecision.Status.PENDING_HR)
+
+    def test_hr_list_hides_pending_hr_decisions_until_the_contract_is_within_90_days(self):
+        from .contract_expiry import hr_action_due
+
+        near, _ = ensure_contract_decision(self.profile)  # expires in 90 days
+        far_profile = EmployeeProfile.objects.create(
+            company=self.company,
+            employee_id="CONTRACT-FAR",
+            full_name="Far Contract",
+            contract_date=timezone.localdate(),
+            contract_expiry=timezone.localdate() + timedelta(days=300),
+        )
+        far, _ = ensure_contract_decision(far_profile)
+
+        self.client.force_authenticate(user=self.hr)
+        response = self.client.get(
+            "/api/employees/contract-decisions/?status=PENDING_HR",
+            secure=True,
+            HTTP_X_ACTIVE_COMPANY_ID=str(self.company.id),
+        )
+
+        ids = [item["id"] for item in response.data["data"]["items"]]
+        self.assertIn(near.id, ids)
+        self.assertNotIn(far.id, ids)
+        self.assertTrue(hr_action_due(near, timezone.localdate()))
+        self.assertFalse(hr_action_due(far, timezone.localdate()))
