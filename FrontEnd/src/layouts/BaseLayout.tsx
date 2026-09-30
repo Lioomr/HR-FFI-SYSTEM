@@ -61,6 +61,7 @@ import type { MenuProps } from "antd";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { getCompanySwitchDestination, getHomePath } from "../routes/homeRoute";
 import { useAuthStore } from "../auth/authStore";
+import type { Role } from "../auth/authStore";
 import { logoutApi } from "../services/api/authApi";
 import { useI18n } from "../i18n/useI18n";
 import type { AppLanguage } from "../i18n/types";
@@ -1633,6 +1634,15 @@ export default function BaseLayout() {
 
   // ─── User name display ─────────────────────────────────────────────────────
   const displayName = user?.email?.split("@")[0] || "User";
+  const profilePathByRole: Record<Role, string> = {
+    SystemAdmin: "/admin/profile",
+    HRManager: "/hr/profile",
+    Manager: "/manager/profile",
+    CEO: "/ceo/profile",
+    CFO: "/cfo/profile",
+    Employee: "/employee/profile",
+  };
+  const profilePath = role ? profilePathByRole[role] : "/login";
 
   // ─── Sidebar content ───────────────────────────────────────────────────────
   const sidebarContent = (
@@ -1686,7 +1696,9 @@ export default function BaseLayout() {
         />
       </div>
       {/* Bottom user card */}
-      <div
+      <Link
+        to={profilePath}
+        aria-label={`${t("layout.profile")}: ${displayName}`}
         style={{
           padding: collapsed ? "12px 0" : "12px 14px",
           borderTop: `1px solid ${sbTheme.border}`,
@@ -1696,6 +1708,7 @@ export default function BaseLayout() {
           justifyContent: collapsed ? "center" : "flex-start",
           flexShrink: 0,
           transition: "padding 0.25s cubic-bezier(0.4,0,0.2,1)",
+          textDecoration: "none",
         }}
       >
         <Tooltip
@@ -1713,7 +1726,7 @@ export default function BaseLayout() {
               fontWeight: 700,
               flexShrink: 0,
               boxShadow: `0 0 0 2px ${sbTheme.bg}, 0 0 0 4px ${sbTheme.accent}44`,
-              cursor: "default",
+              cursor: "pointer",
             }}
           >
             {displayName.charAt(0).toUpperCase()}
@@ -1744,7 +1757,7 @@ export default function BaseLayout() {
             </div>
           </div>
         )}
-      </div>
+      </Link>
     </div>
   );
 
