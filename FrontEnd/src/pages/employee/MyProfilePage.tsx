@@ -44,7 +44,7 @@ const formatValue = (val: any) => {
 const formatDate = (val: any) => {
   if (!val) return "—";
   if (typeof val === "string" && /^\d{4}-\d{2}-\d{2}/.test(val)) {
-    return val.split("T")[0];
+    return val.slice(0, 10);
   }
   return formatValue(val);
 };
@@ -512,7 +512,7 @@ export default function MyProfilePage() {
                 label={t("profile.healthCard")}
                 tagLabel="Health"
                 tagColor="green"
-                number={formatValue((employee as any).health_card)}
+                number={formatDate((employee as any).health_card)}
                 expiry={(employee as any).health_card_expiry}
               />
             </Space>
