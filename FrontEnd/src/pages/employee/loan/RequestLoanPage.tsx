@@ -30,7 +30,9 @@ export default function RequestLoanPage() {
   const [submitting, setSubmitting] = useState(false);
   const [employee, setEmployee] = useState<Employee | null>(null);
   const selectedLoanType = Form.useWatch("loan_type", form) as
-    "open" | "installment" | undefined;
+    | "open"
+    | "installment"
+    | undefined;
   const selectedAmount = Form.useWatch("amount", form) as number | undefined;
   const selectedInstallmentMonths = Form.useWatch(
     "installment_months",
@@ -266,7 +268,9 @@ export default function RequestLoanPage() {
               {
                 validator: (_, value) => {
                   const loanType = form.getFieldValue("loan_type") as
-                    "open" | "installment" | undefined;
+                    | "open"
+                    | "installment"
+                    | undefined;
                   if (
                     typeof value !== "number" ||
                     Number.isNaN(value) ||
