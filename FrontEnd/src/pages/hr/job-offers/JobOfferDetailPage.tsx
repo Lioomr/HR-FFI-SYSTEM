@@ -695,6 +695,7 @@ export default function JobOfferDetailPage() {
         }
         actions={
           <Button
+            iconPlacement="end"
             icon={
               language === "ar" ? (
                 <ArrowRightOutlined aria-hidden />
