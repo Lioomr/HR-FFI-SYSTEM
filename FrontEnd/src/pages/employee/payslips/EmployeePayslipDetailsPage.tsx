@@ -1,11 +1,8 @@
+import BackButton from "../../../components/ui/BackButton";
 import { useCallback, useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { Button, Card, Descriptions, Divider, Typography } from "antd";
-import {
-  ArrowLeftOutlined,
-  DownloadOutlined,
-  ArrowRightOutlined,
-} from "@ant-design/icons";
+import { Space, Button, Card, Descriptions, Divider, Typography } from "antd";
+import { DownloadOutlined } from "@ant-design/icons";
 
 import PageHeader from "../../../components/ui/PageHeader";
 import LoadingState from "../../../components/ui/LoadingState";
@@ -25,7 +22,6 @@ export default function EmployeePayslipDetailsPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { t, language } = useI18n();
-  const isRtl = language === "ar";
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -85,26 +81,25 @@ export default function EmployeePayslipDetailsPage() {
 
   return (
     <div style={{ maxWidth: 800, margin: "0 auto" }}>
-      <Button
-        type="link"
-        icon={isRtl ? <ArrowRightOutlined /> : <ArrowLeftOutlined />}
-        onClick={() => navigate("/employee/payslips")}
-        style={{ paddingInlineStart: 0, marginBottom: 16 }}
-      >
-        {t("payslips.details.back")}
-      </Button>
-
       <PageHeader
         title={`${t("payslips.details.titlePrefix")} ${new Date(0, payslip.month - 1).toLocaleString(language === "ar" ? "ar-EG" : "en-US", { month: "long" })} ${payslip.year}`}
         actions={
-          <Button
-            type="primary"
-            icon={<DownloadOutlined />}
-            onClick={handleDownload}
-            loading={downloading}
-          >
-            {t("payslips.list.downloadPdf")}
-          </Button>
+          <Space wrap>
+            <Button
+              type="primary"
+              icon={<DownloadOutlined />}
+              onClick={handleDownload}
+              loading={downloading}
+            >
+              {t("payslips.list.downloadPdf")}
+            </Button>
+            <BackButton
+              onClick={() => navigate("/employee/payslips")}
+              style={{ minHeight: 40 }}
+            >
+              {t("payslips.details.back")}
+            </BackButton>
+          </Space>
         }
       />
 

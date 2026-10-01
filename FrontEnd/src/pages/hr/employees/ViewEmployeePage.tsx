@@ -1,3 +1,4 @@
+import BackButton from "../../../components/ui/BackButton";
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
@@ -17,7 +18,6 @@ import {
   Typography,
 } from "antd";
 import {
-  ArrowLeftOutlined,
   EditOutlined,
   UserAddOutlined,
   DisconnectOutlined,
@@ -580,9 +580,6 @@ export default function ViewEmployeePage() {
         breadcrumb={t("layout.hrManagement")}
         actions={
           <Space>
-            <Button icon={<ArrowLeftOutlined />} onClick={handleBack}>
-              {t("hr.employees.back")}
-            </Button>
             {employee.user_id ? (
               <Tooltip
                 title={t("employees.view.linkedTo", {
@@ -612,6 +609,9 @@ export default function ViewEmployeePage() {
             <Button type="primary" icon={<EditOutlined />} onClick={handleEdit}>
               {t("hr.employees.edit")}
             </Button>
+            <BackButton onClick={handleBack}>
+              {t("hr.employees.back")}
+            </BackButton>
           </Space>
         }
       />

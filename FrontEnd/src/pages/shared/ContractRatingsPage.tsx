@@ -1,3 +1,4 @@
+import BackButton from "../../components/ui/BackButton";
 import { useCallback, useEffect, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import {
@@ -16,7 +17,6 @@ import {
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import {
-  ArrowLeftOutlined,
   CheckOutlined,
   EyeOutlined,
   FilePdfOutlined,
@@ -478,12 +478,9 @@ export default function ContractRatingsPage() {
               </Button>
             </>
           ) : null}
-          <Button
-            icon={<ArrowLeftOutlined />}
-            onClick={() => navigate(basePath)}
-          >
+          <BackButton onClick={() => navigate(basePath)}>
             {t("common.back")}
-          </Button>
+          </BackButton>
         </Space>
       }
     />

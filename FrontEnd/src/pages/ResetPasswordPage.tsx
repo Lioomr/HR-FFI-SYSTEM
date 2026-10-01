@@ -1,10 +1,7 @@
+import BackButton from "../components/ui/BackButton";
 import { useState } from "react";
 import { Alert, Button, Card, Form, Input, Space, Typography } from "antd";
-import {
-  LockOutlined,
-  ArrowLeftOutlined,
-  SafetyCertificateOutlined,
-} from "@ant-design/icons";
+import { LockOutlined, SafetyCertificateOutlined } from "@ant-design/icons";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { resetPasswordConfirmApi } from "../services/api/authApi";
 import { isApiError } from "../services/api/apiTypes";
@@ -110,7 +107,10 @@ export default function ResetPasswordPage() {
           >
             <LockOutlined style={{ fontSize: 32, color: "#fff" }} />
           </div>
-          <Title level={2} style={{ color: "#fff", margin: 0, fontWeight: 700 }}>
+          <Title
+            level={2}
+            style={{ color: "#fff", margin: 0, fontWeight: 700 }}
+          >
             {t("resetPassword.title")}
           </Title>
           <Text
@@ -272,16 +272,15 @@ export default function ResetPasswordPage() {
                     {t("resetPassword.submit")}
                   </Button>
 
-                  <Button
+                  <BackButton
                     size="large"
                     block
-                    icon={<ArrowLeftOutlined />}
                     onClick={() => navigate("/login")}
                     disabled={submitting}
                     style={{ height: 48, borderRadius: 12, fontWeight: 500 }}
                   >
                     {t("resetPassword.backToLogin")}
-                  </Button>
+                  </BackButton>
                 </Space>
               </Form>
             </>

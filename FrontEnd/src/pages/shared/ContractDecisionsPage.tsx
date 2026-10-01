@@ -1,3 +1,4 @@
+import BackButton from "../../components/ui/BackButton";
 import { useCallback, useEffect, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import dayjs, { type Dayjs } from "dayjs";
@@ -17,11 +18,7 @@ import {
   message,
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import {
-  ArrowLeftOutlined,
-  ReloadOutlined,
-  SearchOutlined,
-} from "@ant-design/icons";
+import { ReloadOutlined, SearchOutlined } from "@ant-design/icons";
 
 import PageHeader from "../../components/ui/PageHeader";
 import {
@@ -589,8 +586,7 @@ export default function ContractDecisionsPage() {
               >
                 {t("common.refresh")}
               </Button>
-              <Button
-                icon={<ArrowLeftOutlined />}
+              <BackButton
                 onClick={() =>
                   navigate(
                     isCeo
@@ -600,7 +596,7 @@ export default function ContractDecisionsPage() {
                 }
               >
                 {t("common.back")}
-              </Button>
+              </BackButton>
             </Space>
           }
         />

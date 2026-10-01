@@ -299,7 +299,7 @@ export default function EmployeeLeaveBalances({
             />
           </Form.Item>
 
-          <div style={{ textAlign: "right" }}>
+          <div style={{ textAlign: "end" }}>
             <Space>
               <Button onClick={() => setIsModalOpen(false)}>
                 {t("common.cancel")}

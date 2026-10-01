@@ -1,9 +1,11 @@
+import BackButton from "../../components/ui/BackButton";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   Alert,
   Button,
   Col,
+  Dropdown,
   DatePicker,
   Form,
   Input,
@@ -17,8 +19,8 @@ import {
 import type { Dayjs } from "dayjs";
 import dayjs from "dayjs";
 import {
-  ArrowLeftOutlined,
   DownloadOutlined,
+  DownOutlined,
   EditOutlined,
   EyeOutlined,
   ReloadOutlined,
@@ -488,13 +490,6 @@ export default function CEOJobOfferDetailPage() {
         actions={
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
             <Button
-              icon={<ArrowLeftOutlined aria-hidden />}
-              onClick={() => navigate("/ceo/job-offers")}
-              style={{ borderRadius: 10, minHeight: 40 }}
-            >
-              {t("jobOffers.ceo.backToInbox")}
-            </Button>
-            <Button
               icon={<ReloadOutlined aria-hidden />}
               loading={refreshing}
               onClick={() => load({ isRefresh: true })}
@@ -504,21 +499,48 @@ export default function CEOJobOfferDetailPage() {
             </Button>
             {offer.has_cv && (
               <>
-                <Button
-                  icon={<EyeOutlined aria-hidden />}
-                  onClick={handleCvPreview}
-                  style={{ borderRadius: 10, minHeight: 40 }}
+                <Dropdown
+                  trigger={["click"]}
+                  menu={{
+                    items: [
+                      {
+                        key: "cv",
+                        label: t("jobOffers.action.previewCv"),
+                        icon: <EyeOutlined />,
+                      },
+                    ],
+                    onClick: handleCvPreview,
+                  }}
                 >
-                  {t("jobOffers.action.previewCv")}
-                </Button>
-                <Button
-                  icon={<DownloadOutlined aria-hidden />}
-                  loading={downloading}
-                  onClick={handleCvDownload}
-                  style={{ borderRadius: 10, minHeight: 40 }}
+                  <Button
+                    icon={<EyeOutlined aria-hidden />}
+                    style={{ borderRadius: 10, minHeight: 40 }}
+                  >
+                    {t("common.preview")} <DownOutlined aria-hidden />
+                  </Button>
+                </Dropdown>
+                <Dropdown
+                  trigger={["click"]}
+                  menu={{
+                    items: [
+                      {
+                        key: "cv",
+                        label: t("jobOffers.action.downloadCv"),
+                        icon: <DownloadOutlined />,
+                        disabled: downloading,
+                      },
+                    ],
+                    onClick: () => void handleCvDownload(),
+                  }}
                 >
-                  {t("jobOffers.action.downloadCv")}
-                </Button>
+                  <Button
+                    icon={<DownloadOutlined aria-hidden />}
+                    loading={downloading}
+                    style={{ borderRadius: 10, minHeight: 40 }}
+                  >
+                    {t("common.download")} <DownOutlined aria-hidden />
+                  </Button>
+                </Dropdown>
               </>
             )}
             {editable && !editing && (
@@ -530,6 +552,12 @@ export default function CEOJobOfferDetailPage() {
                 {t("jobOffers.ceo.editTerms")}
               </Button>
             )}
+            <BackButton
+              onClick={() => navigate("/ceo/job-offers")}
+              style={{ borderRadius: 10, minHeight: 40 }}
+            >
+              {t("jobOffers.ceo.backToInbox")}
+            </BackButton>
           </div>
         }
       />

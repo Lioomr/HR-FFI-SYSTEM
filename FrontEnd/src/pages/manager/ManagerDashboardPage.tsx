@@ -9,6 +9,7 @@ import {
   InboxOutlined,
   ReloadOutlined,
   RightOutlined,
+  LeftOutlined,
   TeamOutlined,
   WarningOutlined,
 } from "@ant-design/icons";
@@ -65,7 +66,7 @@ const QUEUE_ACCENTS: Record<
  * area degrades to a marked-unavailable tile instead of blanking the page.
  */
 export default function ManagerDashboardPage() {
-  const { t } = useI18n();
+  const { t, language } = useI18n();
   const navigate = useNavigate();
   const screens = useBreakpoint();
   const isMobile = !screens.md;
@@ -464,7 +465,13 @@ export default function ManagerDashboardPage() {
                       <Button
                         type="primary"
                         size="small"
-                        icon={<RightOutlined aria-hidden />}
+                        icon={
+                          language === "ar" ? (
+                            <LeftOutlined aria-hidden />
+                          ) : (
+                            <RightOutlined aria-hidden />
+                          )
+                        }
                         onClick={() => navigate(item.path)}
                         aria-label={`${t("common.review")}: ${
                           item.employeeName || t("manager.requests.unknown")

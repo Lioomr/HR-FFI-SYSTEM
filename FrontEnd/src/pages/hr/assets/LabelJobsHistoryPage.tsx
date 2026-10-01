@@ -1,8 +1,9 @@
+import BackButton from "../../../components/ui/BackButton";
 import { useEffect, useState } from "react";
 import { Button, Space, Tag, Tooltip, Typography, message } from "antd";
 import { Link } from "react-router-dom";
 import type { ColumnsType } from "antd/es/table";
-import { ArrowLeftOutlined, DownloadOutlined } from "@ant-design/icons";
+import { DownloadOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 
 import ErrorState from "../../../components/ui/ErrorState";
@@ -170,7 +171,7 @@ export default function LabelJobsHistoryPage() {
         subtitle={t("hr.assets.labelJobs.subtitle")}
         actions={
           <Link to="/hr/assets">
-            <Button icon={<ArrowLeftOutlined />}>{t("hr.assets.title")}</Button>
+            <BackButton>{t("hr.assets.title")}</BackButton>
           </Link>
         }
       />

@@ -1,3 +1,4 @@
+import BackButton from "../../../components/ui/BackButton";
 import { useEffect, useRef, useState } from "react";
 import {
   Alert,
@@ -13,7 +14,7 @@ import {
 } from "antd";
 import type { InputRef } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import { ArrowLeftOutlined, ScanOutlined } from "@ant-design/icons";
+import { ScanOutlined } from "@ant-design/icons";
 import { Link, useSearchParams } from "react-router-dom";
 import dayjs from "dayjs";
 
@@ -215,7 +216,7 @@ export default function AssetLookupPage() {
         subtitle={t("hr.assets.lookup.subtitle")}
         actions={
           <Link to="/hr/assets">
-            <Button icon={<ArrowLeftOutlined />}>{t("hr.assets.title")}</Button>
+            <BackButton>{t("hr.assets.title")}</BackButton>
           </Link>
         }
       />

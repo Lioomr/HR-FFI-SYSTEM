@@ -1,8 +1,8 @@
+import BackButton from "../ui/BackButton";
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Alert, Button, Card, Form, Space, Typography, message } from "antd";
 import {
-  ArrowLeftOutlined,
   EyeOutlined,
   FilePdfOutlined,
   ReloadOutlined,
@@ -251,12 +251,9 @@ export default function RaterEvaluationPage({ rater }: { rater: Rater }) {
                 </Button>
               </>
             ) : null}
-            <Button
-              icon={<ArrowLeftOutlined />}
-              onClick={() => navigate(copy.back)}
-            >
+            <BackButton onClick={() => navigate(copy.back)}>
               {t("common.back")}
-            </Button>
+            </BackButton>
           </Space>
         }
       />

@@ -20,6 +20,7 @@ import {
 import {
   BellOutlined,
   ArrowRightOutlined,
+  ArrowLeftOutlined,
   FilePdfOutlined,
   DownloadOutlined,
   EyeOutlined,
@@ -34,7 +35,7 @@ const { Text, Paragraph } = Typography;
 
 export default function AnnouncementWidget({ role }: { role?: string }) {
   const navigate = useNavigate();
-  const { t } = useI18n();
+  const { t, language } = useI18n();
   const [loading, setLoading] = useState(true);
   const [announcements, setAnnouncements] = useState<AnnouncementListItem[]>(
     [],
@@ -181,7 +182,13 @@ export default function AnnouncementWidget({ role }: { role?: string }) {
                   <Button
                     type="link"
                     size="small"
-                    icon={<ArrowRightOutlined />}
+                    icon={
+                      language === "ar" ? (
+                        <ArrowLeftOutlined />
+                      ) : (
+                        <ArrowRightOutlined />
+                      )
+                    }
                     onClick={() => handleOpen(item)}
                   />,
                 ]}

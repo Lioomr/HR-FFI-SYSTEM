@@ -1,3 +1,4 @@
+import BackButton from "../../../components/ui/BackButton";
 import { useCallback, useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
@@ -13,7 +14,6 @@ import {
   notification,
 } from "antd";
 import {
-  ArrowLeftOutlined,
   CheckCircleOutlined,
   CloseCircleOutlined,
   EyeOutlined,
@@ -454,17 +454,6 @@ export default function LeaveRequestDetailsPage({
 
   return (
     <div style={{ maxWidth: 800, margin: "0 auto" }}>
-      <Button
-        type="link"
-        icon={<ArrowLeftOutlined />}
-        onClick={() =>
-          navigate(isCEO ? "/ceo/leave/requests" : "/hr/leave/requests")
-        }
-        style={{ paddingLeft: 0, marginBottom: 16 }}
-      >
-        {t("leave.backToInbox")}
-      </Button>
-
       <PageHeader
         title={t("leave.requestDetailsTitle", { id: request.id })}
         tags={<Tag color={statusColor()}>{statusLabel}</Tag>}
@@ -480,6 +469,14 @@ export default function LeaveRequestDetailsPage({
             >
               {t("leave.downloadRequestPdf")}
             </Button>
+            <BackButton
+              onClick={() =>
+                navigate(isCEO ? "/ceo/leave/requests" : "/hr/leave/requests")
+              }
+              style={{ borderRadius: 10, minHeight: 40 }}
+            >
+              {t("leave.backToInbox")}
+            </BackButton>
           </div>
         }
       />

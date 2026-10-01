@@ -1,3 +1,4 @@
+import BackButton from "../../../components/ui/BackButton";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
@@ -13,8 +14,6 @@ import {
   message,
 } from "antd";
 import {
-  ArrowLeftOutlined,
-  ArrowRightOutlined,
   DownOutlined,
   AuditOutlined,
   CheckCircleOutlined,
@@ -243,7 +242,7 @@ function DeliveryChannel({
 }
 
 export default function JobOfferDetailPage() {
-  const { t, language } = useI18n();
+  const { t } = useI18n();
   const navigate = useNavigate();
   const { id } = useParams();
   const [messageApi, messageContext] = message.useMessage();
@@ -783,20 +782,12 @@ export default function JobOfferDetailPage() {
             {t("jobOffers.action.edit")}
           </Button>
         )}
-        <Button
-          iconPlacement="end"
-          icon={
-            language === "ar" ? (
-              <ArrowLeftOutlined aria-hidden />
-            ) : (
-              <ArrowRightOutlined aria-hidden />
-            )
-          }
+        <BackButton
           onClick={() => navigate("/hr/job-offers")}
           style={{ borderRadius: 10, minHeight: 40, marginInlineStart: "auto" }}
         >
           {t("jobOffers.action.backToList")}
-        </Button>
+        </BackButton>
       </div>
 
       <Row gutter={[16, 16]}>

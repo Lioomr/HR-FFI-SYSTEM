@@ -1,3 +1,4 @@
+import BackButton from "../../../components/ui/BackButton";
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
@@ -13,7 +14,7 @@ import {
   Row,
   Col,
 } from "antd";
-import { ArrowLeftOutlined, SendOutlined } from "@ant-design/icons";
+import { SendOutlined } from "@ant-design/icons";
 import type { UploadFile } from "antd/es/upload/interface";
 
 import PageHeader from "../../../components/ui/PageHeader";
@@ -284,18 +285,17 @@ export default function RequestLeavePage() {
 
   return (
     <div style={{ maxWidth: 600, margin: "0 auto" }}>
-      <Button
-        type="link"
-        icon={<ArrowLeftOutlined />}
-        onClick={() => navigate("/employee/leave/requests")}
-        style={{ paddingLeft: 0, marginBottom: 16 }}
-      >
-        {t("leave.backToRequests")}
-      </Button>
-
       <PageHeader
         title={t("leave.requestTitle")}
         subtitle={t("leave.requestSubtitle")}
+        actions={
+          <BackButton
+            onClick={() => navigate("/employee/leave/requests")}
+            style={{ borderRadius: 10, minHeight: 40 }}
+          >
+            {t("leave.backToRequests")}
+          </BackButton>
+        }
       />
 
       <Card style={{ borderRadius: 16 }} loading={loading}>

@@ -1,3 +1,4 @@
+import BackButton from "../../../components/ui/BackButton";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
@@ -10,11 +11,7 @@ import {
   Select,
   Typography,
 } from "antd";
-import {
-  ArrowLeftOutlined,
-  SendOutlined,
-  ArrowRightOutlined,
-} from "@ant-design/icons";
+import { SendOutlined } from "@ant-design/icons";
 
 import PageHeader from "../../../components/ui/PageHeader";
 import { createLoanRequest } from "../../../services/api/loanApi";
@@ -28,15 +25,12 @@ const { TextArea } = Input;
 
 export default function RequestLoanPage() {
   const navigate = useNavigate();
-  const { t, language } = useI18n();
-  const isRtl = language === "ar";
+  const { t } = useI18n();
   const [form] = Form.useForm();
   const [submitting, setSubmitting] = useState(false);
   const [employee, setEmployee] = useState<Employee | null>(null);
   const selectedLoanType = Form.useWatch("loan_type", form) as
-    | "open"
-    | "installment"
-    | undefined;
+    "open" | "installment" | undefined;
   const selectedAmount = Form.useWatch("amount", form) as number | undefined;
   const selectedInstallmentMonths = Form.useWatch(
     "installment_months",
@@ -220,17 +214,17 @@ export default function RequestLoanPage() {
 
   return (
     <div style={{ maxWidth: 720, margin: "0 auto" }}>
-      <Button
-        type="link"
-        icon={isRtl ? <ArrowRightOutlined /> : <ArrowLeftOutlined />}
-        onClick={() => navigate("/employee/loans")}
-        style={{ paddingInlineStart: 0 }}
-      >
-        {t("loans.details.back")}
-      </Button>
       <PageHeader
         title={t("loans.request.title")}
         subtitle={t("loans.request.subtitle")}
+        actions={
+          <BackButton
+            onClick={() => navigate("/employee/loans")}
+            style={{ borderRadius: 10, minHeight: 40 }}
+          >
+            {t("loans.details.back")}
+          </BackButton>
+        }
       />
       <Card style={{ borderRadius: 16 }}>
         <Typography.Paragraph style={{ marginBottom: 8 }}>
@@ -272,9 +266,7 @@ export default function RequestLoanPage() {
               {
                 validator: (_, value) => {
                   const loanType = form.getFieldValue("loan_type") as
-                    | "open"
-                    | "installment"
-                    | undefined;
+                    "open" | "installment" | undefined;
                   if (
                     typeof value !== "number" ||
                     Number.isNaN(value) ||
