@@ -932,7 +932,8 @@ export default function JobOfferFormPage() {
                     {
                       validator: async (_rule, value: Dayjs | undefined) => {
                         const offerDate = form.getFieldValue("offer_date") as
-                          Dayjs | undefined;
+                          | Dayjs
+                          | undefined;
                         if (
                           value &&
                           offerDate &&
