@@ -200,7 +200,10 @@ describe("JobOfferDetailPage", () => {
     render(<JobOfferDetailPage />);
     await findCandidateName();
 
-    fireEvent.click(screen.getByRole("button", { name: /Download PDF/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /^Download$/i }));
+    fireEvent.click(
+      await screen.findByRole("menuitem", { name: /Download PDF/i }),
+    );
 
     await waitFor(() => expect(downloadJobOfferPdf).toHaveBeenCalledWith("11"));
     expect(triggerBlobDownload).toHaveBeenCalledWith(blob, "job_offer_11.pdf");
@@ -213,8 +216,9 @@ describe("JobOfferDetailPage", () => {
 
     render(<JobOfferDetailPage />);
 
+    fireEvent.click(await screen.findByRole("button", { name: /^Preview$/i }));
     fireEvent.click(
-      await screen.findByRole("button", { name: /Preview PDF/i }),
+      await screen.findByRole("menuitem", { name: /Preview PDF/i }),
     );
 
     const dialog = await screen.findByRole("dialog");
@@ -235,7 +239,10 @@ describe("JobOfferDetailPage", () => {
 
     render(<JobOfferDetailPage />);
 
-    fireEvent.click(await screen.findByRole("button", { name: /Preview CV/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /^Preview$/i }));
+    fireEvent.click(
+      await screen.findByRole("menuitem", { name: /Preview CV/i }),
+    );
 
     const dialog = await screen.findByRole("dialog");
     expect(within(dialog).getByText("Preview CV")).toBeInTheDocument();
@@ -256,7 +263,10 @@ describe("JobOfferDetailPage", () => {
 
     render(<JobOfferDetailPage />);
 
-    fireEvent.click(await screen.findByRole("button", { name: /Preview CV/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /^Preview$/i }));
+    fireEvent.click(
+      await screen.findByRole("menuitem", { name: /Preview CV/i }),
+    );
 
     const dialog = await screen.findByRole("dialog");
     expect(
@@ -852,7 +862,10 @@ describe("JobOfferDetailPage workflow history and CV", () => {
     render(<JobOfferDetailPage />);
     await findCandidateName();
 
-    fireEvent.click(screen.getByRole("button", { name: /Download CV/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /^Download$/i }));
+    fireEvent.click(
+      await screen.findByRole("menuitem", { name: /Download CV/i }),
+    );
 
     await waitFor(() => expect(downloadJobOfferCv).toHaveBeenCalledWith("11"));
     expect(triggerBlobDownload).toHaveBeenCalledWith(blob, "job_offer_11_cv");
