@@ -4,6 +4,7 @@ import {
   Alert,
   Button,
   Col,
+  Dropdown,
   Modal,
   Row,
   Space,
@@ -13,6 +14,8 @@ import {
 } from "antd";
 import {
   ArrowLeftOutlined,
+  ArrowRightOutlined,
+  DownOutlined,
   AuditOutlined,
   CheckCircleOutlined,
   ClockCircleOutlined,
@@ -240,7 +243,7 @@ function DeliveryChannel({
 }
 
 export default function JobOfferDetailPage() {
-  const { t } = useI18n();
+  const { t, language } = useI18n();
   const navigate = useNavigate();
   const { id } = useParams();
   const [messageApi, messageContext] = message.useMessage();
@@ -691,68 +694,111 @@ export default function JobOfferDetailPage() {
           </Space>
         }
         actions={
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-            <Button
-              icon={<ArrowLeftOutlined aria-hidden />}
-              onClick={() => navigate("/hr/job-offers")}
-              style={{ borderRadius: 10, minHeight: 40 }}
-            >
-              {t("jobOffers.action.backToList")}
-            </Button>
-            <Button
-              icon={<ReloadOutlined aria-hidden />}
-              loading={refreshing}
-              onClick={() => load({ isRefresh: true })}
-              style={{ borderRadius: 10, minHeight: 40 }}
-            >
-              {t("jobOffers.action.refresh")}
-            </Button>
-            {editable && (
-              <Button
-                icon={<EditOutlined aria-hidden />}
-                onClick={() => navigate(`/hr/job-offers/${offer.id}/edit`)}
-                style={{ borderRadius: 10, minHeight: 40 }}
-              >
-                {t("jobOffers.action.edit")}
-              </Button>
-            )}
-            {offer.has_cv && (
-              <>
-                <Button
-                  icon={<EyeOutlined aria-hidden />}
-                  onClick={handleCvPreview}
-                  style={{ borderRadius: 10, minHeight: 40 }}
-                >
-                  {t("jobOffers.action.previewCv")}
-                </Button>
-                <Button
-                  icon={<DownloadOutlined aria-hidden />}
-                  loading={acting === "cv"}
-                  onClick={handleCvDownload}
-                  style={{ borderRadius: 10, minHeight: 40 }}
-                >
-                  {t("jobOffers.action.downloadCv")}
-                </Button>
-              </>
-            )}
-            <Button
-              icon={<EyeOutlined aria-hidden />}
-              onClick={handlePdfPreview}
-              style={{ borderRadius: 10, minHeight: 40 }}
-            >
-              {t("jobOffers.action.previewPdf")}
-            </Button>
-            <Button
-              icon={<FilePdfOutlined aria-hidden />}
-              loading={acting === "pdf"}
-              onClick={handlePdf}
-              style={{ borderRadius: 10, minHeight: 40 }}
-            >
-              {t("jobOffers.action.downloadPdf")}
-            </Button>
-          </div>
+          <Button
+            icon={
+              language === "ar" ? (
+                <ArrowRightOutlined aria-hidden />
+              ) : (
+                <ArrowLeftOutlined aria-hidden />
+              )
+            }
+            onClick={() => navigate("/hr/job-offers")}
+            style={{ borderRadius: 10, minHeight: 40 }}
+          >
+            {t("jobOffers.action.backToList")}
+          </Button>
         }
       />
+
+      <div
+        className="job-offer-document-actions"
+        style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 24 }}
+      >
+        <Dropdown
+          trigger={["click"]}
+          menu={{
+            items: [
+              ...(offer.has_cv
+                ? [
+                    {
+                      key: "cv",
+                      label: t("jobOffers.action.downloadCv"),
+                      icon: <DownloadOutlined />,
+                      disabled: acting === "cv",
+                    },
+                  ]
+                : []),
+              {
+                key: "pdf",
+                label: t("jobOffers.action.downloadPdf"),
+                icon: <FilePdfOutlined />,
+                disabled: acting === "pdf",
+              },
+            ],
+            onClick: ({ key }) => {
+              if (key === "cv") void handleCvDownload();
+              else void handlePdf();
+            },
+          }}
+        >
+          <Button
+            icon={<DownloadOutlined aria-hidden />}
+            loading={acting === "cv" || acting === "pdf"}
+            style={{ borderRadius: 10, minHeight: 40 }}
+          >
+            {t("common.download")} <DownOutlined aria-hidden />
+          </Button>
+        </Dropdown>
+        <Dropdown
+          trigger={["click"]}
+          menu={{
+            items: [
+              ...(offer.has_cv
+                ? [
+                    {
+                      key: "cv",
+                      label: t("jobOffers.action.previewCv"),
+                      icon: <EyeOutlined />,
+                    },
+                  ]
+                : []),
+              {
+                key: "pdf",
+                label: t("jobOffers.action.previewPdf"),
+                icon: <FilePdfOutlined />,
+              },
+            ],
+            onClick: ({ key }) => {
+              if (key === "cv") handleCvPreview();
+              else handlePdfPreview();
+            },
+          }}
+        >
+          <Button
+            icon={<EyeOutlined aria-hidden />}
+            style={{ borderRadius: 10, minHeight: 40 }}
+          >
+            {t("common.preview")} <DownOutlined aria-hidden />
+          </Button>
+        </Dropdown>
+        <Button
+          icon={<ReloadOutlined aria-hidden />}
+          loading={refreshing}
+          onClick={() => load({ isRefresh: true })}
+          style={{ borderRadius: 10, minHeight: 40 }}
+        >
+          {t("jobOffers.action.refresh")}
+        </Button>
+        {editable && (
+          <Button
+            icon={<EditOutlined aria-hidden />}
+            onClick={() => navigate(`/hr/job-offers/${offer.id}/edit`)}
+            style={{ borderRadius: 10, minHeight: 40 }}
+          >
+            {t("jobOffers.action.edit")}
+          </Button>
+        )}
+      </div>
 
       <Row gutter={[16, 16]}>
         <Col xs={24} xl={16}>
