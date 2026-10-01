@@ -693,22 +693,6 @@ export default function JobOfferDetailPage() {
             />
           </Space>
         }
-        actions={
-          <Button
-            iconPlacement="end"
-            icon={
-              language === "ar" ? (
-                <ArrowRightOutlined aria-hidden />
-              ) : (
-                <ArrowLeftOutlined aria-hidden />
-              )
-            }
-            onClick={() => navigate("/hr/job-offers")}
-            style={{ borderRadius: 10, minHeight: 40 }}
-          >
-            {t("jobOffers.action.backToList")}
-          </Button>
-        }
       />
 
       <div
@@ -799,6 +783,20 @@ export default function JobOfferDetailPage() {
             {t("jobOffers.action.edit")}
           </Button>
         )}
+        <Button
+          iconPlacement="end"
+          icon={
+            language === "ar" ? (
+              <ArrowLeftOutlined aria-hidden />
+            ) : (
+              <ArrowRightOutlined aria-hidden />
+            )
+          }
+          onClick={() => navigate("/hr/job-offers")}
+          style={{ borderRadius: 10, minHeight: 40, marginInlineStart: "auto" }}
+        >
+          {t("jobOffers.action.backToList")}
+        </Button>
       </div>
 
       <Row gutter={[16, 16]}>
