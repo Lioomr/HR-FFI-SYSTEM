@@ -1,3 +1,4 @@
+import BackButton from "../components/ui/BackButton";
 import { useState } from "react";
 import {
   Alert,
@@ -9,11 +10,7 @@ import {
   Typography,
   message,
 } from "antd";
-import {
-  LockOutlined,
-  ArrowLeftOutlined,
-  SafetyCertificateOutlined,
-} from "@ant-design/icons";
+import { LockOutlined, SafetyCertificateOutlined } from "@ant-design/icons";
 import { useNavigate } from "react-router-dom";
 import { changePasswordApi } from "../services/api/authApi";
 import { isApiError } from "../services/api/apiTypes";
@@ -257,10 +254,9 @@ export default function ChangePasswordPage() {
                 {t("common.save")}
               </Button>
 
-              <Button
+              <BackButton
                 size="large"
                 block
-                icon={<ArrowLeftOutlined />}
                 onClick={() => navigate(-1)}
                 disabled={submitting}
                 style={{
@@ -270,7 +266,7 @@ export default function ChangePasswordPage() {
                 }}
               >
                 {t("common.cancel")}
-              </Button>
+              </BackButton>
             </Space>
           </Form>
         </div>

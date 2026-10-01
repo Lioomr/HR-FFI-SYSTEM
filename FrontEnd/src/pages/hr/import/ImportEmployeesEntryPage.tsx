@@ -239,7 +239,7 @@ const ImportEmployeesEntryPage: React.FC = () => {
           </p>
         </Dragger>
 
-        <div style={{ marginTop: 24, textAlign: "right" }}>
+        <div style={{ marginTop: 24, textAlign: "end" }}>
           <Button
             type="primary"
             size="large"

@@ -1,3 +1,4 @@
+import BackButton from "../../../components/ui/BackButton";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
@@ -18,12 +19,7 @@ import {
 import type { UploadFile } from "antd";
 import type { Dayjs } from "dayjs";
 import dayjs from "dayjs";
-import {
-  ArrowLeftOutlined,
-  InboxOutlined,
-  SaveOutlined,
-  SendOutlined,
-} from "@ant-design/icons";
+import { InboxOutlined, SaveOutlined, SendOutlined } from "@ant-design/icons";
 
 import LoadingState from "../../../components/ui/LoadingState";
 import PageHeader from "../../../components/ui/PageHeader";
@@ -480,13 +476,12 @@ export default function JobOfferFormPage() {
         }
         breadcrumb={t("jobOffers.title")}
         actions={
-          <Button
-            icon={<ArrowLeftOutlined aria-hidden />}
+          <BackButton
             onClick={() => navigate("/hr/job-offers")}
             style={{ borderRadius: 10, minHeight: 40 }}
           >
             {t("jobOffers.action.backToList")}
-          </Button>
+          </BackButton>
         }
       />
 
@@ -937,8 +932,7 @@ export default function JobOfferFormPage() {
                     {
                       validator: async (_rule, value: Dayjs | undefined) => {
                         const offerDate = form.getFieldValue("offer_date") as
-                          | Dayjs
-                          | undefined;
+                          Dayjs | undefined;
                         if (
                           value &&
                           offerDate &&

@@ -1,7 +1,7 @@
+import BackButton from "../../components/ui/BackButton";
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { Alert, Button, Descriptions, Modal, Typography, message } from "antd";
-import { ArrowLeftOutlined } from "@ant-design/icons";
+import { Alert, Descriptions, Modal, Typography, message } from "antd";
 
 import PageHeader from "../../components/ui/PageHeader";
 import LoadingState from "../../components/ui/LoadingState";
@@ -197,13 +197,12 @@ export default function CEOEmployeeDeletionDetailPage() {
         title={t("employees.removalDetail.title")}
         subtitle={displayName}
         actions={
-          <Button
-            icon={<ArrowLeftOutlined aria-hidden />}
+          <BackButton
             onClick={() => navigate("/ceo/employees/deletion-requests")}
             style={{ borderRadius: 10, minHeight: 40 }}
           >
             {t("employees.removalDetail.backToInbox")}
-          </Button>
+          </BackButton>
         }
         tags={
           <ApprovalStatusTag

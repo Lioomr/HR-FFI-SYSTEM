@@ -1,3 +1,4 @@
+import BackButton from "../../components/ui/BackButton";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
@@ -12,13 +13,12 @@ import {
   Typography,
 } from "antd";
 import {
-  ArrowLeftOutlined,
-  ArrowRightOutlined,
   ContainerOutlined,
   EyeInvisibleOutlined,
   MailOutlined,
   PhoneOutlined,
   RightOutlined,
+  LeftOutlined,
   UserOutlined,
 } from "@ant-design/icons";
 
@@ -230,21 +230,6 @@ export default function ManagerEmployeeProfilePage() {
 
   return (
     <div style={{ maxWidth: 1600, margin: "0 auto", paddingBottom: 24 }}>
-      <Button
-        type="link"
-        icon={
-          isRtl ? (
-            <ArrowRightOutlined aria-hidden />
-          ) : (
-            <ArrowLeftOutlined aria-hidden />
-          )
-        }
-        onClick={handleBack}
-        style={{ paddingInlineStart: 0, marginBottom: 8, fontWeight: 600 }}
-      >
-        {t("manager.team.profile.back")}
-      </Button>
-
       <PageHeader
         title={employee.full_name || t("manager.team.profile.title")}
         subtitle={employee.position || undefined}
@@ -288,6 +273,14 @@ export default function ManagerEmployeeProfilePage() {
               )}
             </Tag>
           </Space>
+        }
+        actions={
+          <BackButton
+            onClick={handleBack}
+            style={{ borderRadius: 10, minHeight: 40 }}
+          >
+            {t("manager.team.profile.back")}
+          </BackButton>
         }
       />
 
@@ -502,7 +495,13 @@ export default function ManagerEmployeeProfilePage() {
                       />
                       <Button
                         size="small"
-                        icon={<RightOutlined aria-hidden />}
+                        icon={
+                          isRtl ? (
+                            <LeftOutlined aria-hidden />
+                          ) : (
+                            <RightOutlined aria-hidden />
+                          )
+                        }
                         onClick={() => navigate(item.path)}
                         aria-label={`${t("common.review")}: ${t(
                           `manager.queue.type.${item.queue}`,

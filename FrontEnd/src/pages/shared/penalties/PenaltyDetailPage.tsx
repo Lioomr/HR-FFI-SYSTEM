@@ -1,3 +1,4 @@
+import BackButton from "../../../components/ui/BackButton";
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
@@ -166,9 +167,9 @@ export default function PenaltyDetailPage({
           language === "ar" ? record.employee_name_ar : record.employee_name_en
         }
         actions={
-          <Button onClick={() => navigate(`/${role}/penalties`)}>
+          <BackButton onClick={() => navigate(`/${role}/penalties`)}>
             {t("common.back")}
-          </Button>
+          </BackButton>
         }
       />
       {role === "employee" && record.payroll_status === "applied" && (

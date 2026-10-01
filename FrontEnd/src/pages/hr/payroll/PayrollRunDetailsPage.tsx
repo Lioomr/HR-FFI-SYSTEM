@@ -1,3 +1,4 @@
+import BackButton from "../../../components/ui/BackButton";
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
@@ -16,12 +17,7 @@ import {
   Typography,
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import {
-  ArrowLeftOutlined,
-  LockOutlined,
-  CheckCircleOutlined,
-  ArrowRightOutlined,
-} from "@ant-design/icons";
+import { LockOutlined, CheckCircleOutlined } from "@ant-design/icons";
 
 import PageHeader from "../../../components/ui/PageHeader";
 import ResponsiveTable from "../../../components/ui/ResponsiveTable";
@@ -54,8 +50,7 @@ export default function PayrollRunDetailsPage() {
   const { run_id } = useParams<{ run_id: string }>();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { t, language } = useI18n();
-  const isRtl = language === "ar";
+  const { t } = useI18n();
   const screens = useBreakpoint();
   const isMobile = !screens.lg;
   const summaryColumnSpan = isMobile ? 24 : screens.xl ? 8 : 12;
@@ -300,17 +295,6 @@ export default function PayrollRunDetailsPage() {
 
   return (
     <div>
-      <div style={{ marginBottom: 16 }}>
-        <Button
-          type="link"
-          icon={isRtl ? <ArrowRightOutlined /> : <ArrowLeftOutlined />}
-          onClick={() => navigate("/hr/payroll")}
-          style={{ paddingInlineStart: 0 }}
-        >
-          {t("payroll.runDetails.backToDashboard")}
-        </Button>
-      </div>
-
       <PageHeader
         title={`${t("payroll.history.colRun")} ${run.month}/${run.year}`}
         subtitle={t("payroll.runDetails.subtitle")}
@@ -344,6 +328,12 @@ export default function PayrollRunDetailsPage() {
                 {t("payroll.runDetails.finalizeBtn")}
               </Button>
             )}
+            <BackButton
+              onClick={() => navigate("/hr/payroll")}
+              style={{ minHeight: 40 }}
+            >
+              {t("payroll.runDetails.backToDashboard")}
+            </BackButton>
           </Space>
         }
       />

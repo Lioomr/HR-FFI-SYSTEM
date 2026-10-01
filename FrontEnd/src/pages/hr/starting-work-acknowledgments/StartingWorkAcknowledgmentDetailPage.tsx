@@ -1,3 +1,4 @@
+import BackButton from "../../../components/ui/BackButton";
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
@@ -12,11 +13,7 @@ import {
   Typography,
   message,
 } from "antd";
-import {
-  ArrowLeftOutlined,
-  DownloadOutlined,
-  ReloadOutlined,
-} from "@ant-design/icons";
+import { DownloadOutlined, ReloadOutlined } from "@ant-design/icons";
 
 import ErrorState from "../../../components/ui/ErrorState";
 import LoadingState from "../../../components/ui/LoadingState";
@@ -353,13 +350,6 @@ export default function StartingWorkAcknowledgmentDetailPage() {
         actions={
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
             <Button
-              icon={<ArrowLeftOutlined aria-hidden />}
-              onClick={() => navigate("/hr/starting-work-acknowledgments")}
-              style={{ borderRadius: 10, minHeight: 40 }}
-            >
-              {t("startingWork.action.back")}
-            </Button>
-            <Button
               icon={<ReloadOutlined aria-hidden />}
               loading={refreshing}
               onClick={() => load({ isRefresh: true })}
@@ -377,6 +367,12 @@ export default function StartingWorkAcknowledgmentDetailPage() {
                 {t("startingWork.action.download")}
               </Button>
             )}
+            <BackButton
+              onClick={() => navigate("/hr/starting-work-acknowledgments")}
+              style={{ borderRadius: 10, minHeight: 40 }}
+            >
+              {t("startingWork.action.back")}
+            </BackButton>
           </div>
         }
       />

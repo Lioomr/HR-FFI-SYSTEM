@@ -1,7 +1,7 @@
+import BackButton from "../../../components/ui/BackButton";
 import { useCallback, useEffect, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import {
-  ArrowLeftOutlined,
   DownloadOutlined,
   EyeOutlined,
   FilePdfOutlined,
@@ -259,17 +259,6 @@ export default function EmployeeLeaveRequestDetailsPage() {
 
   return (
     <div style={{ maxWidth: 1080, margin: "0 auto" }}>
-      <Button
-        type="link"
-        icon={<ArrowLeftOutlined />}
-        onClick={() => navigate(backPath)}
-        style={{ paddingInlineStart: 0 }}
-      >
-        {isDelegatedApprovalRoute
-          ? t("leave.backToDelegatedInbox", "Back to delegated inbox")
-          : t("leave.backToRequests")}
-      </Button>
-
       <PageHeader
         title={t("leave.requestDetailsTitle", { id: request.id })}
         subtitle={t("leave.employeeDetailsSubtitle")}
@@ -301,6 +290,14 @@ export default function EmployeeLeaveRequestDetailsPage() {
                 </Button>
               </>
             ) : null}
+            <BackButton
+              onClick={() => navigate(backPath)}
+              style={{ borderRadius: 10, minHeight: 40 }}
+            >
+              {isDelegatedApprovalRoute
+                ? t("leave.backToDelegatedInbox", "Back to delegated inbox")
+                : t("leave.backToRequests")}
+            </BackButton>
           </Space>
         }
       />

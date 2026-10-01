@@ -1,16 +1,8 @@
+import BackButton from "../../../components/ui/BackButton";
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { Card, Descriptions, Tag, Typography, notification } from "antd";
 import {
-  Button,
-  Card,
-  Descriptions,
-  Tag,
-  Typography,
-  notification,
-} from "antd";
-import {
-  ArrowLeftOutlined,
-  ArrowRightOutlined,
   FileTextOutlined,
   CheckCircleFilled,
   CloseCircleFilled,
@@ -62,8 +54,7 @@ function statusColor(status: LoanStatus) {
 
 export default function EmployeeLoanRequestDetailsPage() {
   const navigate = useNavigate();
-  const { t, language } = useI18n();
-  const isRtl = language === "ar";
+  const { t } = useI18n();
   const { id = "" } = useParams();
   const [loading, setLoading] = useState(false);
   const [item, setItem] = useState<LoanRequest | null>(null);
@@ -132,18 +123,20 @@ export default function EmployeeLoanRequestDetailsPage() {
 
   return (
     <div style={{ maxWidth: 960, margin: "0 auto" }}>
-      <Button
-        type="link"
-        icon={isRtl ? <ArrowRightOutlined /> : <ArrowLeftOutlined />}
-        onClick={() => navigate("/employee/loans")}
-        style={{ paddingInlineStart: 0 }}
-      >
-        {t("loans.details.back")}
-      </Button>
       <PageHeader
         title={t("loans.details.titlePrefix") + " #" + id}
         breadcrumb={t("loans.details.subtitle")}
-        actions={item ? <LoanPdfDownloadButton loanId={item.id} /> : undefined}
+        actions={
+          <>
+            {item ? <LoanPdfDownloadButton loanId={item.id} /> : null}
+            <BackButton
+              onClick={() => navigate("/employee/loans")}
+              style={{ borderRadius: 10, minHeight: 40 }}
+            >
+              {t("loans.details.back")}
+            </BackButton>
+          </>
+        }
       />
       <Card loading={loading} style={{ borderRadius: 16 }}>
         {!item ? null : (

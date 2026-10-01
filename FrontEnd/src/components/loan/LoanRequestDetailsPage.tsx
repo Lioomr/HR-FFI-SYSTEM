@@ -1,3 +1,4 @@
+import BackButton from "../ui/BackButton";
 import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import {
@@ -12,11 +13,7 @@ import {
   Typography,
   notification,
 } from "antd";
-import {
-  ArrowLeftOutlined,
-  ArrowRightOutlined,
-  ReloadOutlined,
-} from "@ant-design/icons";
+import { ReloadOutlined } from "@ant-design/icons";
 
 import PageHeader from "../ui/PageHeader";
 import LoadingState from "../ui/LoadingState";
@@ -129,10 +126,9 @@ export default function LoanRequestDetailsPage({
 }: Props) {
   const { id = "" } = useParams();
   const navigate = useNavigate();
-  const { t, language } = useI18n();
+  const { t } = useI18n();
   const screens = useBreakpoint();
   const isMobile = !screens.md;
-  const isRtl = language === "ar";
 
   const [item, setItem] = useState<LoanRequest | null>(null);
   const [loading, setLoading] = useState(true);
@@ -306,21 +302,6 @@ export default function LoanRequestDetailsPage({
 
   return (
     <div style={{ maxWidth: 1600, margin: "0 auto", paddingBottom: 24 }}>
-      <Button
-        type="link"
-        icon={
-          isRtl ? (
-            <ArrowRightOutlined aria-hidden />
-          ) : (
-            <ArrowLeftOutlined aria-hidden />
-          )
-        }
-        onClick={() => navigate(backPath)}
-        style={{ paddingInlineStart: 0, marginBottom: 8, fontWeight: 600 }}
-      >
-        {t("loans.details.back")}
-      </Button>
-
       <PageHeader
         title={title}
         subtitle={
@@ -359,6 +340,12 @@ export default function LoanRequestDetailsPage({
             >
               {t("common.refresh")}
             </Button>
+            <BackButton
+              onClick={() => navigate(backPath)}
+              style={{ borderRadius: 10, minHeight: 40 }}
+            >
+              {t("loans.details.back")}
+            </BackButton>
           </Space>
         }
       />

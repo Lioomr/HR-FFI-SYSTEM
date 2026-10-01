@@ -1,3 +1,4 @@
+import BackButton from "../../components/ui/BackButton";
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
@@ -12,8 +13,6 @@ import {
   notification,
 } from "antd";
 import {
-  ArrowLeftOutlined,
-  ArrowRightOutlined,
   CalendarOutlined,
   DownloadOutlined,
   EyeOutlined,
@@ -87,10 +86,9 @@ function Field({
 export default function ManagerLeaveRequestDetailsPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { t, language } = useI18n();
+  const { t } = useI18n();
   const screens = useBreakpoint();
   const isMobile = !screens.md;
-  const isRtl = language === "ar";
 
   const [loading, setLoading] = useState(true);
   const [request, setRequest] = useState<ManagerLeaveRequest | null>(null);
@@ -264,21 +262,6 @@ export default function ManagerLeaveRequestDetailsPage() {
 
   return (
     <div style={{ maxWidth: 1600, margin: "0 auto", paddingBottom: 24 }}>
-      <Button
-        type="link"
-        icon={
-          isRtl ? (
-            <ArrowRightOutlined aria-hidden />
-          ) : (
-            <ArrowLeftOutlined aria-hidden />
-          )
-        }
-        onClick={() => navigate(BACK_PATH)}
-        style={{ paddingInlineStart: 0, marginBottom: 8, fontWeight: 600 }}
-      >
-        {t("leave.backToTeamReqs")}
-      </Button>
-
       <PageHeader
         title={t("leave.requestDetailsTitle", { id: request.id })}
         subtitle={employeeName}
@@ -307,6 +290,12 @@ export default function ManagerLeaveRequestDetailsPage() {
             >
               {t("common.refresh")}
             </Button>
+            <BackButton
+              onClick={() => navigate(BACK_PATH)}
+              style={{ borderRadius: 10, minHeight: 40 }}
+            >
+              {t("leave.backToTeamReqs")}
+            </BackButton>
           </Space>
         }
       />

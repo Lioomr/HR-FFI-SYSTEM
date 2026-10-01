@@ -175,7 +175,10 @@ describe("CEOJobOfferDetailPage review", () => {
     render(<CEOJobOfferDetailPage />);
     await screen.findAllByText("Nora Khalid");
 
-    fireEvent.click(screen.getAllByRole("button", { name: /Download CV/i })[0]);
+    fireEvent.click(screen.getByRole("button", { name: /^Download$/i }));
+    fireEvent.click(
+      await screen.findByRole("menuitem", { name: /Download CV/i }),
+    );
 
     await waitFor(() => expect(downloadJobOfferCv).toHaveBeenCalledWith("11"));
     expect(triggerBlobDownload).toHaveBeenCalledWith(blob, "job_offer_11_cv");
