@@ -18,6 +18,7 @@ from core.services.bird_email_service import _resolve_logo_source
 from core.services.email_html import email_action_url
 from core.services.whatsapp_notifications import get_user_whatsapp_number
 from employees.models import EmployeeProfile
+from employees.services.employee_ids import SEQUENTIAL_COMPANY_PREFIXES, allocate_employee_id
 from invites.models import Invite
 
 from .models import JobOffer
@@ -315,9 +316,14 @@ def ensure_prehire_profile_for_offer(offer: JobOffer) -> tuple[EmployeeProfile, 
     for _ in range(20):
         try:
             with transaction.atomic():
+                employee_id = (
+                    allocate_employee_id(offer.company)
+                    if offer.company.code in SEQUENTIAL_COMPANY_PREFIXES
+                    else _generate_prehire_employee_id(offer.company)
+                )
                 profile = EmployeeProfile.objects.create(
                     company=offer.company,
-                    employee_id=_generate_prehire_employee_id(offer.company),
+                    employee_id=employee_id,
                     employment_status=EmployeeProfile.EmploymentStatus.PREHIRE,
                 )
             break

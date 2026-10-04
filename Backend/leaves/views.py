@@ -729,7 +729,7 @@ def _build_leave_request_pdf_legacy(instance: LeaveRequest):
         or getattr(instance.employee, "full_name", "")
         or instance.employee.email
     )
-    reference_no = f"LR-{instance.id:05d}"
+    reference_no = instance.reference_no or f"LR-{instance.id:05d}"
     created_date = _format_date(instance.created_at)
     department_project = _project_department(profile)
     delegated_profile = _profile_for(instance.delegated_to) if instance.delegated_to else None
@@ -1257,8 +1257,14 @@ class LeaveTypeViewSet(viewsets.ModelViewSet):
 
 class LeaveRequestViewSet(viewsets.ModelViewSet):
     parser_classes = [MultiPartParser, FormParser, JSONParser]
-    filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ["status", "leave_type", "employee"]
+    search_fields = [
+        "reference_no",
+        "employee_profile__employee_id",
+        "employee_profile__id_aliases__old_employee_id",
+        "employee_profile__full_name_en",
+    ]
     ordering_fields = ["created_at", "start_date"]
     ordering = ["-created_at"]
 
@@ -1539,6 +1545,7 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
         date_to = params.get("date_to")
         if date_to:
             qs = qs.filter(end_date__lte=date_to)
+        qs = self.filter_queryset(qs)
         page = self.paginate_queryset(qs)
         serializer = self.get_serializer(page if page is not None else qs, many=True)
         if page is not None:
