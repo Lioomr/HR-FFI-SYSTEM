@@ -131,6 +131,14 @@ WORKFLOW_TEMPLATES = {
             {"key": "hr", "title": "HR Review", "approver_role": "hr", "order": 2, "is_optional": True},
         ],
     },
+    # An employee's own profile / passport / national ID change: HR alone decides it, item by item.
+    "employee_profile_change": {
+        "name": "Employee Profile Change Workflow",
+        "module_key": "employees",
+        "stages": [
+            {"key": "hr", "title": "HR Review", "approver_role": "hr", "order": 1},
+        ],
+    },
     # An HR-submitted termination settlement can start at the CEO, so the HR stage is optional.
     "annual_leave_payment_request": {
         "name": "Annual Leave Settlement Workflow",
@@ -194,6 +202,7 @@ def _build_action_url_path(workflow_key: str, role: str, object_id: int) -> str:
         ("permission_request", "hr"): f"/hr/permission-requests/{object_id}",
         ("annual_leave_payment_request", "hr"): f"/hr/annual-leave-payments/{object_id}",
         ("annual_leave_payment_request", "ceo"): f"/ceo/annual-leave-payments/{object_id}",
+        ("employee_profile_change", "hr"): "/hr/employees/profile-change-requests",
     }
     return route_map.get((workflow_key, role), "")
 
@@ -307,6 +316,33 @@ def _get_manager_user_for_instance(instance, subject_user):
     return get_direct_manager_user(subject_user)
 
 
+def _get_sole_company_ceo(instance, subject_user):
+    """Return the company's CEO only when it is unambiguous, otherwise None."""
+    from core.permissions import CEO_APPROVER_DEPARTMENT_ID
+    from employees.models import EmployeeProfile
+
+    company_id = getattr(instance, "company_id", None)
+    if not company_id:
+        profile = getattr(subject_user, "employee_profile", None)
+        company_id = getattr(profile, "company_id", None)
+    if not company_id:
+        return None
+    ceos = list(
+        get_user_model()
+        .objects.filter(is_active=True)
+        .filter(
+            Q(groups__name="CEO")
+            | Q(
+                employee_profile__employment_status=EmployeeProfile.EmploymentStatus.ACTIVE,
+                employee_profile__department_ref_id=CEO_APPROVER_DEPARTMENT_ID,
+            )
+        )
+        .filter(Q(employee_profile__company_id=company_id) | Q(organization_access_entries__organization_id=company_id))
+        .distinct()[:2]
+    )
+    return ceos[0] if len(ceos) == 1 else None
+
+
 def _resolve_current_actor(role: str, instance):
     subject_user = _get_subject_user(instance)
     candidate = None
@@ -314,6 +350,8 @@ def _resolve_current_actor(role: str, instance):
         return getattr(instance, "delegated_to", None)
     if role == "manager":
         candidate = _get_manager_user_for_instance(instance, subject_user) if subject_user else None
+    if role == "ceo":
+        candidate = _get_sole_company_ceo(instance, subject_user)
     if candidate:
         delegation = get_active_delegation(candidate)
         if delegation:
@@ -1656,6 +1694,49 @@ def _legacy_events_for_permission_request(instance) -> list[WorkflowEvent]:
     return events
 
 
+def _status_snapshot_for_employee_profile_change(instance):
+    statuses = type(instance).Status
+    status = {
+        statuses.APPROVED: WorkflowInstance.Status.APPROVED,
+        # A partial decision is a completed approval: the engine recorded APPROVE.
+        statuses.PARTIALLY_APPROVED: WorkflowInstance.Status.APPROVED,
+        statuses.REJECTED: WorkflowInstance.Status.REJECTED,
+        statuses.CANCELLED: WorkflowInstance.Status.CANCELLED,
+    }.get(instance.status, WorkflowInstance.Status.IN_REVIEW)
+    pending = instance.status == statuses.PENDING_HR
+    return {
+        "status": status,
+        "current_stage": "hr" if pending else "",
+        "current_role": "hr" if pending else "",
+        "current_actor_user": None,
+        "submitted_by": instance.submitted_by,
+        "submitted_at": instance.created_at,
+        "decided_at": instance.decided_at
+        if status in {WorkflowInstance.Status.APPROVED, WorkflowInstance.Status.REJECTED}
+        else None,
+        "cancelled_at": instance.decided_at if status == WorkflowInstance.Status.CANCELLED else None,
+    }
+
+
+def _events_for_employee_profile_change(instance) -> list[WorkflowEvent]:
+    """Only used before a workflow row exists; every transition is recorded as it happens."""
+
+    return [
+        WorkflowEvent(
+            signature=f"profile-change:submitted:{instance.id}",
+            action=WorkflowAction.Action.SUBMIT,
+            approver_role="",
+            from_status="draft",
+            to_status="in_review",
+            from_stage="",
+            to_stage="hr",
+            actor=instance.submitted_by,
+            at=instance.created_at,
+            metadata={"legacy_signature": "submitted", "workflow_key": "employee_profile_change"},
+        )
+    ]
+
+
 def _legacy_status_snapshot_for_annual_leave_payment(instance):
     request_status = type(instance).Status
     current_stage, current_role = {
@@ -1753,6 +1834,12 @@ def _adapter_for_instance(instance):
             "permission_request",
             _legacy_status_snapshot_for_permission_request,
             _legacy_events_for_permission_request,
+        )
+    if class_name == "ProfileChangeRequest":
+        return (
+            "employee_profile_change",
+            _status_snapshot_for_employee_profile_change,
+            _events_for_employee_profile_change,
         )
     if class_name == "LeaveRequest":
         return "leave_request", _legacy_status_snapshot_for_leave, _legacy_events_for_leave
@@ -2214,6 +2301,7 @@ _PENDING_LABEL_AR = {
     "annual_leave_payment_request": "تسوية الإجازة السنوية",
     "job_offer": "عرض وظيفي",
     "starting_work_acknowledgment": "مباشرة العمل",
+    "employee_profile_change": "تحديث البيانات",
 }
 
 
@@ -2236,6 +2324,7 @@ def build_pending_approval_item(workflow: WorkflowInstance, *, language: str = "
         "annual_leave_payment_request": "Annual Leave Settlement",
         "job_offer": "Job Offer",
         "starting_work_acknowledgment": "Starting Work",
+        "employee_profile_change": "Profile Change",
     }
     review_path = _build_action_url_path(workflow_key, workflow.current_approver_role, obj.pk)
     if workflow_key == "annual_leave_payment_request":
@@ -2253,6 +2342,12 @@ def build_pending_approval_item(workflow: WorkflowInstance, *, language: str = "
         prefix = "إذن انصراف" if is_ar else "Exit permission"
         action = f"{prefix}: {getattr(obj, 'request_date', '')} {window}".strip()
         request_type = "PERMISSION"
+    elif workflow_key == "employee_profile_change":
+        profile = getattr(obj, "employee_profile", None)
+        name = getattr(profile, "full_name", "") or getattr(profile, "employee_id", f"Request #{obj.pk}")
+        count = len(getattr(obj, "items", None) or [])
+        action = f"تحديث البيانات: {count} بند" if is_ar else f"Profile change: {count} item{'s' if count != 1 else ''}"
+        request_type = "EMPLOYEE_PROFILE_CHANGE"
     elif workflow_key == "leave_request":
         profile = getattr(getattr(obj, "employee", None), "employee_profile", None)
         name = getattr(profile, "full_name", "") or getattr(

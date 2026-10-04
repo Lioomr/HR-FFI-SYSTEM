@@ -22,3 +22,16 @@ describe("getDetailedHttpErrorMessage", () => {
     );
   });
 });
+
+describe("getDetailedHttpErrorMessage raw transport text", () => {
+  it("never shows Axios's generic status-code message", () => {
+    const error = {
+      message: "Request failed with status code 404",
+      response: { status: 404 },
+    };
+
+    expect(getDetailedHttpErrorMessage(t, error, "penalties.notFound")).toBe(
+      "penalties.notFound",
+    );
+  });
+});

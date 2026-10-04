@@ -7,7 +7,7 @@ from django.db import InterfaceError, OperationalError
 from django.utils import timezone
 
 from .contract_expiry import process_contract_expiry
-from .models import EmployeeDocument
+from .models import EmployeeDocument, ProfileChangeAttachment
 from .notifications import notify_expiring_work_licenses
 from .ocr import TransientExtractionError
 from .ocr.pipeline import GENERIC_FAILURE_MESSAGE, extract_document_fields
@@ -99,7 +99,9 @@ def audit_system_document_deletion(snapshot: dict) -> None:
         logger.exception("employee_document_deletion_audit_failed", extra={"document_id": snapshot["document_id"]})
 
 
-def _record_permanent_failure(document: EmployeeDocument, message: str) -> None:
+def _record_permanent_failure(document, message: str) -> None:
+    """Works on an ``EmployeeDocument`` or a ``ProfileChangeAttachment`` (same extraction fields)."""
+
     document.extraction_status = EmployeeDocument.ExtractionStatus.FAILED
     document.extraction_error = message
     document.extraction_warnings = [message]
@@ -168,3 +170,55 @@ def extract_employee_document(self, document_id: int):
         "attempts": document.extraction_attempts,
         "warnings": warnings,
     }
+
+
+@shared_task(
+    bind=True,
+    autoretry_for=(TransientExtractionError, OperationalError, InterfaceError),
+    retry_backoff=True,
+    retry_backoff_max=300,
+    retry_jitter=True,
+    max_retries=OCR_MAX_RETRIES,
+    acks_late=True,
+    soft_time_limit=OCR_SOFT_TIME_LIMIT,
+    time_limit=OCR_TIME_LIMIT,
+)
+def extract_profile_change_attachment(self, attachment_id: int):
+    """OCR a profile change upload so the employee's form can be pre-filled (suggestions only)."""
+
+    attachment = ProfileChangeAttachment.objects.filter(pk=attachment_id).first()
+    if attachment is None:
+        return {"attachment_id": attachment_id, "status": "missing"}
+
+    ProfileChangeAttachment.objects.filter(pk=attachment.pk).update(
+        extraction_attempts=attachment.extraction_attempts + 1
+    )
+    try:
+        warnings = extract_document_fields(attachment)
+    except SoftTimeLimitExceeded:
+        logger.error("profile_change_attachment_ocr_timed_out", extra={"attachment_id": attachment.id})
+        _record_permanent_failure(attachment, OCR_TIMEOUT_MESSAGE)
+        return {"attachment_id": attachment.id, "status": attachment.extraction_status}
+    except (TransientExtractionError, OperationalError, InterfaceError) as exc:
+        logger.warning(
+            "profile_change_attachment_ocr_transient_failure",
+            extra={"attachment_id": attachment.id, "retries": self.request.retries},
+        )
+        try:
+            raise self.retry(exc=exc)
+        except MaxRetriesExceededError:
+            _record_permanent_failure(attachment, str(exc) or GENERIC_FAILURE_MESSAGE)
+            return {"attachment_id": attachment.id, "status": attachment.extraction_status}
+    return {"attachment_id": attachment.id, "status": attachment.extraction_status, "warnings": len(warnings)}
+
+
+@shared_task
+def cleanup_unattached_profile_change_attachments():
+    """Delete profile change uploads that were never submitted within 24 hours."""
+
+    from .services.profile_change_requests import cleanup_unattached_attachments
+
+    deleted = cleanup_unattached_attachments()
+    if deleted:
+        logger.info("profile_change_attachments_cleaned_up", extra={"deleted": deleted})
+    return {"deleted": deleted}

@@ -18,7 +18,7 @@ from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError as DRFValidationError
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import BasePermission, IsAuthenticated
 from rest_framework.response import Response
 
 from announcements.models import Announcement
@@ -77,6 +77,8 @@ from .models import (
     EmployeeIdAlias,
     EmployeeImport,
     EmployeeProfile,
+    ProfileChangeAttachment,
+    ProfileChangeRequest,
 )
 from .notifications import notify_document_expiry_in_app
 from .permissions import IsEmployeeOwner, IsHRManagerOnly, IsHRManagerOrAdmin
@@ -93,6 +95,9 @@ from .serializers import (
     EmployeeProfileWriteSerializer,
     EmployeeSignatureStateSerializer,
     EmployeeSignatureUploadSerializer,
+    ProfileChangeAttachmentSerializer,
+    ProfileChangeAttachmentUploadSerializer,
+    ProfileChangeRequestReadSerializer,
     ScopedEmployeeReadSerializer,
 )
 from .services import (
@@ -102,6 +107,7 @@ from .services import (
     managed_reports_queryset,
     manager_scope_q,
 )
+from .services import profile_change_requests as profile_change_services
 from .services.document_jobs import (
     DocumentDeletionError,
     delete_document_permanently,
@@ -2413,3 +2419,243 @@ class EmployeeImportHistoryViewSet(mixins.ListModelMixin, mixins.RetrieveModelMi
         response = FileResponse(record.errors_file, content_type="text/csv")
         response["Content-Disposition"] = f'attachment; filename="{filename}"'
         return response
+
+
+# ---------------------------------------------------------------------------
+# Employee profile change requests (personal details + passport / national ID, HR decides per item)
+# ---------------------------------------------------------------------------
+
+PROFILE_CHANGE_SELECT_RELATED = ("employee_profile", "employee_profile__user", "company", "decided_by")
+PROFILE_CHANGE_BODY_KEYS = frozenset({"items", "attachment_ids"})
+PROFILE_CHANGE_DECIDE_KEYS = frozenset({"decisions", "note"})
+
+
+def _profile_change_not_found():
+    return error("Not found", errors=["Not found."], status=status.HTTP_404_NOT_FOUND)
+
+
+def _profile_change_queryset():
+    return ProfileChangeRequest.objects.select_related(*PROFILE_CHANGE_SELECT_RELATED).prefetch_related("attachments")
+
+
+def _profile_change_list_response(view, queryset):
+    status_param = view.request.query_params.get("status")
+    if status_param:
+        if status_param not in ProfileChangeRequest.Status.values:
+            allowed = ", ".join(ProfileChangeRequest.Status.values)
+            return error(
+                "Validation error", errors={"status": [f"Unsupported status. Use one of: {allowed}."]}, status=422
+            )
+        queryset = queryset.filter(status=status_param)
+    queryset = queryset.order_by("-created_at", "-id")
+    page = view.paginate_queryset(queryset)
+    items = page if page is not None else list(queryset)
+    data = ProfileChangeRequestReadSerializer(items, many=True, context={"request": view.request}).data
+    if page is not None:
+        return view.get_paginated_response(data)
+    return success({"items": data, "page": 1, "page_size": len(data), "count": len(data), "total_pages": 1})
+
+
+def _profile_change_detail(request, instance):
+    instance = _profile_change_queryset().get(pk=instance.pk)
+    return ProfileChangeRequestReadSerializer(instance, context={"request": request}).data
+
+
+def _unknown_body_keys(request, allowed):
+    data = request.data if isinstance(request.data, dict) else {}
+    unknown = sorted(set(data) - allowed)
+    if not isinstance(request.data, dict):
+        return {"non_field_errors": ["Send a JSON object."]}
+    return {key: ["This field is not accepted."] for key in unknown} or None
+
+
+def _profile_change_file_response(request, instance, attachment_id):
+    attachment = instance.attachments.filter(pk=attachment_id).first()
+    if attachment is None or not attachment.file:
+        return _profile_change_not_found()
+    try:
+        handle = attachment.file.open("rb")
+    except FileNotFoundError:
+        return error("Not found", errors=["The file is missing from storage."], status=status.HTTP_404_NOT_FOUND)
+    filename = os.path.basename(attachment.original_filename or attachment.file.name) or f"attachment-{attachment.pk}"
+    response = FileResponse(handle, content_type="application/octet-stream", as_attachment=True, filename=filename)
+    response["X-Content-Type-Options"] = "nosniff"
+    response["Cache-Control"] = "private, no-store"
+    profile_change_services.audit_attachment(request, "employee_profile_change_file_downloaded", attachment)
+    return response
+
+
+class IsProfileChangeHRApprover(BasePermission):
+    message = "Only HR workflow approvers can review profile change requests."
+
+    def has_permission(self, request, view):
+        return profile_change_services.is_hr_approver(request.user)
+
+
+class MyProfileChangeRequestViewSet(viewsets.GenericViewSet):
+    """``/employees/me/profile-change-requests/``: an employee's own change requests and uploads."""
+
+    queryset = ProfileChangeRequest.objects.none()
+    permission_classes = [IsAuthenticated]
+    pagination_class = StandardPagination
+    parser_classes = [JSONParser, MultiPartParser, FormParser]
+    lookup_value_regex = r"\d+"
+
+    def _own_queryset(self):
+        # Ownership is the only boundary: an employee never reaches another person's request.
+        return _profile_change_queryset().filter(employee_profile__user=self.request.user)
+
+    def _active_profile(self, request):
+        """The caller's own profile in the active company, or an error response."""
+
+        profile = (
+            EmployeeProfile.objects.select_related("user", "company")
+            .filter(user=request.user, is_archived=False, company__isnull=False)
+            .first()
+        )
+        if profile is None:
+            message = "An active employee profile is required to request a profile change."
+            return None, error(message, errors=[message], status=status.HTTP_403_FORBIDDEN)
+        active_company = get_active_company_for_request(request)
+        if active_company is None or active_company.pk != profile.company_id:
+            message = "Select your employee company to request a profile change."
+            return None, error(message, errors=[message], status=status.HTTP_403_FORBIDDEN)
+        return profile, None
+
+    def list(self, request, *args, **kwargs):
+        return _profile_change_list_response(self, self._own_queryset())
+
+    def create(self, request, *args, **kwargs):
+        profile, denied = self._active_profile(request)
+        if denied:
+            return denied
+        unknown = _unknown_body_keys(request, PROFILE_CHANGE_BODY_KEYS)
+        if unknown:
+            return error("Validation error", errors=unknown, status=422)
+        try:
+            instance = profile_change_services.submit_change_request(
+                user=request.user,
+                profile=profile,
+                items=request.data.get("items"),
+                attachment_ids=request.data.get("attachment_ids"),
+            )
+        except profile_change_services.ProfileChangeError as exc:
+            return exc.to_response()
+
+        profile_change_services.audit_change_request(request, "employee_profile_change_submitted", instance)
+        profile_change_services.notify_after_submission(instance)
+        return success(
+            _profile_change_detail(request, instance),
+            message="Profile change request submitted.",
+            status=status.HTTP_201_CREATED,
+        )
+
+    @action(detail=True, methods=["post"])
+    def cancel(self, request, pk=None):
+        instance = self._own_queryset().filter(pk=pk).first()
+        if instance is None:
+            return _profile_change_not_found()
+        try:
+            instance = profile_change_services.cancel_change_request(instance, actor=request.user)
+        except profile_change_services.ProfileChangeError as exc:
+            return exc.to_response()
+        profile_change_services.audit_change_request(request, "employee_profile_change_cancelled", instance)
+        return success(_profile_change_detail(request, instance), message="Profile change request cancelled.")
+
+    @action(detail=True, methods=["get"], url_path=r"attachments/(?P<attachment_id>\d+)/file")
+    def attachment_file(self, request, pk=None, attachment_id=None):
+        instance = self._own_queryset().filter(pk=pk).first()
+        if instance is None:
+            return _profile_change_not_found()
+        return _profile_change_file_response(request, instance, attachment_id)
+
+    @action(detail=False, methods=["post"], url_path="attachments")
+    def upload_attachment(self, request):
+        profile, denied = self._active_profile(request)
+        if denied:
+            return denied
+        serializer = ProfileChangeAttachmentUploadSerializer(data=request.data)
+        if not serializer.is_valid():
+            return error("Validation error", errors=serializer.errors, status=422)
+        try:
+            attachment = profile_change_services.create_attachment(
+                user=request.user,
+                profile=profile,
+                document_type=serializer.validated_data["document_type"],
+                upload=serializer.validated_data["file"],
+            )
+        except profile_change_services.ProfileChangeError as exc:
+            return exc.to_response()
+        profile_change_services.audit_attachment(request, "employee_profile_change_attachment_uploaded", attachment)
+        attachment.refresh_from_db()
+        return success(ProfileChangeAttachmentSerializer(attachment).data, status=status.HTTP_201_CREATED)
+
+    @action(detail=False, methods=["get"], url_path=r"attachments/(?P<attachment_id>\d+)")
+    def attachment_detail(self, request, attachment_id=None):
+        attachment = (
+            ProfileChangeAttachment.objects.select_related("employee_profile", "employee_profile__user")
+            .filter(pk=attachment_id, employee_profile__user=request.user)
+            .first()
+        )
+        if attachment is None:
+            return _profile_change_not_found()
+        return success(ProfileChangeAttachmentSerializer(attachment).data)
+
+
+class ProfileChangeRequestReviewViewSet(viewsets.GenericViewSet):
+    """``/employees/profile-change-requests/``: the HR review queue, scoped to the active company."""
+
+    queryset = ProfileChangeRequest.objects.none()
+    permission_classes = [IsAuthenticated, IsProfileChangeHRApprover]
+    pagination_class = StandardPagination
+    lookup_value_regex = r"\d+"
+
+    def _scoped_queryset(self):
+        return filter_queryset_by_company_scope(_profile_change_queryset(), self.request)
+
+    def _get(self, pk):
+        return self._scoped_queryset().filter(pk=pk).first()
+
+    def list(self, request, *args, **kwargs):
+        return _profile_change_list_response(self, self._scoped_queryset())
+
+    def retrieve(self, request, pk=None, *args, **kwargs):
+        instance = self._get(pk)
+        if instance is None:
+            return _profile_change_not_found()
+        return success(_profile_change_detail(request, instance))
+
+    @action(detail=True, methods=["post"])
+    def decide(self, request, pk=None):
+        instance = self._get(pk)
+        if instance is None:
+            return _profile_change_not_found()
+        unknown = _unknown_body_keys(request, PROFILE_CHANGE_DECIDE_KEYS)
+        if unknown:
+            return error("Validation error", errors=unknown, status=422)
+        ensure_company_write_allowed(request)
+        try:
+            instance, approved, rejected = profile_change_services.decide_change_request(
+                instance,
+                actor=request.user,
+                decisions=request.data.get("decisions"),
+                note=request.data.get("note") or "",
+            )
+        except profile_change_services.ProfileChangeError as exc:
+            return exc.to_response()
+
+        profile_change_services.audit_change_request(
+            request,
+            "employee_profile_change_decided",
+            instance,
+            extra={"approved_fields": approved, "rejected_fields": rejected},
+        )
+        profile_change_services.notify_after_decision(instance)
+        return success(_profile_change_detail(request, instance), message="Profile change request decided.")
+
+    @action(detail=True, methods=["get"], url_path=r"attachments/(?P<attachment_id>\d+)/file")
+    def attachment_file(self, request, pk=None, attachment_id=None):
+        instance = self._get(pk)
+        if instance is None:
+            return _profile_change_not_found()
+        return _profile_change_file_response(request, instance, attachment_id)

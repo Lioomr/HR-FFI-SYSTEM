@@ -72,6 +72,10 @@ def _company_for_request(request_type: str, request_id):
             from employees.models import EmployeeDeletionRequest
 
             return EmployeeDeletionRequest.objects.filter(pk=request_id).values_list("company", flat=True).first()
+        if request_type == "Profile Change Request":
+            from employees.models import ProfileChangeRequest
+
+            return ProfileChangeRequest.objects.filter(pk=request_id).values_list("company", flat=True).first()
         if request_type in {"Annual Leave Payment Request", "Annual Leave Settlement"}:
             from leaves.models import AnnualLeavePaymentRequest
 

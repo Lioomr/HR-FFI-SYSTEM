@@ -485,6 +485,37 @@ class TenantScopeContractTests(APITestCase):
         team_items = team.data["data"].get("items", team.data["data"].get("results", []))
         self.assertEqual({item["id"] for item in team_items}, {self.employee_a.employee_profile.id})
 
+    def test_duplicate_active_cross_company_manager_assignment_is_rejected_and_listed_on_detail(self):
+        UserOrganizationAccess.objects.create(user=self.hr, organization=self.company_b)
+        self.client.force_authenticate(user=self.hr)
+        payload = {
+            "employee_id": self.employee_a.employee_profile.id,
+            "manager_profile_id": self.employee_b.employee_profile.id,
+            "scope_id": self.scope.id,
+            "start_at": (timezone.now() - timedelta(minutes=1)).isoformat(),
+            "end_at": (timezone.now() + timedelta(hours=1)).isoformat(),
+        }
+        headers = {"HTTP_X_ACTIVE_COMPANY_ID": str(self.company_a.id)}
+        first = self.client.post(
+            "/api/core/cross-company-manager-assignments/", payload, format="json", **headers
+        )
+        self.assertEqual(first.status_code, status.HTTP_201_CREATED, first.data)
+
+        second = self.client.post(
+            "/api/core/cross-company-manager-assignments/", payload, format="json", **headers
+        )
+        self.assertEqual(second.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY, second.data)
+        self.assertIn("already assigned", str(second.data))
+        self.assertEqual(CrossCompanyManagerAssignment.objects.count(), 1)
+
+        from employees.serializers import EmployeeProfileReadSerializer
+
+        data = EmployeeProfileReadSerializer(self.employee_a.employee_profile).data
+        self.assertEqual(
+            [item["manager_profile_id"] for item in data["cross_company_managers"]],
+            [self.employee_b.employee_profile.id],
+        )
+
     def test_cross_company_manager_assignment_prevents_reporting_cycle(self):
         CrossCompanyManagerAssignment.objects.create(
             employee=self.employee_a.employee_profile,

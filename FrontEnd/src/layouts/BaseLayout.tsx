@@ -212,6 +212,8 @@ function getTitle(
     return t("layout.delegationRules", "Delegation Rules");
   if (pathname.startsWith("/hr/permission-requests"))
     return t("permissionRequests.list.hrTitle");
+  if (pathname.startsWith("/hr/employees/profile-change-requests"))
+    return t("profileChange.hr.title");
   if (pathname.startsWith("/hr/attendance-policy"))
     return t("hr.attendancePolicy.title");
   if (pathname.startsWith("/hr/penalties")) return t("penalties.hrTitle");
@@ -291,7 +293,8 @@ function getOpenKeysForPath(pathname: string): string[] {
   const isHrInboxPath =
     pathname.startsWith("/hr/leave/requests") ||
     pathname.startsWith("/hr/loan-requests") ||
-    pathname.startsWith("/hr/permission-requests");
+    pathname.startsWith("/hr/permission-requests") ||
+    pathname.startsWith("/hr/employees/profile-change-requests");
 
   // HR sidebar sub-menus
   if (pathname.startsWith("/hr/assets")) opens.push("hr-assets-sub");
@@ -794,6 +797,14 @@ export default function BaseLayout() {
               ),
             },
             {
+              key: "/hr/employees/profile-change-requests",
+              label: (
+                <Link to="/hr/employees/profile-change-requests">
+                  {t("layout.nav.profileChangeInbox")}
+                </Link>
+              ),
+            },
+            {
               key: "/hr/contract-decisions",
               label: (
                 <Link to="/hr/contract-decisions">
@@ -832,11 +843,12 @@ export default function BaseLayout() {
                 </Link>
               ),
             },
-            {
-              key: "/hr/penalties",
-              label: <Link to="/hr/penalties">{t("layout.penalties")}</Link>,
-            },
           ],
+        },
+        {
+          key: "/hr/penalties",
+          icon: <WarningOutlined />,
+          label: <Link to="/hr/penalties">{t("layout.penalties")}</Link>,
         },
         {
           key: "/hr/workflow/delegations",
@@ -1026,6 +1038,7 @@ export default function BaseLayout() {
         },
         {
           key: "/employee/penalties",
+          icon: <WarningOutlined />,
           label: (
             <Link to="/employee/penalties">{t("layout.myPenalties")}</Link>
           ),
@@ -1075,6 +1088,7 @@ export default function BaseLayout() {
         },
         {
           key: "/employee/penalties",
+          icon: <WarningOutlined />,
           label: (
             <Link to="/employee/penalties">{t("layout.myPenalties")}</Link>
           ),
@@ -1321,6 +1335,13 @@ export default function BaseLayout() {
             <Link to="/employee/attendance">
               {t("layout.nav.myAttendance", "My Attendance")}
             </Link>
+          ),
+        },
+        {
+          key: "/employee/penalties",
+          icon: <WarningOutlined />,
+          label: (
+            <Link to="/employee/penalties">{t("layout.myPenalties")}</Link>
           ),
         },
         {

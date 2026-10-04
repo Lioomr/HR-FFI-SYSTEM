@@ -61,11 +61,14 @@ interface EmployeeFormProps {
   employeeCompanyId?: number | null;
 }
 
-function localizeManagerAssignmentError(
+export function localizeManagerAssignmentError(
   message: string | null,
   translate: (key: string) => string,
 ): string | null {
   if (!message) return null;
+  if (message.includes("already assigned to this employee")) {
+    return translate("employees.form.managerErrors.duplicate");
+  }
   if (message.includes("must belong to the employee's company")) {
     return translate("employees.form.managerErrors.company");
   }

@@ -45,6 +45,7 @@ import {
   ViewEmployeePage,
   EditEmployeePage,
   ExpiringDocumentsPage,
+  ProfileChangeRequestsPage,
   HRDashboardPage,
   RecentActivityPage,
   ImportEmployeesEntryPage,
@@ -270,6 +271,10 @@ export const routes = [
               {
                 path: "hr/employees/expiries",
                 element: <ExpiringDocumentsPage />,
+              },
+              {
+                path: "hr/employees/profile-change-requests",
+                element: <ProfileChangeRequestsPage />,
               },
 
               // Reference Data

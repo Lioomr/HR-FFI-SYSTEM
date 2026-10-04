@@ -224,3 +224,9 @@ def test_missing_pair_takes_the_documented_fallback(monkeypatch):
 
 def test_map_pair_is_validated_against_the_renderer_contract():
     assert load_form_assets(TEMPLATE_FILENAME, "does_not_exist_field_map.json") is None
+
+
+def test_stored_reference_number_is_printed_in_preference_to_the_legacy_id():
+    values = build_leave_request_values(_instance(reference_no="LV-FFI-000101"))
+
+    assert values["reference_no"] == "LV-FFI-000101"

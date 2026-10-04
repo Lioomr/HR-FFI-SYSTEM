@@ -25,7 +25,7 @@ import type { TaskGroup } from "../../../services/api/taskGroupsApi";
 import { listSponsors } from "../../../services/api/sponsorsApi";
 import type { Sponsor } from "../../../services/api/sponsorsApi";
 import { toPayload, fromEmployeeToFormValues } from "./employeeFormMapper";
-import EmployeeForm from "./EmployeeForm";
+import EmployeeForm, { localizeManagerAssignmentError } from "./EmployeeForm";
 import { useI18n } from "../../../i18n/useI18n";
 import { useAuthStore } from "../../../auth/authStore";
 import dayjs from "dayjs";
@@ -205,18 +205,44 @@ export default function EditEmployeePage() {
       }
 
       if (crossCompany) {
-        await createCrossCompanyManagerAssignment({
-          employee_id: Number(id),
-          manager_profile_id: Number(values.manager_profile_id),
-          scope_id: Number(values.cross_company_scope_id),
-          start_at: new Date().toISOString(),
-          end_at: dayjs(values.cross_company_end_at).toISOString(),
-          capabilities: ["employees.view", "leaves.approve", "attendance.approve"],
-        });
+        try {
+          await createCrossCompanyManagerAssignment({
+            employee_id: Number(id),
+            manager_profile_id: Number(values.manager_profile_id),
+            scope_id: Number(values.cross_company_scope_id),
+            start_at: new Date().toISOString(),
+            end_at: dayjs(values.cross_company_end_at).toISOString(),
+            capabilities: ["employees.view", "leaves.approve", "attendance.approve"],
+          });
+        } catch (assignmentError: any) {
+          if (isForbidden(assignmentError)) throw assignmentError;
+
+          apply422ToForm(form, assignmentError);
+          const fieldMessage = localizeManagerAssignmentError(
+            getFieldApiError(assignmentError, "manager_profile_id") ??
+              getFieldApiError(assignmentError, "scope_id") ??
+              getFieldApiError(assignmentError, "end_at") ??
+              getFieldApiError(assignmentError, "non_field_errors") ??
+              null,
+            t,
+          );
+          setManagerAssignmentError(fieldMessage ?? null);
+          notifyError(
+            fieldMessage
+              ? `${t("hr.employees.crossCompanyAssignmentFailed")} ${fieldMessage}`
+              : t("hr.employees.crossCompanyAssignmentFailed"),
+          );
+          setSubmitting(false);
+          return;
+        }
       }
 
       // Success
-      notifySuccess(t("hr.employees.updateSuccess"));
+      notifySuccess(
+        crossCompany
+          ? t("hr.employees.crossCompanyAssignmentSaved")
+          : t("hr.employees.updateSuccess"),
+      );
       navigate(`/hr/employees/${id}`);
     } catch (err: any) {
       setSubmitting(false);
@@ -238,9 +264,11 @@ export default function EditEmployeePage() {
         return;
       }
 
-      if (!err.response || err.response.status !== 422) {
-        notifyError(err.message || t("hr.employees.updateFailed"));
-      }
+      notifyError(
+        err.response?.status === 422
+          ? t("hr.employees.validationFailed")
+          : err.message || t("hr.employees.updateFailed"),
+      );
     }
   };
 

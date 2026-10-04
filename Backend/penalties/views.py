@@ -2,6 +2,7 @@ from datetime import date
 
 from django.db import transaction
 from django.db.models import Q
+from django.http import FileResponse
 from django.utils import timezone
 from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action
@@ -25,7 +26,21 @@ from organization.services import (
 from .models import PenaltyCatalog, PenaltyDeduction, PenaltyRecord
 from .notifications import notify_penalty
 from .serializers import PenaltyCatalogSerializer, PenaltyRecordSerializer
-from .services import effective_from, issue, waive
+from .services import _review_recurrence, current_replacement, effective_from, issue, rerate_recurrence, waive
+from .warning_notices import notice_filename
+
+Automation = PenaltyRecord.Automation
+# Automatic warnings stay out of the HR queue unless HR has something to decide:
+# a reopened candidate, a dispute, a correction review or a payroll review.
+HR_VISIBLE = (
+    Q(automation=Automation.NONE)
+    | Q(
+        automation=Automation.WARNING_ISSUED,
+        status__in=[PenaltyRecord.Status.PENDING_HR_MARK, PenaltyRecord.Status.DISPUTED],
+    )
+    | Q(resolution__decision="manual_review")
+    | Q(deduction__status__in=[PenaltyDeduction.Status.PENDING_REVIEW, PenaltyDeduction.Status.HELD])
+)
 
 
 def _selected_company(request):
@@ -65,7 +80,7 @@ class PenaltyViewSet(
     def get_queryset(self):
         _selected_company(self.request)
         qs = PenaltyRecord.objects.select_related(
-            "company", "employee_profile", "employee_profile__user", "catalog", "deduction"
+            "company", "employee_profile", "employee_profile__user", "catalog", "deduction", "warning_notice"
         ).order_by("-occurred_on", "-id")
         mine = self.request.query_params.get("mine", "").lower() in {"1", "true"}
         if mine or get_role(self.request.user) not in {"HRManager", "SystemAdmin"}:
@@ -92,6 +107,13 @@ class PenaltyViewSet(
                 queryset = queryset.filter(employee_profile_id=int(profile_id))
             else:
                 errors["employee_profile_id"] = ["Use a positive integer id."]
+        include_automated = params.get("include_automated", "").lower() in {"1", "true"}
+        hr_scope = get_role(self.request.user) in {"HRManager", "SystemAdmin"} and params.get(
+            "mine", ""
+        ).lower() not in {"1", "true"}
+        if self.action == "list" and hr_scope and not include_automated and profile_id is None:
+            # Employees always see their own automatic warnings (they received the letter).
+            queryset = queryset.filter(HR_VISIBLE)
         dates = {}
         for key in ("date_from", "date_to"):
             if key in params:
@@ -131,6 +153,8 @@ class PenaltyViewSet(
         ensure_company_write_allowed(request)
         company = _selected_company(request)
         data = request.data
+        if not isinstance(data, dict):
+            return error("Request body must be an object.", status=422)
         try:
             profile_id = int(data.get("employee_profile_id"))
             occurred_on = date.fromisoformat(data.get("occurred_on"))
@@ -154,6 +178,8 @@ class PenaltyViewSet(
             profile = EmployeeProfile.objects.select_for_update().filter(pk=profile_id, company=company).first()
             if profile is None:
                 return error("Not found.", status=404)
+            if profile.is_archived or profile.employment_status != EmployeeProfile.EmploymentStatus.ACTIVE:
+                return error("Only active, non-archived employees are eligible for penalties.", status=422)
             record = PenaltyRecord.objects.create(
                 company=company,
                 employee_profile=profile,
@@ -187,9 +213,13 @@ class PenaltyViewSet(
             if not record:
                 return error("Not found.", status=404)
             EmployeeProfile.objects.select_for_update().get(pk=record.employee_profile_id)
-            record = self.get_queryset().select_for_update().get(pk=record.pk)
+            record = self.get_queryset().select_for_update(of=("self",)).get(pk=record.pk)
             if record.source != PenaltyRecord.Source.AUTOMATIC or record.status != PenaltyRecord.Status.PENDING_HR_MARK:
                 return error("This candidate has already been marked.", status=409)
+            if record.automation:
+                # An HR decision takes the candidate out of the automatic warning flow.
+                record.automation = Automation.NONE
+                record.save(update_fields=["automation", "updated_at"])
             has_disruption_branches = record.catalog.code in {"W01", "W02", "W03", "W04", "W05", "W06"}
             allowed = {"disrupted", "not_disrupted", "excused"} if has_disruption_branches else {"confirmed", "excused"}
             if choice not in allowed:
@@ -226,11 +256,24 @@ class PenaltyViewSet(
     @action(detail=True, methods=["post"])
     def acknowledge(self, request, pk=None):
         with transaction.atomic():
-            record = self.get_queryset().select_for_update().filter(pk=pk, employee_profile__user=request.user).first()
+            profile_id = (
+                self.get_queryset()
+                .filter(pk=pk, employee_profile__user=request.user)
+                .values_list("employee_profile_id", flat=True)
+                .first()
+            )
+            if profile_id:
+                EmployeeProfile.objects.select_for_update().get(pk=profile_id)
+            record = (
+                self.get_queryset()
+                .select_for_update(of=("self",))
+                .filter(pk=pk, employee_profile__user=request.user)
+                .first()
+            )
             if not record:
                 return error("Not found.", status=404)
             if (
-                record.source != PenaltyRecord.Source.HR
+                (record.source != PenaltyRecord.Source.HR and record.automation != Automation.WARNING_ISSUED)
                 or record.status not in {PenaltyRecord.Status.ISSUED, PenaltyRecord.Status.APPLIED}
                 or record.employee_response
             ):
@@ -250,11 +293,25 @@ class PenaltyViewSet(
         if not reason:
             return error("A reason is required.", {"reason": ["Explain the dispute."]}, 422)
         with transaction.atomic():
-            record = self.get_queryset().select_for_update().filter(pk=pk, employee_profile__user=request.user).first()
+            profile_id = (
+                self.get_queryset()
+                .filter(pk=pk, employee_profile__user=request.user)
+                .values_list("employee_profile_id", flat=True)
+                .first()
+            )
+            if profile_id:
+                EmployeeProfile.objects.select_for_update().get(pk=profile_id)
+            record = (
+                self.get_queryset()
+                .select_for_update(of=("self",))
+                .filter(pk=pk, employee_profile__user=request.user)
+                .first()
+            )
             if not record:
                 return error("Not found.", status=404)
+            # Automatic warnings had no HR check, so the employee can dispute them.
             if (
-                record.source != PenaltyRecord.Source.HR
+                (record.source != PenaltyRecord.Source.HR and record.automation != Automation.WARNING_ISSUED)
                 or record.status not in {PenaltyRecord.Status.ISSUED, PenaltyRecord.Status.APPLIED}
                 or (record.employee_response or {}).get("decision") == "disputed"
             ):
@@ -291,16 +348,92 @@ class PenaltyViewSet(
         _selected_company(request)
         decision = request.data.get("decision")
         note = str(request.data.get("note") or "").strip()
-        if decision not in {"uphold", "waive"} or not note:
-            return error("Invalid resolution.", {"decision": ["Use uphold or waive and provide a note."]}, 422)
+        if decision not in {"uphold", "waive", "reopen", "rerate"} or not note:
+            return error(
+                "Invalid resolution.", {"decision": ["Use uphold, waive, reopen or rerate and provide a note."]}, 422
+            )
         with transaction.atomic():
-            record = self.get_queryset().select_for_update().filter(pk=pk).first()
+            profile_id = self.get_queryset().filter(pk=pk).values_list("employee_profile_id", flat=True).first()
+            if profile_id:
+                EmployeeProfile.objects.select_for_update().get(pk=profile_id)
+            record = self.get_queryset().select_for_update(of=("self",)).filter(pk=pk).first()
             if not record:
                 return error("Not found.", status=404)
-            if record.status != PenaltyRecord.Status.DISPUTED:
-                return error("Only disputed penalties can be resolved.", status=409)
+            if (
+                record.status != PenaltyRecord.Status.DISPUTED
+                and (record.resolution or {}).get("decision") != "manual_review"
+            ):
+                return error("Only disputed penalties or correction reviews can be resolved.", status=409)
+            if decision == "uphold" and (record.resolution or {}).get("decision") == "manual_review":
+                return error(
+                    "Correction review requires waiver and a new HR assessment; the original rating cannot be upheld.",
+                    status=409,
+                )
+            if decision == "rerate":
+                try:
+                    rerate_recurrence(record, note=note, request=request)
+                except PermissionError as exc:
+                    return error(str(exc), status=409)
+                except ValueError as exc:
+                    transaction.set_rollback(True)
+                    return error(str(exc), status=422)
+                transaction.on_commit(lambda: notify_penalty(record, "resolved"))
+                return success(self._fresh_data(record.pk))
+            if decision == "reopen":
+                deduction = PenaltyDeduction.objects.select_for_update().filter(penalty=record).first()
+                if (
+                    record.source != PenaltyRecord.Source.AUTOMATIC
+                    or (record.resolution or {}).get("decision") != "manual_review"
+                    or record.status == PenaltyRecord.Status.APPLIED
+                    or (deduction and deduction.status == PenaltyDeduction.Status.APPLIED)
+                ):
+                    return error("Only unapplied automatic correction reviews can be reopened.", status=409)
+                # Never install a stored proposal: it may predate a later correction.
+                replacement = current_replacement(record)
+                if replacement is None:
+                    return error(
+                        "Recalculate attendance to establish replacement evidence before reopening.", status=409
+                    )
+                code, occurred_on, candidate_note, evidence = replacement
+                audit(
+                    request,
+                    "penalty_correction_reopened",
+                    "PenaltyRecord",
+                    record.pk,
+                    {
+                        "note": note,
+                        "previous_catalog_code": record.catalog.code,
+                        "previous_evidence": record.evidence,
+                        "previous_resolution": record.resolution,
+                        "previous_amount": str(record.total_deduction_amount),
+                        "current_evidence": {
+                            "catalog_code": code,
+                            "occurred_on": str(occurred_on),
+                            "evidence": evidence,
+                        },
+                    },
+                )
+                record.catalog = PenaltyCatalog.objects.get(code=code)
+                record.evidence = evidence
+                record.occurred_on = occurred_on
+                record.note = candidate_note
+                record.status = PenaltyRecord.Status.PENDING_HR_MARK
+                record.action = "pending_hr_mark"
+                record.occurrence_number = 0
+                record.amount = record.extra_wage_amount = record.total_deduction_amount = 0
+                record.resolution = {"decision": "reopened", "note": note, "reopened_at": timezone.now().isoformat()}
+                record.save()
+                if deduction:
+                    deduction.status = PenaltyDeduction.Status.VOID
+                    deduction.save(update_fields=["status", "updated_at"])
+                # The record no longer counts toward recurrence until re-marked.
+                _review_recurrence(record)
+                return success(self._fresh_data(record.pk))
             if decision == "waive":
                 waive(record, reason=note, request=request)
+                if record.automation == Automation.WARNING_ISSUED:
+                    # waive() already sends the employee the withdrawn notice.
+                    return success(self._fresh_data(record.pk))
             else:
                 deduction = PenaltyDeduction.objects.select_for_update().filter(penalty=record).first()
                 record.status = (
@@ -326,11 +459,16 @@ class PenaltyViewSet(
         if decision not in {"approve", "hold"} or not note:
             return error("Invalid payroll review.", {"decision": ["Use approve or hold and provide a note."]}, 422)
         with transaction.atomic():
-            record = self.get_queryset().select_for_update().filter(pk=pk).first()
+            profile_id = self.get_queryset().filter(pk=pk).values_list("employee_profile_id", flat=True).first()
+            if profile_id:
+                EmployeeProfile.objects.select_for_update().get(pk=profile_id)
+            record = self.get_queryset().select_for_update(of=("self",)).filter(pk=pk).first()
             if not record:
                 return error("Not found.", status=404)
             if record.status != PenaltyRecord.Status.ISSUED or record.total_deduction_amount <= 0:
                 return error("Only issued monetary penalties can be reviewed.", status=409)
+            if decision == "approve" and (record.resolution or {}).get("decision") == "manual_review":
+                return error("Resolve the attendance or recurrence correction before payroll approval.", status=409)
             deduction = PenaltyDeduction.objects.select_for_update().filter(penalty=record).first()
             if not deduction or deduction.status in {PenaltyDeduction.Status.APPLIED, PenaltyDeduction.Status.VOID}:
                 return error("This deduction is locked or unavailable.", status=409)
@@ -343,3 +481,23 @@ class PenaltyViewSet(
             deduction.save(update_fields=["status", "review_note", "reviewed_by", "reviewed_at", "updated_at"])
             audit(request, "penalty_payroll_reviewed", "PenaltyRecord", record.pk, {"decision": decision, "note": note})
         return success(self._fresh_data(record.pk))
+
+    @action(detail=True, methods=["get"], url_path="warning-notice")
+    def warning_notice(self, request, pk=None):
+        # Scoped like retrieve: own records for employees, the selected company for HR.
+        record = self.get_object()
+        notice = getattr(record, "warning_notice", None)
+        if notice is None or not notice.document:
+            return error("Notice not found.", status=status.HTTP_404_NOT_FOUND)
+        try:
+            handle = notice.document.open("rb")
+        except (FileNotFoundError, OSError, ValueError):
+            return error("Notice not found.", status=status.HTTP_404_NOT_FOUND)
+        response = FileResponse(handle, content_type="application/octet-stream")
+        response["Content-Disposition"] = f'attachment; filename="{notice_filename(notice)}"'
+        response["Cache-Control"] = "private, no-store"
+        response["X-Content-Type-Options"] = "nosniff"
+        audit(
+            request, "penalty_warning_notice_downloaded", "PenaltyWarningNotice", notice.pk, {"penalty_id": record.pk}
+        )
+        return response

@@ -3,11 +3,17 @@ import {
   type AnnualLeaveEmployeePreference,
 } from "./annualLeavePaymentsApi";
 import type { ApiResponse, PaginatedResponse } from "./apiTypes";
+import { getMyProfileChangeRequests } from "./employeeProfileChangeRequestsApi";
 import { getMyLeaveRequests } from "./leaveApi";
 import { getMyLoanRequests } from "./loanApi";
 import { getMyPermissionRequests } from "./permissionRequestsApi";
 
-export type CurrentRequestKind = "leave" | "permission" | "loan" | "settlement";
+export type CurrentRequestKind =
+  | "leave"
+  | "permission"
+  | "loan"
+  | "settlement"
+  | "profile";
 export type CurrentRequest = {
   id: number;
   kind: CurrentRequestKind;
@@ -103,6 +109,21 @@ export async function getEmployeeCurrentRequests(
           path: "/employee/leave/balance",
           cycle: { start: item.cycle_start, end: item.cycle_end },
           preference: item.employee_preference ?? "",
+        })),
+    },
+    {
+      // Profile change requests have no detail route; the per-field list and
+      // approval trail live on the profile page. Statuses are upper case
+      // (`PENDING_HR`), so they are lower-cased to match the filter below.
+      kind: "profile" as const,
+      load: async () =>
+        (await readPages(getMyProfileChangeRequests, isActive)).map((item) => ({
+          id: item.id,
+          status: item.status.toLowerCase(),
+          createdAt: item.submitted_at,
+          reference: `#${item.id}`,
+          kind: "profile" as const,
+          path: "/employee/profile#profile-change",
         })),
     },
   ];

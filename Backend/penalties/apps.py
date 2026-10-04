@@ -6,4 +6,7 @@ class PenaltiesConfig(AppConfig):
     name = "penalties"
 
     def ready(self):
-        from . import signals  # noqa: F401
+        from . import (
+            checks,  # noqa: F401
+            signals,  # noqa: F401
+        )

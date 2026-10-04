@@ -73,6 +73,7 @@ REQUEST_TYPE_LABELS: dict[str, str] = {
     "Employee Deletion": "حذف موظف",
     "Annual Leave Payment Request": "طلب صرف رصيد الإجازة السنوية",
     "Annual Leave Settlement": "تسوية الإجازة السنوية",
+    "Profile Change Request": "طلب تحديث البيانات",
 }
 
 _REQUEST_TYPE_BY_CODE = {_code_key(en): (en, ar) for en, ar in REQUEST_TYPE_LABELS.items()}
@@ -103,6 +104,7 @@ STATUS_LABELS: dict[str, tuple[str, str]] = {
     "pending_disbursement": ("Pending Disbursement", "بانتظار الصرف"),
     "in_review": ("In Review", "قيد المراجعة"),
     "approved": ("Approved", "معتمد"),
+    "partially_approved": ("Partially approved", "معتمد جزئياً"),
     "approved_and_disbursed": ("Approved and disbursed", "معتمد وتم الصرف"),
     "auto_approved": ("Automatically approved", "معتمد تلقائياً"),
     "automatically_approved": ("Automatically approved", "معتمد تلقائياً"),
@@ -271,6 +273,21 @@ MESSAGES: dict[str, dict[str, tuple[str, str]]] = {
     "penalty.manual_review": {
         "title": ("Penalty requires HR review", "جزاء يتطلب مراجعة الموارد البشرية"),
         "message": ("Review penalty record #{record_id} in the secure app.", "يرجى مراجعة سجل الجزاء رقم {record_id} في التطبيق الآمن."),
+    },
+    # Automatic late warnings never state how many warnings preceded them.
+    "penalty.auto_warning": {
+        "title": ("Late attendance warning", "إنذار التأخر في الحضور"),
+        "message": (
+            "A written warning was issued for late attendance on {date}. Your PDF copy is in the secure app.",
+            "صدر لك إنذار كتابي بسبب التأخر في الحضور بتاريخ {date}. نسختك بصيغة PDF متاحة في التطبيق الآمن.",
+        ),
+    },
+    "penalty.warning_withdrawn": {
+        "title": ("Late attendance warning withdrawn", "تم سحب إنذار التأخر في الحضور"),
+        "message": (
+            "The late attendance warning dated {date} has been withdrawn. No action is needed.",
+            "تم سحب إنذار التأخر في الحضور بتاريخ {date}. لا يلزم اتخاذ أي إجراء.",
+        ),
     },
     "approval.pending": {
         "title": ("{request_type} requires your review", "{request_type} بانتظار مراجعتك"),

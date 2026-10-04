@@ -43,7 +43,7 @@ import {
   WalletOutlined,
 } from "@ant-design/icons";
 import "./ViewEmployeePage.css";
-import { getCountryFlag } from "../../../utils/countries";
+import { getCountryFlag, isSaudiEmployee } from "../../../utils/countries";
 import EmployeeLeaveBalances from "./components/EmployeeLeaveBalances";
 import EmployeeDocumentArchive from "../../../components/employees/EmployeeDocumentArchive";
 import PageHeader from "../../../components/ui/PageHeader";
@@ -538,14 +538,21 @@ export default function ViewEmployeePage() {
   const joinDate = (employee as any).join_date || employee.hire_date;
   const serviceLength = getServiceLength(joinDate);
   const contractInfo = getExpiryInfo((employee as any).contract_expiry);
+  const showPassport = !isSaudiEmployee(employee as any);
   const documents = [
-    {
-      label: t("employees.form.passport"),
-      tagLabel: t("employees.form.passport"),
-      tagColor: "cyan",
-      number: formatValue(employee.passport || (employee as any).passport_no),
-      expiry: (employee as any).passport_expiry,
-    },
+    ...(showPassport
+      ? [
+          {
+            label: t("employees.form.passport"),
+            tagLabel: t("employees.form.passport"),
+            tagColor: "cyan",
+            number: formatValue(
+              employee.passport || (employee as any).passport_no,
+            ),
+            expiry: (employee as any).passport_expiry,
+          },
+        ]
+      : []),
     {
       label: t("employees.form.nationalId"),
       tagLabel: t("employees.view.idTag"),
@@ -748,6 +755,20 @@ export default function ViewEmployeePage() {
               employee.manager_profile_name || employee.manager_name,
             )}
           />
+          {(employee.cross_company_managers ?? []).length > 0 && (
+            <StatItem
+              icon={<ApartmentOutlined />}
+              label={t("employees.view.crossCompanyManagers")}
+              value={(employee.cross_company_managers ?? []).map((item) => (
+                <div key={item.id}>
+                  {item.manager_name} ({item.manager_company_name}){" "}
+                  {t("employees.view.crossCompanyManagerUntil", {
+                    date: formatDate(item.end_at),
+                  })}
+                </div>
+              ))}
+            />
+          )}
           <StatItem
             icon={<SafetyCertificateOutlined />}
             label={t("employees.view.documentsStatus")}

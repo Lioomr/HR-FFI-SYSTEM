@@ -44,11 +44,7 @@ function getWorkflowStageActorName(request: LeaveRequest, stageKey: string) {
   const historyEntry = [...(workflow.history || [])]
     .reverse()
     .find(
-      (item) =>
-        item.approver_role === stageKey ||
-        item.stage === stageKey ||
-        item.from_stage === stageKey ||
-        item.to_stage === stageKey,
+      (item) => item.approver_role === stageKey || item.from_stage === stageKey,
     );
   return getActorDisplayName(historyEntry?.actor);
 }

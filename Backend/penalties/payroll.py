@@ -1,5 +1,6 @@
 """Idempotent schedule-penalty claims for mutable DRAFT payroll runs."""
 
+import logging
 from decimal import ROUND_HALF_UP, Decimal
 
 from django.db import transaction
@@ -13,6 +14,7 @@ from .models import PenaltyDeduction, PenaltyRecord
 
 ZERO = Decimal("0.00")
 Status = PenaltyDeduction.Status
+logger = logging.getLogger(__name__)
 
 
 def _due_for_run(run):
@@ -33,12 +35,20 @@ def sync_penalty_deductions(run, *, request=None):
     profiles = {
         row.pk: row for row in EmployeeProfile.objects.select_for_update().filter(pk__in=profile_ids).order_by("pk")
     }
+    penalty_ids = PenaltyDeduction.objects.filter(candidates, employee_profile_id__in=profile_ids).values_list(
+        "penalty_id", flat=True
+    )
+    locked_penalties = {
+        row.pk: row for row in PenaltyRecord.objects.select_for_update().filter(pk__in=penalty_ids).order_by("pk")
+    }
     deductions = list(
         PenaltyDeduction.objects.select_for_update(of=("self",))
         .select_related("penalty")
         .filter(candidates, employee_profile_id__in=profile_ids)
         .order_by("pk")
     )
+    for deduction in deductions:
+        deduction.penalty = locked_penalties[deduction.penalty_id]
     # Article 70 limits the fines settled from one month's wages. Legacy late
     # deductions are fines too and are synchronized before this service in the
     # payroll generation/finalization path. Unworked-time withholding is not a
@@ -56,6 +66,7 @@ def sync_penalty_deductions(run, *, request=None):
         if not (
             deduction.status in {Status.APPROVED, Status.CLAIMED}
             and deduction.penalty.status == PenaltyRecord.Status.ISSUED
+            and (deduction.penalty.resolution or {}).get("decision") != "manual_review"
             and deduction.amount > 0
         ):
             continue
@@ -133,6 +144,10 @@ def sync_penalty_deductions(run, *, request=None):
     if run_delta:
         run.total_net -= run_delta
         run.save(update_fields=["total_net", "updated_at"])
+    logger.info(
+        "penalty_payroll_claims_reconciled",
+        extra={"run_id": run.pk, "company_id": run.company_id, **counts, "net_delta": str(run_delta)},
+    )
     return counts
 
 
@@ -163,4 +178,7 @@ def finalize_penalty_deductions(run, *, request=None):
             },
         )
     counts["applied"] = len(claims)
+    logger.info(
+        "penalty_payroll_finalized", extra={"run_id": run.pk, "company_id": run.company_id, "applied": len(claims)}
+    )
     return counts

@@ -12,6 +12,7 @@ export const PENDING_TYPE_COLORS: Record<PendingRequestType, string> = {
   ANNUAL_LEAVE_PAYMENT: "green",
   JOB_OFFER: "magenta",
   STARTING_WORK: "lime",
+  EMPLOYEE_PROFILE_CHANGE: "volcano",
 };
 
 export const PENDING_TYPE_LABEL_KEYS: Record<PendingRequestType, string> = {
@@ -25,4 +26,5 @@ export const PENDING_TYPE_LABEL_KEYS: Record<PendingRequestType, string> = {
   ANNUAL_LEAVE_PAYMENT: "pendingInbox.requestType.ANNUAL_LEAVE_PAYMENT",
   JOB_OFFER: "pendingInbox.requestType.JOB_OFFER",
   STARTING_WORK: "pendingInbox.requestType.STARTING_WORK",
+  EMPLOYEE_PROFILE_CHANGE: "pendingInbox.requestType.EMPLOYEE_PROFILE_CHANGE",
 };

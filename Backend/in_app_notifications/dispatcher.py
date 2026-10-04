@@ -140,6 +140,15 @@ def _load_whatsapp_document(document: dict) -> dict | None:
 
             notice = AttendanceLateNotice.objects.filter(pk=document["attendance_late_notice_id"]).first()
             return _file_attachment(notice.document, f"late_attendance_notice_{notice.reference_number}.pdf") if notice else None
+        if document.get("penalty_warning_notice_id"):
+            from penalties.models import PenaltyWarningNotice
+
+            notice = PenaltyWarningNotice.objects.filter(pk=document["penalty_warning_notice_id"]).first()
+            return (
+                _file_attachment(notice.document, f"penalty_warning_notice_{notice.reference_number}.pdf")
+                if notice
+                else None
+            )
     except (TypeError, ValueError):
         return None
     return None

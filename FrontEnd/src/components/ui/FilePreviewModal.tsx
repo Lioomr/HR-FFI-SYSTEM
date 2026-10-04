@@ -73,6 +73,9 @@ function PdfPages({ blob }: { blob: Blob }) {
         const canvas = document.createElement("canvas");
         canvas.width = Math.floor(viewport.width);
         canvas.height = Math.floor(viewport.height);
+        // Canvas text inherits the page direction; in the RTL (Arabic) layout
+        // that mirrors pdf.js glyph runs and garbles the whole page.
+        canvas.dir = "ltr";
         canvas.style.cssText =
           "display:block;width:100%;height:auto;background:#fff;border-radius:8px;box-shadow:0 4px 14px rgba(15,23,42,0.12)";
         if (cancelled) return;
