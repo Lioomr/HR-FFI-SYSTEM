@@ -1,0 +1,7 @@
+{
+  "name": "ffi-hr-marketing-video",
+  "private": true,
+  "description": "Arabic marketing video for the FFI HR system (HTML timeline rendered frame-by-frame with Playwright, muxed with ffmpeg).",
+  "scripts": { "build": "./build.sh", "preview": "node tools/preview.cjs" },
+  "dependencies": { "playwright-core": "^1.50.0" }
+}
