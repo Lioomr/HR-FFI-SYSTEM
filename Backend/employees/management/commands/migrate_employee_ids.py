@@ -185,8 +185,7 @@ class Command(BaseCommand):
                     old_employee_id=row["old_employee_id"],
                     new_employee_id=row["new_employee_id"],
                 )
-                profile.employee_id = row["new_employee_id"]
-                profile.save(update_fields=["employee_id"])
+                EmployeeProfile.objects.filter(pk=profile.pk).update(employee_id=row["new_employee_id"])
                 AuditLog.objects.create(
                     action="employee_id.migrated",
                     entity="EmployeeProfile",

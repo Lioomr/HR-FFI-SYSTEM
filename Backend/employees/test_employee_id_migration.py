@@ -2,6 +2,7 @@ from datetime import date, datetime, timezone
 from io import StringIO
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from unittest.mock import patch
 
 from django.core.management import call_command
 from django.core.management.base import CommandError
@@ -104,3 +105,13 @@ class EmployeeIdMigrationTests(TestCase):
                 )
         self.assertFalse(EmployeeIdAlias.objects.exists())
         self.assertEqual(EmployeeProfile.objects.get(pk=self.earlier.pk).employee_id, "ASECO-222222")
+
+    def test_apply_does_not_revalidate_unrelated_legacy_profile_fields(self):
+        with TemporaryDirectory() as directory:
+            path = self.mapping_csv(directory)
+            with patch.object(EmployeeProfile, "save", side_effect=AssertionError("profile save must not run")):
+                call_command(
+                    "migrate_employee_ids", company_code="ASECO_PRO", csv_path=str(path), apply=True, stdout=StringIO()
+                )
+        self.earlier.refresh_from_db()
+        self.assertEqual(self.earlier.employee_id, "ASECO-0003")
