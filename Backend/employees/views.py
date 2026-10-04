@@ -70,7 +70,14 @@ from .contract_expiry import (
     submit_decision,
 )
 from .document_thumbnail import DocumentThumbnailError, build_document_thumbnail
-from .models import ContractDecision, EmployeeDeletionRequest, EmployeeDocument, EmployeeImport, EmployeeProfile
+from .models import (
+    ContractDecision,
+    EmployeeDeletionRequest,
+    EmployeeDocument,
+    EmployeeIdAlias,
+    EmployeeImport,
+    EmployeeProfile,
+)
 from .notifications import notify_document_expiry_in_app
 from .permissions import IsEmployeeOwner, IsHRManagerOnly, IsHRManagerOrAdmin
 from .serializers import (
@@ -101,6 +108,7 @@ from .services.document_jobs import (
     document_snapshot,
     queue_document_extraction,
 )
+from .services.employee_ids import SEQUENTIAL_COMPANY_PREFIXES, allocate_employee_id
 from .services.manager_relationships import (
     active_cross_company_manager_assignments,
     log_manager_assignment_change,
@@ -618,6 +626,9 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
         params = self.request.query_params
         search = params.get("search")
         if search:
+            alias_profile_ids = EmployeeIdAlias.objects.filter(old_employee_id__icontains=search).values(
+                "employee_profile_id"
+            )
             qs = qs.filter(
                 Q(full_name__icontains=search)
                 | Q(full_name_en__icontains=search)
@@ -627,6 +638,7 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
                 | Q(mobile__icontains=search)
                 | Q(passport_no__icontains=search)
                 | Q(national_id__icontains=search)
+                | Q(pk__in=alias_profile_ids)
             )
 
         # Employees who can still receive an invitation (no user account yet).
@@ -1536,6 +1548,9 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
 
         search = request.query_params.get("search")
         if search:
+            alias_profile_ids = EmployeeIdAlias.objects.filter(old_employee_id__icontains=search).values(
+                "employee_profile_id"
+            )
             qs = qs.filter(
                 Q(full_name__icontains=search)
                 | Q(full_name_en__icontains=search)
@@ -1543,6 +1558,7 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
                 | Q(employee_id__icontains=search)
                 | Q(mobile__icontains=search)
                 | Q(user__email__icontains=search)
+                | Q(pk__in=alias_profile_ids)
             )
 
         page = self.paginate_queryset(qs)
@@ -1593,9 +1609,13 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
             raise IntegrityError("Active company is required.")
         max_retries = 5
         for _ in range(max_retries):
-            eid = generate_employee_id(company.employee_id_prefix or "EMP")
             try:
                 with transaction.atomic():
+                    eid = (
+                        allocate_employee_id(company)
+                        if company.code in SEQUENTIAL_COMPANY_PREFIXES
+                        else generate_employee_id(company.employee_id_prefix or "EMP")
+                    )
                     instance = serializer.save(
                         employee_id=eid,
                         data_source=EmployeeProfile.DataSource.MANUAL,
