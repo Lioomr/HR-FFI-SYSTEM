@@ -235,7 +235,7 @@ def build_leave_request_values(instance) -> dict[str, Any]:
     request_date = getattr(instance, "created_at", None)
 
     return {
-        "reference_no": f"LR-{instance.id:05d}" if getattr(instance, "id", None) else "",
+        "reference_no": instance.reference_no or (f"LR-{instance.id:05d}" if getattr(instance, "id", None) else ""),
         "request_date": _format_date(request_date),
         "filed_date": _format_date(getattr(instance, "filed_at", None) or request_date),
         "employee_name": _display_name(employee, profile),

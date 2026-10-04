@@ -16,6 +16,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from employees.models import EmployeeImport, EmployeeProfile
+from employees.services.employee_ids import SEQUENTIAL_COMPANY_PREFIXES, allocate_employee_id
 from employees.services.manager_relationships import (
     log_manager_assignment_change,
     reroute_pending_manager_requests,
@@ -732,8 +733,10 @@ class EmployeeImporter:
                     if profile is None and row["passport_no"]:
                         profile = existing_profiles_by_passport.get(row["passport_no"])
                     if profile is None:
-                        employee_id = self._generate_unique_employee_id(
-                            existing_ids, company.employee_id_prefix or "EMP"
+                        employee_id = (
+                            allocate_employee_id(company)
+                            if company.code in SEQUENTIAL_COMPANY_PREFIXES
+                            else self._generate_unique_employee_id(existing_ids, company.employee_id_prefix or "EMP")
                         )
                         if not employee_id:
                             raise ValueError("Failed to generate unique employee_id.")

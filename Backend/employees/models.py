@@ -275,6 +275,19 @@ class EmployeeProfile(models.Model):
         super().save(*args, **kwargs)
 
 
+class EmployeeIdAlias(models.Model):
+    """An issued employee code retained for lookup after a code migration."""
+
+    company = models.ForeignKey(OrganizationNode, on_delete=models.PROTECT, related_name="employee_id_aliases")
+    employee_profile = models.ForeignKey(EmployeeProfile, on_delete=models.PROTECT, related_name="id_aliases")
+    old_employee_id = models.CharField(max_length=20, unique=True)
+    new_employee_id = models.CharField(max_length=20)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.old_employee_id} -> {self.new_employee_id}"
+
+
 class ContractDecision(models.Model):
     class DecisionType(models.TextChoices):
         RENEW = "RENEW", _("Renew")
