@@ -497,6 +497,9 @@ export default function LeaveRequestDetailsPage({
 
         <Card style={{ borderRadius: 16 }} title={t("common.details")}>
           <Descriptions bordered column={1}>
+            <Descriptions.Item label={t("permissionRequests.list.reference")}>
+              {request.reference_no || `#${request.id}`}
+            </Descriptions.Item>
             <Descriptions.Item label={t("common.employee")}>
               {employeeName}
             </Descriptions.Item>

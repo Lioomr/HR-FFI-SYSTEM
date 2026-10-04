@@ -20,6 +20,7 @@ export interface LeaveType {
  */
 export interface LeaveRequest {
   id: number;
+  reference_no?: string | null;
   company_id?: number;
   company_name?: string;
   // Backend returns nested objects
@@ -136,6 +137,7 @@ export interface CreateLeaveRequestPayload {
  * Filters for HR Inbox
  */
 export interface LeaveRequestFilter {
+  search?: string;
   status?: string;
   source?: "employee" | "hr_manual";
   employee_id?: number;

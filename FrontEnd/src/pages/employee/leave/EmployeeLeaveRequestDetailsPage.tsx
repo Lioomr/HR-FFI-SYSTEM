@@ -319,6 +319,9 @@ export default function EmployeeLeaveRequestDetailsPage() {
 
         <Card style={{ borderRadius: 20, border: "1px solid #e5e7eb" }}>
           <Descriptions column={{ xs: 1, md: 2 }} layout="vertical" bordered>
+            <Descriptions.Item label={t("permissionRequests.list.reference")}>
+              {request.reference_no || `#${request.id}`}
+            </Descriptions.Item>
             <Descriptions.Item label={t("leave.leaveType")}>
               {translateLeaveType(request.leave_type?.name)}
             </Descriptions.Item>

@@ -1,10 +1,13 @@
 from django.conf import settings
 from django.core.exceptions import ObjectDoesNotExist, ValidationError
-from django.db import models
+from django.db import models, transaction
+from django.db.models import Max
 from django.utils.translation import gettext_lazy as _
 
 from employees.storage import PrivateUploadStorage
 from organization.models import OrganizationNode
+
+from .references import format_leave_reference, is_sequential_employee_code
 
 
 class LeaveType(models.Model):
@@ -88,6 +91,8 @@ class LeaveRequest(models.Model):
         blank=True,
         help_text=_("Employee profile for requests recorded without a linked user account."),
     )
+    reference_no = models.CharField(max_length=40, null=True, blank=True, unique=True, editable=False)
+    reference_sequence = models.PositiveIntegerField(null=True, blank=True, editable=False)
     leave_type = models.ForeignKey(LeaveType, on_delete=models.PROTECT, related_name="requests")
     start_date = models.DateField()
     end_date = models.DateField()
@@ -229,6 +234,11 @@ class LeaveRequest(models.Model):
         ordering = ["-created_at"]
         verbose_name = _("Leave Request")
         verbose_name_plural = _("Leave Requests")
+        constraints = [
+            models.UniqueConstraint(
+                fields=["employee_profile", "reference_sequence"], name="unique_leave_employee_reference_sequence"
+            )
+        ]
 
     def save(self, *args, **kwargs):
         if self._state.adding:
@@ -242,6 +252,20 @@ class LeaveRequest(models.Model):
                 self.employee_profile = profile
                 if self.company_id is None:
                     self.company_id = profile.company_id
+        if self._state.adding and self.employee_profile_id and not self.reference_no:
+            with transaction.atomic():
+                profile = type(self.employee_profile).objects.select_for_update().get(pk=self.employee_profile_id)
+                if is_sequential_employee_code(profile.employee_id):
+                    current = (
+                        type(self)
+                        .objects.filter(employee_profile_id=profile.pk)
+                        .aggregate(highest=Max("reference_sequence"))["highest"]
+                        or 0
+                    )
+                    self.reference_sequence = current + 1
+                    self.reference_no = format_leave_reference(profile.employee_id, self.reference_sequence)
+                self.full_clean()
+                return super().save(*args, **kwargs)
         self.full_clean()
         return super().save(*args, **kwargs)
 

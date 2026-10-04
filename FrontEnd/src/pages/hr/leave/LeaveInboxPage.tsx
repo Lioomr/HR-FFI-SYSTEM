@@ -102,6 +102,7 @@ export default function LeaveInboxPage() {
     (_, index) => currentYear + 5 - index,
   );
   const [filters, setFilters] = useState<LeaveRequestFilter>({});
+  const [searchTerm, setSearchTerm] = useState("");
   const [manualForm] = Form.useForm();
 
   const [manualModalOpen, setManualModalOpen] = useState(false);
@@ -265,6 +266,11 @@ export default function LeaveInboxPage() {
   };
 
   const columns: ColumnsType<LeaveRequest> = [
+    {
+      title: t("permissionRequests.list.reference"),
+      key: "reference_no",
+      render: (_, record) => record.reference_no || `#${record.id}`,
+    },
     {
       title: t("hr.dashboard.employee"),
       key: "employee",
@@ -618,6 +624,15 @@ export default function LeaveInboxPage() {
       <WorkspaceCard
         toolbar={
           <>
+            <Input.Search
+              value={searchTerm}
+              onChange={(event) => setSearchTerm(event.target.value)}
+              onSearch={(value) => updateFilters({ search: value.trim() })}
+              placeholder={t("permissionRequests.list.reference")}
+              aria-label={t("permissionRequests.list.reference")}
+              className="ffi-toolbar__field--wide"
+              allowClear
+            />
             <Select
               allowClear
               placeholder={t("hr.leaveBalances.allYears")}
@@ -688,6 +703,7 @@ export default function LeaveInboxPage() {
               disabled={!hasFilters}
               onClick={() => {
                 setFilters({});
+                setSearchTerm("");
                 setPage(1);
               }}
             >

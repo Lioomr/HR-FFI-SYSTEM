@@ -115,6 +115,12 @@ export default function MyLeaveRequestsPage() {
 
   const columns: ColumnsType<LeaveRequest> = [
     {
+      title: t("permissionRequests.list.reference"),
+      key: "reference_no",
+      render: (_, record) => record.reference_no || `#${record.id}`,
+      width: 170,
+    },
+    {
       title: t("leave.type"),
       key: "leave_type",
       width: 180,
