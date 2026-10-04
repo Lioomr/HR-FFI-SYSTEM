@@ -1,3 +1,4 @@
+import { downloadBlob } from "../../utils/download";
 import { api } from "./apiClient";
 import type { ApiResponse, PaginatedResponse } from "./apiTypes";
 
@@ -5,7 +6,6 @@ export type PenaltyStatus =
   | "pending_hr_mark"
   | "issued"
   | "disputed"
-  | "upheld"
   | "waived"
   | "applied";
 export type PenaltyPayrollStatus =
@@ -40,6 +40,16 @@ export type PenaltyCatalogItem = {
   source_page?: number;
   source_row?: number;
   extra_wage_deduction?: string;
+  /** Automatic warnings that precede the printed levels (company policy). */
+  auto_warning_extra_levels?: number;
+};
+export type PenaltyAutomation = "" | "warning_pending" | "warning_issued";
+export type PenaltyWarningNotice = {
+  id: number;
+  reference_number: string;
+  delivery_status: string;
+  issued_at: string;
+  download_path: string;
 };
 export type PenaltyResponse = {
   decision: string;
@@ -55,7 +65,8 @@ export type PenaltyRecord = {
   catalog_code: string;
   category: string;
   occurred_on: string;
-  occurrence_number: number;
+  /** Null for employees viewing an automatic warning: the count is never shown. */
+  occurrence_number: number | null;
   count_period: string;
   action: PenaltyAction;
   amount: string | null;
@@ -63,6 +74,8 @@ export type PenaltyRecord = {
   total_deduction_amount?: string | null;
   status: PenaltyStatus;
   source: string;
+  automation?: PenaltyAutomation;
+  warning_notice?: PenaltyWarningNotice | null;
   attendance_result_id?: number | null;
   attendance_record_id?: number | null;
   description: string;
@@ -72,10 +85,27 @@ export type PenaltyRecord = {
   employee_response?: PenaltyResponse | null;
   dispute_reason?: string | null;
   resolution?: {
-    decision: "waive" | "uphold" | PenaltyMarkDecision;
+    decision:
+      | "waive"
+      | "uphold"
+      | "manual_review"
+      | "reopened"
+      | "recurrence_rerated"
+      | "auto_warning"
+      | PenaltyMarkDecision;
+    proposed_evidence?: {
+      catalog_code?: string;
+      occurred_on?: string;
+      evidence?: Record<string, unknown>;
+      expected_occurrence?: number;
+      absence_dates?: string[];
+      released_wage_dates?: string[];
+      proposed_wage_absence_dates?: string[];
+    };
     reason?: string;
     note?: string;
     resolved_at?: string;
+    reopened_at?: string;
   } | null;
   payroll_status?: PenaltyPayrollStatus | null;
   source_page?: number;
@@ -92,11 +122,31 @@ export type PenaltyFilters = {
   date_from?: string;
   date_to?: string;
   search?: string;
+  /** HR: also list automatic warnings, which are hidden from the HR queue by default. */
+  include_automated?: boolean;
   page?: number;
   page_size?: number;
 };
 
 const base = "/api/penalties/";
+
+/**
+ * The warning letter is private: fetched through apiClient (token and active
+ * company) and saved from the blob, never linked from storage.
+ */
+export async function downloadPenaltyWarningNotice(
+  record: Pick<PenaltyRecord, "id"> & {
+    warning_notice: Pick<PenaltyWarningNotice, "reference_number">;
+  },
+): Promise<void> {
+  const response = await api.get<Blob>(`${base}${record.id}/warning-notice/`, {
+    responseType: "blob",
+  });
+  downloadBlob(
+    response.data,
+    `penalty_warning_notice_${record.warning_notice.reference_number}.pdf`,
+  );
+}
 
 export async function getPenaltyCatalog(): Promise<
   ApiResponse<PenaltyCatalogItem[]>
@@ -151,7 +201,7 @@ export async function markPenaltyDisruption(
 export async function resolvePenalty(
   id: number,
   payload: {
-    decision: "uphold" | "waive";
+    decision: "uphold" | "waive" | "reopen" | "rerate";
     note: string;
   },
 ): Promise<ApiResponse<PenaltyRecord>> {

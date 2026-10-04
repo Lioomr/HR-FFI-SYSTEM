@@ -62,23 +62,37 @@ it("shows an in-flight Annual Leave settlement with its cycle and preference", a
     "Contract year 2025-09-10 → 2026-09-09",
   );
 });
+it("links a pending profile change to the profile page", async () => {
+  vi.mocked(getEmployeeCurrentRequests).mockResolvedValue({
+    failed: [],
+    requests: [
+      {
+        id: 8,
+        kind: "profile",
+        reference: "#8",
+        path: "/employee/profile#profile-change",
+        status: "pending_hr",
+        createdAt: "2026-09-04",
+      },
+    ],
+  });
+  mount();
+  expect(
+    await screen.findByRole("link", { name: /Profile change #8/ }),
+  ).toHaveAttribute("href", "/employee/profile#profile-change");
+  expect(screen.getByText("Pending HR")).toBeInTheDocument();
+});
 it("does not show an empty inbox when loading fails, and retries", async () => {
   vi.mocked(getEmployeeCurrentRequests)
     .mockResolvedValueOnce({ requests: [], failed: ["loan"] })
     .mockResolvedValueOnce({ requests: [], failed: [] });
   mount();
   expect(await screen.findByRole("alert")).toHaveTextContent("Loan requests");
-  expect(
-    screen.queryByText(
-      "You have no ongoing leave, exit permission, loan, or Annual Leave settlement requests.",
-    ),
-  ).not.toBeInTheDocument();
+  const emptyText =
+    "You have no ongoing leave, exit permission, loan, Annual Leave settlement, or profile change requests.";
+  expect(screen.queryByText(emptyText)).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "Refresh" }));
-  expect(
-    await screen.findByText(
-      "You have no ongoing leave, exit permission, loan, or Annual Leave settlement requests.",
-    ),
-  ).toBeInTheDocument();
+  expect(await screen.findByText(emptyText)).toBeInTheDocument();
 });
 it("translates the current request section into Arabic", async () => {
   useI18nStore.getState().setLanguage("ar");
@@ -92,7 +106,7 @@ it("translates the current request section into Arabic", async () => {
   ).toBeInTheDocument();
   expect(
     await screen.findByText(
-      "ليس لديك طلبات إجازة أو إذن خروج أو سلف أو تسوية إجازة سنوية قيد الإجراء.",
+      "ليس لديك طلبات إجازة أو إذن خروج أو سلف أو تسوية إجازة سنوية أو تعديل بيانات قيد الإجراء.",
     ),
   ).toBeInTheDocument();
 });

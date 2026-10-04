@@ -287,6 +287,12 @@ class AttendanceCalculationService:
                     "raw_punch_ids": [punch.id for punch in raw_punches],
                     "approved_adjustment_minutes": result_dto.approved_permission_minutes,
                     "normalization_version": 1,
+                    # One untyped punch, or one that is not a typed check-in,
+                    # cannot establish arrival or departure for penalties.
+                    "lone_opaque_punch": len(events) == 1
+                    and (
+                        events[0].used_fallback or events[0].event_type != NormalizedAttendanceEvent.EventType.CHECK_IN
+                    ),
                 },
             }
             result, _ = AttendanceDailyResult.objects.select_for_update().update_or_create(

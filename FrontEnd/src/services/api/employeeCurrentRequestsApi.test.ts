@@ -42,11 +42,19 @@ it("reads older pages, excludes completed requests and links ongoing requests to
         },
       ]);
     if (url === "/api/leaves/annual-leave-payments/") return response([]);
+    if (url === "/api/employees/me/profile-change-requests/")
+      return response([
+        { id: 8, status: "PENDING_HR", submitted_at: "2026-09-04" },
+        { id: 9, status: "APPROVED", submitted_at: "2026-09-05" },
+        { id: 10, status: "REJECTED" },
+        { id: 11, status: "CANCELLED" },
+      ]);
     throw new Error(`Unexpected endpoint: ${url}`);
   });
   const result = await getEmployeeCurrentRequests();
   expect(result.failed).toEqual([]);
   expect(result.requests.map((item) => item.path)).toEqual([
+    "/employee/profile#profile-change",
     "/employee/loans/3",
     "/employee/permission-requests/3",
     "/employee/leave/requests/3",
@@ -65,10 +73,11 @@ it("preserves successful sources and identifies failed sources including API err
   });
   const result = await getEmployeeCurrentRequests();
   expect(result.failed).toEqual(["leave", "permission"]);
-  // The loan and settlement sources both still load.
+  // The loan, settlement and profile change sources all still load.
   expect(result.requests.map((item) => item.kind)).toEqual([
     "loan",
     "settlement",
+    "profile",
   ]);
 });
 it("lists only the caller's in-flight Annual Leave settlements with cycle and preference", async () => {

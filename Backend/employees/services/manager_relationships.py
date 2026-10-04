@@ -126,6 +126,10 @@ def validate_cross_company_manager_assignment(
     )
     if assignment is not None:
         edge_qs = edge_qs.exclude(pk=assignment.pk)
+    if edge_qs.filter(employee=employee, manager_profile=manager_profile, scope=scope).exists():
+        raise ValidationError(
+            {"manager_profile_id": "This manager is already assigned to this employee for this approved scope."}
+        )
     extra_edges: dict[int, set[int]] = {}
     for report_id, manager_id in edge_qs.values_list("employee_id", "manager_profile_id"):
         extra_edges.setdefault(report_id, set()).add(manager_id)

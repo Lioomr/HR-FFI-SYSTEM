@@ -63,6 +63,7 @@ class EmployeeProfile(models.Model):
     nationality_ar = models.CharField(max_length=100, blank=True, null=True)
     is_saudi = models.BooleanField(default=False)
     passport_no = models.CharField(max_length=50, blank=True, null=True)
+    passport_issue_date = models.DateField(null=True, blank=True)
     passport_expiry = models.DateField(null=True, blank=True)
     passport_expiry_raw = models.CharField(max_length=50, blank=True, null=True)
     national_id = models.CharField(max_length=50, blank=True)
@@ -555,6 +556,149 @@ class EmployeeDocument(models.Model):
 
     def __str__(self):
         return f"{self.employee_profile_id} - {self.display_name}"
+
+
+class ProfileChangeRequest(models.Model):
+    """An employee's requested changes to their own profile, applied item by item only when HR decides.
+
+    ``items`` is a list of ``{field, old, new, source, decision, note}`` line items
+    (plus ``attachment_id`` on file items). ``old`` is frozen at submit. Nothing
+    reaches the profile, the login account, or the document archive until HR
+    approves that item; see ``services/profile_change_requests.py``.
+    """
+
+    class Status(models.TextChoices):
+        PENDING_HR = "PENDING_HR", _("Pending HR")
+        APPROVED = "APPROVED", _("Approved")
+        PARTIALLY_APPROVED = "PARTIALLY_APPROVED", _("Partially approved")
+        REJECTED = "REJECTED", _("Rejected")
+        CANCELLED = "CANCELLED", _("Cancelled")
+
+    employee_profile = models.ForeignKey(
+        EmployeeProfile,
+        on_delete=models.CASCADE,
+        related_name="profile_change_requests",
+    )
+    company = models.ForeignKey(
+        OrganizationNode,
+        on_delete=models.PROTECT,
+        related_name="employee_profile_change_requests",
+    )
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING_HR)
+    items = models.JSONField(default=list, blank=True)
+    submitted_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="profile_change_requests_submitted",
+    )
+    decided_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="profile_change_requests_decided",
+    )
+    decided_at = models.DateTimeField(null=True, blank=True)
+    decision_note = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["employee_profile"],
+                condition=models.Q(status="PENDING_HR"),
+                name="emp_profile_change_one_pending",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["company", "status"], name="emp_profile_change_company_idx"),
+        ]
+
+    def __str__(self):
+        return f"ProfileChange:{self.employee_profile_id}:{self.status}"
+
+
+class ProfileChangeAttachment(models.Model):
+    """A passport / national ID scan uploaded for a profile change request.
+
+    It is uploaded (and OCR-read) before the request exists, so the employee can
+    review the suggestions; submit links it to the request. The ``extracted_fields``
+    and ``extraction_*`` columns deliberately share ``EmployeeDocument``'s names so
+    ``ocr.pipeline.extract_document_fields`` runs on it unchanged. It only becomes
+    a live ``EmployeeDocument`` when HR approves its file item.
+    """
+
+    class DocumentType(models.TextChoices):
+        # Same values as EmployeeDocument.DocumentType; only these two are employee-editable.
+        PASSPORT = "PASSPORT", _("Passport")
+        SAUDI_ID = "SAUDI_ID", _("Saudi ID")
+
+    ExtractionStatus = EmployeeDocument.ExtractionStatus
+
+    employee_profile = models.ForeignKey(
+        EmployeeProfile,
+        on_delete=models.CASCADE,
+        related_name="profile_change_attachments",
+    )
+    company = models.ForeignKey(
+        OrganizationNode,
+        on_delete=models.PROTECT,
+        related_name="employee_profile_change_attachments",
+    )
+    request = models.ForeignKey(
+        ProfileChangeRequest,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="attachments",
+    )
+    document_type = models.CharField(max_length=20, choices=DocumentType.choices)
+    file = models.FileField(storage=PrivateUploadStorage(), upload_to="employee_change_attachments/")
+    original_filename = models.CharField(max_length=255, blank=True)
+    uploaded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="profile_change_attachments_uploaded",
+    )
+    applied_document = models.ForeignKey(
+        EmployeeDocument,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="profile_change_attachments",
+    )
+    extracted_fields = models.JSONField(default=dict, blank=True)
+    # Verbatim OCR text of an identity document: server-side only, never serialized.
+    extraction_raw_text = models.TextField(blank=True)
+    extraction_status = models.CharField(
+        max_length=20,
+        choices=EmployeeDocument.ExtractionStatus.choices,
+        default=EmployeeDocument.ExtractionStatus.PENDING,
+    )
+    extraction_error = models.TextField(blank=True)
+    extraction_warnings = models.JSONField(default=list, blank=True)
+    extraction_confidence = models.FloatField(null=True, blank=True)
+    extraction_metadata = models.JSONField(default=dict, blank=True)
+    extraction_task_id = models.CharField(max_length=64, blank=True)
+    extraction_completed_at = models.DateTimeField(null=True, blank=True)
+    extraction_attempts = models.PositiveSmallIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+        indexes = [
+            models.Index(fields=["request", "created_at"], name="emp_profile_attach_req_idx"),
+        ]
+
+    def __str__(self):
+        return f"ProfileChangeAttachment:{self.employee_profile_id}:{self.document_type}"
 
 
 class EmployeeDeletionRequest(models.Model):

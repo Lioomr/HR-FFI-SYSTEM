@@ -35,6 +35,16 @@ app.conf.beat_schedule = {
         "task": "employees.tasks.reconcile_employee_document_deletions",
         "schedule": crontab(minute=int(os.environ.get("DOCUMENT_DELETION_RECONCILE_MINUTE", "20"))),
     },
+    # Profile change uploads (OCR preview) that were never submitted.
+    "cleanup-unattached-profile-change-attachments": {
+        "task": "employees.tasks.cleanup_unattached_profile_change_attachments",
+        "schedule": crontab(minute=int(os.environ.get("PROFILE_CHANGE_ATTACHMENT_CLEANUP_MINUTE", "40"))),
+    },
+    # Automatic late warnings; a no-op while PENALTY_AUTO_WARNINGS_EFFECTIVE_FROM is empty.
+    "issue-penalty-auto-warnings-hourly": {
+        "task": "penalties.tasks.issue_auto_warnings",
+        "schedule": crontab(minute=int(os.environ.get("PENALTY_AUTO_WARNING_MINUTE", "15"))),
+    },
     "cleanup-expired-notifications-daily": {
         "task": "in_app_notifications.tasks.cleanup_expired_notifications",
         "schedule": crontab(

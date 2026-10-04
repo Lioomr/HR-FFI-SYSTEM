@@ -29,7 +29,7 @@ import {
   ScheduleOutlined,
   InboxOutlined,
 } from "@ant-design/icons";
-import { getCountryFlag } from "../../utils/countries";
+import { getCountryFlag, isSaudiEmployee } from "../../utils/countries";
 import LoadingState from "../../components/ui/LoadingState";
 import ErrorState from "../../components/ui/ErrorState";
 import { getEmployee } from "../../services/api/employeesApi";
@@ -570,15 +570,17 @@ export default function UserProfilePage() {
               }}
             >
               <Space direction="vertical" style={{ width: "100%" }} size={12}>
-                <DocCard
-                  label={t("profile.passport")}
-                  tagLabel="Passport"
-                  tagColor="cyan"
-                  number={formatValue(
-                    employee.passport || (employee as any).passport_no,
-                  )}
-                  expiry={(employee as any).passport_expiry}
-                />
+                {!isSaudiEmployee(employee as any) && (
+                  <DocCard
+                    label={t("profile.passport")}
+                    tagLabel="Passport"
+                    tagColor="cyan"
+                    number={formatValue(
+                      employee.passport || (employee as any).passport_no,
+                    )}
+                    expiry={(employee as any).passport_expiry}
+                  />
+                )}
                 <DocCard
                   label={t("profile.nationalId")}
                   tagLabel="ID"

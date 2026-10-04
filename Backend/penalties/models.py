@@ -1,6 +1,8 @@
 from django.db import models
 from django.db.models import Q
 
+from employees.storage import PrivateUploadStorage
+
 
 class PenaltyCatalog(models.Model):
     class Period(models.TextChoices):
@@ -39,6 +41,13 @@ class PenaltyRecord(models.Model):
         AUTOMATIC = "automatic", "Automatic attendance"
         HR = "hr", "HR"
 
+    class Automation(models.TextChoices):
+        # Not part of the printed schedule: W01/W02/W07 occurrences 1-3 are issued
+        # by the system as warnings (services.AUTO_WARNING_ROWS).
+        NONE = "", "None"
+        WARNING_PENDING = "warning_pending", "Automatic warning pending"
+        WARNING_ISSUED = "warning_issued", "Automatic warning issued"
+
     company = models.ForeignKey("organization.OrganizationNode", on_delete=models.PROTECT)
     employee_profile = models.ForeignKey("employees.EmployeeProfile", on_delete=models.PROTECT)
     catalog = models.ForeignKey(PenaltyCatalog, on_delete=models.PROTECT)
@@ -57,6 +66,7 @@ class PenaltyRecord(models.Model):
         "attendance.AttendanceRecord", null=True, blank=True, on_delete=models.PROTECT
     )
     source_kind = models.CharField(max_length=24, blank=True)
+    automation = models.CharField(max_length=24, choices=Automation.choices, default="", blank=True, db_index=True)
     evidence = models.JSONField(default=dict)
     note = models.TextField(blank=True)
     employee_response = models.JSONField(null=True, blank=True)
@@ -111,3 +121,39 @@ class PenaltyDeduction(models.Model):
         indexes = [
             models.Index(fields=["company", "status", "intended_year", "intended_month"], name="penalty_due_idx")
         ]
+
+
+def penalty_warning_notice_upload_to(instance, filename):
+    return f"penalty_warning_notices/{instance.company_id}/{instance.reference_number}.pdf"
+
+
+class PenaltyWarningNotice(models.Model):
+    """The private PDF letter for one automatically issued warning."""
+
+    class DeliveryStatus(models.TextChoices):
+        SCHEDULED = "scheduled", "Scheduled"
+        SENT = "sent", "Sent"
+        FAILED = "failed", "Failed"
+        SKIPPED = "skipped", "Skipped"
+
+    penalty = models.OneToOneField(PenaltyRecord, on_delete=models.PROTECT, related_name="warning_notice")
+    company = models.ForeignKey(
+        "organization.OrganizationNode", on_delete=models.PROTECT, related_name="penalty_warning_notices"
+    )
+    employee_profile = models.ForeignKey(
+        "employees.EmployeeProfile", on_delete=models.PROTECT, related_name="penalty_warning_notices"
+    )
+    reference_number = models.CharField(max_length=64, unique=True)
+    template_name = models.CharField(max_length=128)
+    template_version = models.PositiveIntegerField()
+    document = models.FileField(storage=PrivateUploadStorage(), upload_to=penalty_warning_notice_upload_to, blank=True)
+    notification = models.ForeignKey(
+        "in_app_notifications.Notification",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="penalty_warning_notices",
+    )
+    delivery_status = models.CharField(max_length=16, choices=DeliveryStatus.choices, default=DeliveryStatus.SCHEDULED)
+    delivery_message = models.CharField(max_length=255, blank=True)
+    issued_at = models.DateTimeField(auto_now_add=True)

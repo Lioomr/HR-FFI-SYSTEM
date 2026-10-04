@@ -8,12 +8,20 @@ from django.utils import timezone
 from rest_framework import serializers
 
 from core.permissions import get_role
-from core.services import get_workflow_snapshot, get_workflow_snapshot_read_only
+from core.services import get_workflow_snapshot, get_workflow_snapshot_read_only, get_workflow_snapshots
 from hr_reference.models import Department, Position, Sponsor, TaskGroup
 from in_app_notifications.models import Notification
 from organization.services import get_user_accessible_company_ids
 
-from .models import ContractDecision, EmployeeDeletionRequest, EmployeeDocument, EmployeeImport, EmployeeProfile
+from .models import (
+    ContractDecision,
+    EmployeeDeletionRequest,
+    EmployeeDocument,
+    EmployeeImport,
+    EmployeeProfile,
+    ProfileChangeAttachment,
+    ProfileChangeRequest,
+)
 from .ocr.parsers import sanitize_extracted_fields
 from .services.manager_relationships import validate_manager_assignment
 from .services.signature_image import SignatureImageError, normalize_signature
@@ -188,6 +196,7 @@ class EmployeeProfileReadSerializer(serializers.ModelSerializer):
     manager_name = serializers.SerializerMethodField()
     manager_profile_id = serializers.SerializerMethodField()
     manager_profile_name = serializers.SerializerMethodField()
+    cross_company_managers = serializers.SerializerMethodField()
     department = serializers.SerializerMethodField()
     position = serializers.SerializerMethodField()
     task_group = serializers.SerializerMethodField()
@@ -218,6 +227,7 @@ class EmployeeProfileReadSerializer(serializers.ModelSerializer):
             "mobile",
             "passport",
             "passport_no",
+            "passport_issue_date",
             "passport_expiry",
             "passport_expiry_raw",
             "nationality",
@@ -278,6 +288,7 @@ class EmployeeProfileReadSerializer(serializers.ModelSerializer):
             "manager_name",
             "manager_profile_id",
             "manager_profile_name",
+            "cross_company_managers",
             "created_at",
             "updated_at",
         ]
@@ -312,6 +323,32 @@ class EmployeeProfileReadSerializer(serializers.ModelSerializer):
         if obj.manager_profile:
             return obj.manager_profile.full_name_en or obj.manager_profile.full_name or obj.manager_profile.employee_id
         return None
+
+    def get_cross_company_managers(self, obj):
+        # Detail responses only: list serializers have a ListSerializer parent, and this runs one query per profile.
+        if self.parent is not None:
+            return []
+        from django.utils import timezone
+
+        from core.models import CrossCompanyManagerAssignment
+
+        now = timezone.now()
+        assignments = CrossCompanyManagerAssignment.objects.filter(
+            employee=obj, is_active=True, revoked_at__isnull=True, start_at__lte=now, end_at__gte=now
+        ).select_related("manager_profile__company", "scope")
+        return [
+            {
+                "id": assignment.id,
+                "manager_profile_id": assignment.manager_profile_id,
+                "manager_name": assignment.manager_profile.full_name_en
+                or assignment.manager_profile.full_name
+                or assignment.manager_profile.employee_id,
+                "manager_company_name": assignment.manager_profile.company.name,
+                "scope_name": assignment.scope.name,
+                "end_at": assignment.end_at,
+            }
+            for assignment in assignments.order_by("end_at", "id")
+        ]
 
     def _display_name(self, ref_obj, fallback):
         if ref_obj:
@@ -890,6 +927,146 @@ class EmployeeDocumentSerializer(serializers.ModelSerializer):
         if not valid_signature:
             raise serializers.ValidationError("File content does not match its extension.")
         return value
+
+
+class ProfileChangeAttachmentUploadSerializer(serializers.Serializer):
+    """Multipart upload of one passport / national ID scan for the OCR preview."""
+
+    document_type = serializers.ChoiceField(choices=ProfileChangeAttachment.DocumentType.choices)
+    file = serializers.FileField()
+
+    def validate_file(self, value):
+        return EmployeeDocumentSerializer().validate_file(value)
+
+
+class ProfileChangeAttachmentSerializer(serializers.ModelSerializer):
+    """What the employee's form polls; the OCR raw text is never included."""
+
+    suggested = serializers.SerializerMethodField()
+    warnings = serializers.SerializerMethodField()
+    confidence = serializers.FloatField(source="extraction_confidence", read_only=True)
+
+    class Meta:
+        model = ProfileChangeAttachment
+        fields = [
+            "id",
+            "document_type",
+            "original_filename",
+            "extraction_status",
+            "suggested",
+            "warnings",
+            "confidence",
+        ]
+        read_only_fields = fields
+
+    def get_suggested(self, obj):
+        from .services.profile_change_requests import suggested_values
+
+        return suggested_values(obj)
+
+    def get_warnings(self, obj):
+        warnings = obj.extraction_warnings if isinstance(obj.extraction_warnings, list) else []
+        return [str(warning) for warning in warnings]
+
+
+class ProfileChangeRequestListSerializer(serializers.ListSerializer):
+    def to_representation(self, data):
+        instances = list(data)
+        request = self.context.get("request")
+        actor = getattr(request, "user", None) if request else None
+        self.child._workflow_snapshot_cache = get_workflow_snapshots(instances, actor=actor)
+        try:
+            return super().to_representation(instances)
+        finally:
+            self.child._workflow_snapshot_cache = None
+
+
+class ProfileChangeRequestReadSerializer(serializers.ModelSerializer):
+    employee = serializers.SerializerMethodField()
+    items = serializers.SerializerMethodField()
+    attachments = serializers.SerializerMethodField()
+    submitted_at = serializers.DateTimeField(source="created_at", read_only=True)
+    decided_by_name = serializers.SerializerMethodField()
+    workflow = serializers.SerializerMethodField()
+    can_act = serializers.SerializerMethodField()
+
+    ITEM_KEYS = ("field", "old", "new", "source", "decision", "note")
+
+    class Meta:
+        model = ProfileChangeRequest
+        list_serializer_class = ProfileChangeRequestListSerializer
+        fields = [
+            "id",
+            "employee",
+            "status",
+            "items",
+            "attachments",
+            "decision_note",
+            "submitted_at",
+            "decided_at",
+            "decided_by_name",
+            "workflow",
+            "can_act",
+        ]
+        read_only_fields = fields
+
+    def get_employee(self, obj):
+        profile = obj.employee_profile
+        return {"id": profile.pk, "full_name": profile.full_name, "employee_number": profile.employee_number}
+
+    def get_items(self, obj):
+        return [{key: item.get(key) for key in self.ITEM_KEYS} for item in obj.items or []]
+
+    def get_attachments(self, obj):
+        from .services.profile_change_requests import FILE_FIELDS
+
+        return [
+            {
+                "id": attachment.pk,
+                "document_type": attachment.document_type,
+                "original_filename": attachment.original_filename,
+                "field": FILE_FIELDS[attachment.document_type],
+            }
+            for attachment in sorted(obj.attachments.all(), key=lambda item: item.pk)
+        ]
+
+    def get_decided_by_name(self, obj):
+        user = obj.decided_by
+        return (user.full_name or user.email) if user else ""
+
+    def _actor(self):
+        request = self.context.get("request")
+        return getattr(request, "user", None) if request else None
+
+    def get_can_act(self, obj):
+        from .services.profile_change_requests import can_actor_decide, is_hr_approver
+
+        actor = self._actor()
+        if not actor or not actor.is_authenticated:
+            return False
+        cache = self.context.setdefault("_profile_change_hr_approver", {})
+        if actor.pk not in cache:
+            cache[actor.pk] = is_hr_approver(actor)
+        return can_actor_decide(actor, obj, hr_approver=cache[actor.pk])
+
+    def get_workflow(self, obj):
+        actor = self._actor()
+        cache = getattr(self, "_workflow_snapshot_cache", None)
+        snapshot = cache.get(obj.pk) if cache else None
+        if snapshot is None:
+            snapshot = get_workflow_snapshot_read_only(obj, actor=actor)
+        snapshot = dict(snapshot)
+        # Mirror exactly what the endpoints accept: no self-decision, owner-only cancel.
+        can_act = self.get_can_act(obj)
+        snapshot["can_approve"] = can_act
+        snapshot["can_reject"] = can_act
+        snapshot["can_cancel"] = bool(
+            actor
+            and actor.is_authenticated
+            and actor.pk == obj.employee_profile.user_id
+            and obj.status == ProfileChangeRequest.Status.PENDING_HR
+        )
+        return snapshot
 
 
 class EmployeeSignatureUploadSerializer(serializers.Serializer):

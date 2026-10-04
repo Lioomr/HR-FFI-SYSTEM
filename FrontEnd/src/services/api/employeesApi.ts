@@ -57,9 +57,19 @@ export interface Employee {
   // New manager profile (FK to EmployeeProfile)
   manager_profile_id?: number;
   manager_profile_name?: string;
+  // Active cross-company manager assignments (detail responses only)
+  cross_company_managers?: Array<{
+    id: number;
+    manager_profile_id: number;
+    manager_name: string;
+    manager_company_name: string;
+    scope_name: string;
+    end_at: string;
+  }>;
   nationality?: string;
   employee_number?: string;
   passport_no?: string;
+  passport_issue_date?: string | null;
   passport_expiry?: string;
   passport_expiry_raw?: string;
   national_id?: string;

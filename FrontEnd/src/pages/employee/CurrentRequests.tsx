@@ -19,6 +19,7 @@ const kindKeys: Record<CurrentRequestKind, string> = {
   permission: "employee.dashboard.permissionTitle",
   loan: "employee.dashboard.loans",
   settlement: "employee.dashboard.annualSettlement",
+  profile: "employee.dashboard.profileChange",
 };
 const statusKeys: Record<string, string> = {
   submitted: "status.submitted",

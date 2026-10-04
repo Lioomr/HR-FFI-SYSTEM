@@ -189,3 +189,15 @@ class AttendanceCalculationFoundationTests(TestCase):
         ceo_group, _ = Group.objects.get_or_create(name="CEO")
         self.user.groups.add(ceo_group)
         self.assertTrue(is_attendance_exempt(self.profile))
+
+    def test_lone_checkout_and_opaque_punch_keep_projection_but_are_flagged(self):
+        for kind, day in ((1, "2026-04-01"), (None, "2026-04-02")):
+            self._ingest([self._transaction(10, punch_state=kind, punch_id=day, day=day)])
+            result = self._result(date.fromisoformat(day))
+            # The legacy projection keeps the punch; penalties read the flag.
+            self.assertIsNotNone(result.first_check_in_at)
+            self.assertTrue(result.calculation_inputs["lone_opaque_punch"])
+        self._ingest([self._transaction(10, punch_state=0, punch_id="arrival", day="2026-04-04")])
+        arrival = self._result(date(2026, 4, 4))
+        self.assertIsNotNone(arrival.first_check_in_at)
+        self.assertFalse(arrival.calculation_inputs["lone_opaque_punch"])

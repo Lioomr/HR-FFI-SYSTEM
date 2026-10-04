@@ -308,6 +308,17 @@ class AttendancePolicyService:
                 # on the configured cutover date. This covers sync and manual
                 # recalculation because both call this central reconciliation.
                 if effective_from is not None and result.date < effective_from:
+                    inputs = dict(result.calculation_inputs or {})
+                    inputs["policy"] = {
+                        "late_excused": result.date in late_marker_days,
+                        "is_exempt": exempt,
+                        "working_day": is_working_day(profile, result.date),
+                        "grace_reason": "before_late_policy_cutover",
+                    }
+                    result.calculation_inputs = inputs
+                    result.save(update_fields=["calculation_inputs", "calculated_at"])
+                    if result.date >= penalty_cutover:
+                        sync_attendance_candidates(result)
                     continue
                 working_day = is_working_day(profile, result.date)
                 excused = result.date in late_marker_days

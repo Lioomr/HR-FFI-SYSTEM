@@ -154,14 +154,23 @@ export default function CreateEmployeePage() {
       const employeeId = response.data?.id || response.data?.employee_id;
       if (employeeId) {
         if (crossCompany) {
-          await createCrossCompanyManagerAssignment({
-            employee_id: Number(employeeId),
-            manager_profile_id: Number(values.manager_profile_id),
-            scope_id: Number(values.cross_company_scope_id),
-            start_at: new Date().toISOString(),
-            end_at: dayjs(values.cross_company_end_at).toISOString(),
-            capabilities: ["employees.view", "leaves.approve", "attendance.approve"],
-          });
+          try {
+            await createCrossCompanyManagerAssignment({
+              employee_id: Number(employeeId),
+              manager_profile_id: Number(values.manager_profile_id),
+              scope_id: Number(values.cross_company_scope_id),
+              start_at: new Date().toISOString(),
+              end_at: dayjs(values.cross_company_end_at).toISOString(),
+              capabilities: ["employees.view", "leaves.approve", "attendance.approve"],
+            });
+          } catch (assignmentError: any) {
+            if (isForbidden(assignmentError)) throw assignmentError;
+
+            apply422ToForm(form, assignmentError);
+            notifyError(t("hr.employees.crossCompanyAssignmentFailed"));
+            setSubmitting(false);
+            return;
+          }
         }
         navigate(`/hr/employees/${employeeId}`);
       } else {
@@ -173,6 +182,7 @@ export default function CreateEmployeePage() {
 
       // Handle form validation errors
       if (err.errorFields) {
+        notifyError(t("hr.employees.fixValidationErrors"));
         return;
       }
 
@@ -187,9 +197,11 @@ export default function CreateEmployeePage() {
         return;
       }
 
-      if (!err.response || err.response.status !== 422) {
-        notifyError(err.message || t("hr.employees.createFailed"));
-      }
+      notifyError(
+        err.response?.status === 422
+          ? t("hr.employees.validationFailed")
+          : err.message || t("hr.employees.createFailed"),
+      );
     }
   };
 

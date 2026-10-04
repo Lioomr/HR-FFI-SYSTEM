@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useLocation } from "react-router-dom";
 import {
   Card,
   Descriptions,
@@ -24,9 +25,18 @@ import {
   ReloadOutlined,
   CopyOutlined,
   MailOutlined,
+  EditOutlined,
 } from "@ant-design/icons";
-import { getCountryFlag } from "../../utils/countries";
+import { getCountryFlag, isSaudiEmployee } from "../../utils/countries";
 import EmployeeSignatureCard from "../../components/employees/EmployeeSignatureCard";
+import ProfileChangeRequestForm, {
+  type ProfileChangeFocus,
+} from "../../components/employees/ProfileChangeRequestForm";
+import ProfileChangeRequestStatus from "../../components/employees/ProfileChangeRequestStatus";
+import {
+  getMyProfileChangeRequests,
+  type ProfileChangeRequest,
+} from "../../services/api/employeeProfileChangeRequestsApi";
 import LoadingState from "../../components/ui/LoadingState";
 import EmptyState from "../../components/ui/EmptyState";
 import ErrorState from "../../components/ui/ErrorState";
@@ -82,12 +92,14 @@ function DocCard({
   tagColor,
   number,
   expiry,
+  children,
 }: {
   label: string;
   tagLabel: string;
   tagColor: string;
   number: string;
   expiry: string | undefined;
+  children?: ReactNode;
 }) {
   const { t } = useI18n();
   const status = getExpiryStatus(expiry);
@@ -127,6 +139,7 @@ function DocCard({
       <div style={{ fontSize: 12, color: "#8c8c8c" }}>
         {t("profile.expires")}: {formatDate(expiry)}
       </div>
+      {children}
     </div>
   );
 }
@@ -159,6 +172,54 @@ export default function MyProfilePage() {
   useEffect(() => {
     loadProfile();
   }, []);
+
+  // Profile change requests load separately: a failure here must not hide
+  // the profile, it only hides the pending/decided state.
+  const [changeRequests, setChangeRequests] = useState<ProfileChangeRequest[]>(
+    [],
+  );
+  const loadChangeRequests = useCallback(async () => {
+    try {
+      const response = await getMyProfileChangeRequests({ page_size: 20 });
+      if (!isApiError(response)) setChangeRequests(response.data.items ?? []);
+    } catch {
+      // Keep the last known state; the request form still works.
+    }
+  }, []);
+  useEffect(() => {
+    void loadChangeRequests();
+  }, [loadChangeRequests]);
+  const latestRequest = [...changeRequests].sort(
+    (a, b) =>
+      (b.submitted_at ?? "").localeCompare(a.submitted_at ?? "") || b.id - a.id,
+  )[0];
+  const hasPending = latestRequest?.status === "PENDING_HR";
+  const showStatus = Boolean(
+    latestRequest && latestRequest.status !== "CANCELLED",
+  );
+  // undefined = closed, null = opened without a section focus.
+  const [formFocus, setFormFocus] = useState<
+    ProfileChangeFocus | null | undefined
+  >(undefined);
+  const updateButton = (focus: ProfileChangeFocus) =>
+    hasPending ? null : (
+      <Button
+        size="small"
+        icon={<EditOutlined />}
+        style={{ marginTop: 8 }}
+        onClick={() => setFormFocus(focus)}
+      >
+        {t("profileChange.update")}
+      </Button>
+    );
+
+  // The dashboard's Current Requests links here with #profile-change.
+  const location = useLocation();
+  useEffect(() => {
+    if (!loading && location.hash === "#profile-change") {
+      document.getElementById("profile-change")?.scrollIntoView?.();
+    }
+  }, [loading, location.hash, showStatus]);
 
   if (loading) return <LoadingState title={t("loading.generic")} />;
 
@@ -273,15 +334,50 @@ export default function MyProfilePage() {
               </Text>
             </div>
           </div>
-          <Button
-            icon={<ReloadOutlined />}
-            onClick={loadProfile}
-            style={{ alignSelf: "flex-start" }}
-          >
-            {t("profile.refresh")}
-          </Button>
+          <Space wrap style={{ alignSelf: "flex-start" }}>
+            <Button
+              type="primary"
+              icon={<EditOutlined />}
+              disabled={hasPending}
+              onClick={() => setFormFocus(null)}
+            >
+              {t("profileChange.requestChange")}
+            </Button>
+            <Button icon={<ReloadOutlined />} onClick={loadProfile}>
+              {t("profile.refresh")}
+            </Button>
+          </Space>
         </div>
       </Card>
+
+      {showStatus && latestRequest ? (
+        <Card
+          id="profile-change"
+          title={t("profileChange.statusTitle")}
+          style={{
+            borderRadius: 16,
+            border: "none",
+            boxShadow: "0 4px 12px rgba(0,0,0,0.03)",
+            marginBottom: 24,
+          }}
+        >
+          <ProfileChangeRequestStatus
+            request={latestRequest}
+            onChanged={() => void loadChangeRequests()}
+          />
+        </Card>
+      ) : null}
+
+      <ProfileChangeRequestForm
+        open={formFocus !== undefined}
+        employee={employee}
+        focus={formFocus ?? undefined}
+        onClose={() => setFormFocus(undefined)}
+        onSubmitted={() => {
+          setFormFocus(undefined);
+          void loadChangeRequests();
+        }}
+      />
 
       <Row gutter={24}>
         {/* Left Column: Main Tabs */}
@@ -492,22 +588,28 @@ export default function MyProfilePage() {
             }}
           >
             <Space direction="vertical" style={{ width: "100%" }} size={12}>
-              <DocCard
-                label={t("profile.passport")}
-                tagLabel="Passport"
-                tagColor="cyan"
-                number={formatValue(
-                  employee.passport || (employee as any).passport_no,
-                )}
-                expiry={(employee as any).passport_expiry}
-              />
+              {!isSaudiEmployee(employee as any) && (
+                <DocCard
+                  label={t("profile.passport")}
+                  tagLabel="Passport"
+                  tagColor="cyan"
+                  number={formatValue(
+                    employee.passport || (employee as any).passport_no,
+                  )}
+                  expiry={(employee as any).passport_expiry}
+                >
+                  {updateButton("passport")}
+                </DocCard>
+              )}
               <DocCard
                 label={t("profile.nationalId")}
                 tagLabel="ID"
                 tagColor="blue"
                 number={formatValue((employee as any).national_id)}
                 expiry={(employee as any).id_expiry}
-              />
+              >
+                {updateButton("national_id")}
+              </DocCard>
               <DocCard
                 label={t("profile.healthCard")}
                 tagLabel="Health"

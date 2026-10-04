@@ -19,6 +19,11 @@ All user-uploaded files go to private storage — never to a publicly accessible
 | Announcements | `Announcement.attachment` | `announcement_attachments/` | `MAX_ANNOUNCEMENT_ATTACHMENT_SIZE_BYTES` |
 | Employee imports | `EmployeeImport.stored_file` | `employee_imports/` | — |
 | Employee import errors | `EmployeeImport.errors_file` | `employee_imports/errors/` | — |
+| Employee documents | `EmployeeDocument.file` | `employee_documents/` | `MAX_EMPLOYEE_DOCUMENT_SIZE_BYTES` |
+| Employee profile change attachments | `ProfileChangeAttachment.file` | `employee_change_attachments/` | `MAX_EMPLOYEE_DOCUMENT_SIZE_BYTES` |
+| Automatic penalty warning letters (system-generated PDF) | `PenaltyWarningNotice.document` | `penalty_warning_notices/{company_id}/` | — |
+
+Employee profile change attachments (passport / national ID scans uploaded by the employee) reuse `EmployeeDocumentSerializer.validate_file` (PDF/JPG/PNG, extension + content type + magic bytes, size). They are uploaded before the request exists and OCR-read by `employees.tasks.extract_profile_change_attachment` (same `ocr.pipeline.extract_document_fields`; the raw OCR text is never serialized) so the form can be pre-filled. Submit links them to the request; unused uploads are deleted after 24 h by the `cleanup-unattached-profile-change-attachments` beat task. When HR approves the file item, the scan is copied into a new `EmployeeDocument` under `employee_documents/` (the attachment copy is kept for history). Downloads: owner via `GET /api/employees/me/profile-change-requests/{id}/attachments/{attachment_id}/file/`, HR via `GET /api/employees/profile-change-requests/{id}/attachments/{attachment_id}/file/` (audited, `nosniff`, `private, no-store`).
 
 Default size limit for all: **5 MB** (5,242,880 bytes). Override via env vars in `Backend/.env.docker`.
 

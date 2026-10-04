@@ -25,6 +25,8 @@ Asset flow: **Employee → Manager → CEO**
 
 Exit permission flow (`permission_requests`, workflow key `permission_request`): **Employee → Manager → HRManager → approved**. There is no CEO stage. No valid manager starts at HR (refused with 422 when no HR approver other than the requester exists); an HRManager/SystemAdmin requester's request is final after manager approval. See `plans/Permission Requests Backend Handoff.md`.
 
+Employee profile change flow (`employees`, workflow key `employee_profile_change`): **Employee → HR → approved / partially approved / rejected**, single HR stage. One request holds many line items (personal details, passport / national ID data, and scans whose OCR only pre-fills the form). An HR approver (HRManager/SystemAdmin or active HR delegate, never the requester) decides every item in ONE call; the engine records a single `APPROVE` (all or some approved: `APPROVED`/`PARTIALLY_APPROVED`) or `REJECT` (none: `REJECTED`), so there is no partial workflow state. Approved items update the profile / login email and approved scans become new `EmployeeDocument`s (older ones kept). Pending-inbox type `EMPLOYEE_PROFILE_CHANGE`, review path `/hr/employees/profile-change-requests`. Contract: `plans/Employee Profile Change Requests API.md`.
+
 ## Delegation Rules
 
 - `DelegationRule` allows a manager to delegate their approval authority to another user for a date range.
@@ -69,6 +71,7 @@ record_workflow_transition(locked, start, action=WorkflowAction.Action.APPROVE, 
   - Asset return requests — `Backend/assets/services/return_requests.py`
   - Exit permission requests — `Backend/permission_requests/services.py`
   - Employee archive requests — `Backend/employees/archive_request_services.py`
+  - Employee profile change requests — `Backend/employees/services/profile_change_requests.py`
   - Contract decisions — `Backend/employees/contract_expiry.py`
   - Starting work acknowledgments — `Backend/job_offers/starting_work_service.py`
 - Job offers already keep an explicit per-event log (`approval_events`), rebuilt one row per event, so they need no conversion. Manual attendance approval and attendance corrections have no live transitions; their adapters only serve existing history.

@@ -78,6 +78,24 @@ export const translations: Record<AppLanguage, TranslationMap> = {
       "Confirm only after verifying the attendance facts and absence of permission or an acceptable excuse. Otherwise, excuse the incident.",
     "penalties.uphold": "Uphold",
     "penalties.waive": "Waive",
+    "penalties.releasedAbsenceDates": "Absence wage dates released by waiver",
+    "penalties.proposedAbsenceDates":
+      "Absence wage dates proposed for reassessment",
+    "penalties.reopen": "Reopen for HR assessment",
+    "penalties.decision.reopen": "Reopen for HR assessment",
+    "penalties.decision.reopened": "Reopened for HR assessment",
+    "penalties.rerate": "Re-rate recurrence",
+    "penalties.decision.rerate": "Re-rate recurrence",
+    "penalties.decision.recurrence_rerated": "Recurrence re-rated",
+    "penalties.decision.manual_review": "Correction review required",
+    "penalties.correctionReviewHint":
+      "Attendance or recurrence changed. Payroll approval is paused. Review the correction and waive the record, or reopen an unapplied automatic record for a new HR decision. Applied payroll requires separate reconciliation.",
+    "penalties.error.salaryRequired":
+      "Update the employee's total salary before issuing this monetary penalty.",
+    "penalties.error.correctionRequired":
+      "Resolve the attendance or recurrence correction before approving payroll.",
+    "penalties.error.reopenUnavailable":
+      "This correction cannot be reopened. Applied payroll requires separate reconciliation.",
     "penalties.approvePayroll": "Approve for payroll",
     "penalties.holdPayroll": "Hold payroll",
     "penalties.actionSaved": "Decision saved",
@@ -96,7 +114,100 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "penalties.status.pending_hr_mark": "Waiting for HR attendance decision",
     "penalties.status.issued": "Issued",
     "penalties.status.disputed": "Disputed",
-    "penalties.status.upheld": "Upheld",
+    "penalties.action.pending_hr_mark": "Awaiting HR decision",
+    "penalties.dateRangeInvalid":
+      "The start date must be on or before the end date.",
+    "penalties.viewRecord": "View penalty #{id}: {title}",
+    "penalties.error.cannotAcknowledge":
+      "This penalty can no longer be acknowledged. The record has been refreshed.",
+    "penalties.error.cannotDispute":
+      "This penalty can no longer be disputed. The record has been refreshed.",
+    "penalties.error.alreadyMarked":
+      "This attendance candidate has already been marked. The record has been refreshed.",
+    "penalties.error.onlyDisputedResolve":
+      "Only disputed penalties can be resolved. The record has been refreshed.",
+    "penalties.error.onlyIssuedMonetaryReview":
+      "Only issued penalties with a deduction can be reviewed for payroll. The record has been refreshed.",
+    "penalties.error.deductionLocked":
+      "This deduction is locked by payroll or no longer available.",
+    "penalties.error.reasonRequired": "Enter a reason for the dispute.",
+    "penalties.error.noteRequired": "Enter a note for this decision.",
+    "penalties.error.invalidMarking":
+      "This decision is not allowed for this violation.",
+    "penalties.error.dateOutOfRange":
+      "The penalty date must be between the policy start date and today.",
+    "penalties.error.invalidCatalog": "Select a valid manual violation.",
+    "penalties.error.fineCap":
+      "A single disciplinary fine cannot exceed five days' wages.",
+    "penalties.error.invalidFilters": "Check the filters and try again.",
+    "penalties.deduction": "Deduction",
+    "penalties.stats.pending_hr_mark": "Awaiting HR decision",
+    "penalties.stats.issued": "Issued",
+    "penalties.stats.disputed": "Disputed",
+    "penalties.stats.all": "All records",
+    "penalties.stats.show": "{label}: {count}. Show these records",
+    "penalties.stats.filtered": "Filter applied",
+    "penalties.searchPlaceholder": "Search employee or violation",
+    "penalties.filters.clear": "Clear filters",
+    "penalties.empty.title": "No penalties found",
+    "penalties.empty.filtered": "No penalties match these filters.",
+    "penalties.empty.hr": "No penalties have been recorded yet.",
+    "penalties.empty.mine": "You have no penalty records.",
+    "penalties.automatic": "From attendance",
+    "penalties.levels": "Action per repeat",
+    "penalties.occurrenceShort": "#{n}",
+    "penalties.autoWarning": "Automatic warning",
+    "penalties.autoWarningLevels":
+      "The first {count} repeats in a month are automatic written warnings.",
+    "penalties.downloadWarningLetter": "Download warning letter",
+    "penalties.downloadFailed": "Could not download the warning letter.",
+    "penalties.filters.includeAutomated": "Show automatic warnings",
+    "penalties.decision.auto_warning": "Issued automatically by the system",
+    "penalties.timeline.autoIssued": "Automatic warning issued",
+    "penalties.scheduleCount": "{count} violations",
+    "penalties.scheduleHint":
+      "The action applied at each repeat of a violation, from the approved penalty schedule.",
+    "penalties.createHint":
+      "Record a work-organization or conduct violation. Attendance violations are created automatically.",
+    "penalties.facts": "Details",
+    "penalties.pendingAmount": "Set after HR review",
+    "penalties.noDeduction": "No deduction",
+    "penalties.holdWhileDisputed": "on hold until the dispute is resolved",
+    "penalties.timeline.title": "Progress",
+    "penalties.timeline.recorded": "Recorded",
+    "penalties.timeline.fromAttendance": "detected from attendance",
+    "penalties.timeline.fromHr": "recorded by HR",
+    "penalties.timeline.hrMark": "HR attendance decision",
+    "penalties.timeline.hrMarkPending":
+      "Waiting for HR to review the attendance facts",
+    "penalties.timeline.responsePending": "No response from the employee yet",
+    "penalties.timeline.resolutionPending":
+      "Waiting for HR to resolve the dispute",
+    "penalties.help.employee":
+      "Acknowledge to confirm you received this penalty, or dispute it with a reason if you disagree.",
+    "penalties.help.employeeDisputeOnly":
+      "You can still dispute this penalty with a reason.",
+    "penalties.help.resolve":
+      "The employee disputed this penalty. Its payroll deduction stays on hold until you uphold or waive it.",
+    "penalties.help.payroll":
+      "Approve to let the next draft payroll deduct this amount, or hold it with a note.",
+    "penalties.help.none": "No action is needed from you right now.",
+    "penalties.help.disputedEmployee":
+      "Your dispute is with HR. Any payroll deduction stays on hold until HR decides.",
+    "penalties.help.decision.dispute":
+      "Explain why you disagree. HR will review your reason before any deduction continues.",
+    "penalties.help.decision.uphold":
+      "The penalty stands and its deduction can continue to payroll review.",
+    "penalties.help.decision.waive":
+      "The penalty is cancelled and no deduction will be taken.",
+    "penalties.help.decision.rerate":
+      "The occurrence level and fine are recalculated from the current recurrence count. An unapplied deduction returns to payroll review.",
+    "penalties.help.decision.approve":
+      "The next draft payroll will deduct this amount.",
+    "penalties.help.decision.hold":
+      "Payroll will not deduct this amount until it is approved.",
+    "penalties.help.decision.excused":
+      "No penalty will be issued for this attendance incident.",
     "penalties.status.waived": "Waived",
     "penalties.status.applied": "Applied",
     "penalties.response.acknowledged": "Acknowledged",
@@ -110,9 +221,10 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "employee.dashboard.pendingCompletion": "Pending HR completion",
     "employee.dashboard.currentTitle": "Current requests",
     "employee.dashboard.currentHint":
-      "Your leave, exit permission, loan, and Annual Leave settlement requests awaiting approval, completion, or payment. Select a request to view its progress.",
+      "Your leave, exit permission, loan, Annual Leave settlement, and profile change requests awaiting approval, completion, or payment. Select a request to view its progress.",
     "employee.dashboard.currentEmpty":
-      "You have no ongoing leave, exit permission, loan, or Annual Leave settlement requests.",
+      "You have no ongoing leave, exit permission, loan, Annual Leave settlement, or profile change requests.",
+    "employee.dashboard.profileChange": "Profile change",
     "employee.dashboard.currentError":
       "Couldn’t load these requests. Refresh to try again:",
     "employee.dashboard.refresh": "Refresh",
@@ -289,6 +401,16 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     // Language
     "language.english": "English",
     "language.arabic": "Arabic",
+    "language.label": "Language",
+    "auth.login.tagline": "Easier management, better performance",
+    "auth.login.feature.reports.title": "Live reports",
+    "auth.login.feature.reports.subtitle": "To improve performance",
+    "auth.login.feature.employees.title": "Employee management",
+    "auth.login.feature.employees.subtitle": "With high efficiency",
+    "auth.login.feature.procedures.title": "Simplified procedures",
+    "auth.login.feature.procedures.subtitle": "For faster services",
+    "auth.login.feature.secure.title": "Safe workplace",
+    "auth.login.feature.secure.subtitle": "With a culture of excellence",
 
     // Auth
     "auth.signInToContinue": "Sign in to continue",
@@ -1785,6 +1907,10 @@ export const translations: Record<AppLanguage, TranslationMap> = {
       "The selected manager must be an active employee with an active user account.",
     "employees.form.managerErrors.cycle":
       "Manager assignment cannot create a reporting cycle.",
+    "employees.form.managerErrors.duplicate":
+      "This manager is already assigned to this employee for this approved scope. Nothing was changed.",
+    "employees.view.crossCompanyManagers": "Cross-company managers",
+    "employees.view.crossCompanyManagerUntil": "until {{date}}",
     "employees.form.managerScope": "Approved organization scope",
     "employees.form.managerScopePlaceholder": "Select an approved scope",
     "employees.form.managerAssignmentEnd": "Assignment expiry",
@@ -2979,6 +3105,12 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "hr.employees.updateFailed": "Failed to update employee",
     "hr.employees.loadFailed": "Failed to load employee data",
     "hr.employees.updateSuccess": "Employee updated successfully",
+    "hr.employees.validationFailed":
+      "The employee could not be saved. Review validation errors across all tabs and try again.",
+    "hr.employees.crossCompanyAssignmentSaved":
+      "Employee updated and the cross-company manager was assigned. It appears under Cross-company managers on the employee page; the direct manager field is unchanged.",
+    "hr.employees.crossCompanyAssignmentFailed":
+      "The employee profile was saved, but the cross-company manager assignment failed. Confirm the employee has an active linked user account, and check the manager, approved scope, and expiry before retrying.",
     "hr.employees.noIdError": "No employee ID provided",
     "hr.employees.fixValidationErrors":
       "Please fix the validation errors in the form.",
@@ -5199,6 +5331,87 @@ export const translations: Record<AppLanguage, TranslationMap> = {
       "Record that the employee was told about the scheduled termination. Record-keeping only.",
     "contractRatings.doneLeftQueue":
       "Recorded. This rating has left your queue and will return once the corrected evaluation is resubmitted.",
+    "pendingInbox.requestType.EMPLOYEE_PROFILE_CHANGE": "Profile Change",
+    "layout.nav.profileChangeInbox": "Profile Changes",
+    "status.partiallyApproved": "Partially approved",
+    "profileChange.title": "Request a change to my details",
+    "profileChange.requestChange": "Request a change",
+    "profileChange.update": "Update",
+    "profileChange.statusTitle": "My change request",
+    "profileChange.hrReviewHint":
+      "HR reviews each change first. Your profile changes only after approval.",
+    "profileChange.personalSection": "Personal details",
+    "profileChange.documentsSection": "Documents",
+    "profileChange.field.full_name": "Full name",
+    "profileChange.field.date_of_birth": "Date of birth",
+    "profileChange.field.nationality": "Nationality",
+    "profileChange.field.email": "Email",
+    "profileChange.field.mobile": "Mobile number",
+    "profileChange.field.passport_no": "Passport number",
+    "profileChange.field.passport_issue_date": "Passport issue date",
+    "profileChange.field.passport_expiry": "Passport expiry date",
+    "profileChange.field.national_id": "National ID number",
+    "profileChange.field.id_expiry": "National ID expiry date",
+    "profileChange.field.passport_file": "Passport file",
+    "profileChange.field.national_id_file": "National ID file",
+    "profileChange.documentFile": "Document file",
+    "profileChange.fileRules":
+      "PDF, JPG or PNG, up to {max} MB. We read the document and fill in what we can.",
+    "profileChange.uploadPassport": "Upload passport",
+    "profileChange.uploadNationalId": "Upload national ID",
+    "profileChange.reading": "Reading the document…",
+    "profileChange.readFromDocument": "Read from document",
+    "profileChange.readFailed":
+      "We couldn’t read this document. Please fill in the details manually.",
+    "profileChange.readTimeout":
+      "Reading the document is taking too long. Please fill in the details manually.",
+    "profileChange.checkValues": "Check these values before you submit",
+    "profileChange.invalidType": "Choose a PDF, JPG or PNG file.",
+    "profileChange.invalidSize": "The file is larger than 5 MB.",
+    "profileChange.invalidEmpty": "The file is empty.",
+    "profileChange.invalidEmail": "Enter a valid email address.",
+    "profileChange.uploadFailed": "Couldn’t upload the document.",
+    "profileChange.nothingChanged":
+      "Change at least one detail or upload a document.",
+    "profileChange.submitted": "Request sent to HR for review.",
+    "profileChange.submitFailed": "Couldn’t send the request.",
+    "profileChange.pending": "Waiting for HR review.",
+    "profileChange.decidedApproved": "HR approved your changes.",
+    "profileChange.decidedPartial": "HR approved some of your changes.",
+    "profileChange.decidedRejected": "HR rejected your changes.",
+    "profileChange.hrReason": "HR reason",
+    "profileChange.approvalTrail": "Approval trail",
+    "profileChange.cancelRequest": "Cancel request",
+    "profileChange.cancelConfirm": "Cancel this change request?",
+    "profileChange.cancelled": "Request cancelled.",
+    "profileChange.cancelFailed": "Couldn’t cancel the request.",
+    "profileChange.hr.title": "Profile Change Requests",
+    "profileChange.hr.subtitle":
+      "Changes to personal details, passport and national ID submitted by employees. Decide each field; approved fields update the profile.",
+    "profileChange.hr.changes": "Requested changes",
+    "profileChange.hr.submittedAt": "Submitted",
+    "profileChange.hr.review": "Review",
+    "profileChange.hr.empty": "No profile change requests.",
+    "profileChange.hr.loadFailed": "Couldn’t load profile change requests.",
+    "profileChange.hr.field": "Field",
+    "profileChange.hr.current": "Current",
+    "profileChange.hr.requested": "Requested",
+    "profileChange.hr.decision": "Decision",
+    "profileChange.hr.approve": "Approve",
+    "profileChange.hr.reject": "Reject",
+    "profileChange.hr.approveAll": "Approve all",
+    "profileChange.hr.submitDecisions": "Submit decisions",
+    "profileChange.hr.decideHint":
+      "Approve or reject every field, then submit. A rejected field needs a reason.",
+    "profileChange.hr.decideAll": "Decide every field before submitting.",
+    "profileChange.hr.rejectReason": "Reason (required)",
+    "profileChange.hr.rejectReasonFor": "Reason for rejecting {field}",
+    "profileChange.hr.rejectNoteRequired":
+      "Add a reason for each rejected field.",
+    "profileChange.hr.decided": "Decisions saved.",
+    "profileChange.hr.actionFailed": "Couldn’t save the decisions.",
+    "profileChange.hr.decidedBy": "Decided by",
+    "profileChange.hr.decisionNote": "Decision note",
   },
 
   ar: {
@@ -5275,6 +5488,24 @@ export const translations: Record<AppLanguage, TranslationMap> = {
       "أكد المخالفة بعد التحقق من واقعة الحضور وعدم وجود إذن أو عذر مقبول. وإلا فاقبل العذر.",
     "penalties.uphold": "تأييد الجزاء",
     "penalties.waive": "إلغاء الجزاء",
+    "penalties.releasedAbsenceDates": "أيام أجور الغياب التي ألغيت بالإعفاء",
+    "penalties.proposedAbsenceDates":
+      "أيام أجور الغياب المقترحة لإعادة التقييم",
+    "penalties.reopen": "إعادة الفتح لتقييم الموارد البشرية",
+    "penalties.decision.reopen": "إعادة الفتح لتقييم الموارد البشرية",
+    "penalties.decision.reopened": "أعيد فتحه لتقييم الموارد البشرية",
+    "penalties.rerate": "إعادة احتساب التكرار",
+    "penalties.decision.rerate": "إعادة احتساب التكرار",
+    "penalties.decision.recurrence_rerated": "أعيد احتساب التكرار",
+    "penalties.decision.manual_review": "يلزم مراجعة التصحيح",
+    "penalties.correctionReviewHint":
+      "تغيرت بيانات الحضور أو تكرار المخالفة. تم تعليق اعتماد الخصم. راجع التصحيح وألغِ السجل، أو أعد فتح السجل الآلي الذي لم يطبق على الرواتب لتقييم جديد. الرواتب المطبقة تتطلب تسوية منفصلة.",
+    "penalties.error.salaryRequired":
+      "حدّث الراتب الإجمالي للموظف قبل إصدار هذا الجزاء المالي.",
+    "penalties.error.correctionRequired":
+      "راجع تصحيح الحضور أو تكرار المخالفة قبل اعتماد الخصم.",
+    "penalties.error.reopenUnavailable":
+      "لا يمكن إعادة فتح هذا التصحيح. الرواتب المطبقة تتطلب تسوية منفصلة.",
     "penalties.approvePayroll": "اعتماد الخصم للراتب",
     "penalties.holdPayroll": "تعليق الخصم",
     "penalties.actionSaved": "تم حفظ القرار",
@@ -5293,7 +5524,96 @@ export const translations: Record<AppLanguage, TranslationMap> = {
       "بانتظار قرار الموارد البشرية بشأن الحضور",
     "penalties.status.issued": "صادر",
     "penalties.status.disputed": "محل اعتراض",
-    "penalties.status.upheld": "تم تأييده",
+    "penalties.action.pending_hr_mark": "بانتظار قرار الموارد البشرية",
+    "penalties.dateRangeInvalid":
+      "يجب أن يكون تاريخ البداية في تاريخ النهاية أو قبله.",
+    "penalties.viewRecord": "عرض الجزاء رقم {id}: {title}",
+    "penalties.error.cannotAcknowledge":
+      "لم يعد بالإمكان تأكيد الاطلاع على هذا الجزاء. تم تحديث السجل.",
+    "penalties.error.cannotDispute":
+      "لم يعد بالإمكان الاعتراض على هذا الجزاء. تم تحديث السجل.",
+    "penalties.error.alreadyMarked":
+      "تم البت في مخالفة الحضور هذه مسبقًا. تم تحديث السجل.",
+    "penalties.error.onlyDisputedResolve":
+      "لا يمكن البت إلا في الجزاءات محل الاعتراض. تم تحديث السجل.",
+    "penalties.error.onlyIssuedMonetaryReview":
+      "لا يمكن مراجعة الخصم في الرواتب إلا للجزاءات الصادرة التي تتضمن خصمًا. تم تحديث السجل.",
+    "penalties.error.deductionLocked":
+      "هذا الخصم مقفل في مسير الرواتب أو لم يعد متاحًا.",
+    "penalties.error.reasonRequired": "أدخل سبب الاعتراض.",
+    "penalties.error.noteRequired": "أدخل ملاحظة لهذا القرار.",
+    "penalties.error.invalidMarking": "هذا القرار غير مسموح لهذه المخالفة.",
+    "penalties.error.dateOutOfRange":
+      "يجب أن يكون تاريخ الجزاء بين تاريخ بدء اللائحة واليوم.",
+    "penalties.error.invalidCatalog": "اختر مخالفة يدوية صحيحة.",
+    "penalties.error.fineCap":
+      "لا يجوز أن تتجاوز الغرامة الواحدة أجر خمسة أيام.",
+    "penalties.error.invalidFilters": "تحقق من عوامل التصفية وحاول مرة أخرى.",
+    "penalties.deduction": "الخصم",
+    "penalties.stats.pending_hr_mark": "بانتظار قرار الموارد البشرية",
+    "penalties.stats.issued": "صادرة",
+    "penalties.stats.disputed": "محل اعتراض",
+    "penalties.stats.all": "كل السجلات",
+    "penalties.stats.show": "{label}: {count}. عرض هذه السجلات",
+    "penalties.stats.filtered": "تم تطبيق التصفية",
+    "penalties.searchPlaceholder": "ابحث بالموظف أو المخالفة",
+    "penalties.filters.clear": "مسح التصفية",
+    "penalties.empty.title": "لا توجد جزاءات",
+    "penalties.empty.filtered": "لا توجد جزاءات مطابقة لهذه التصفية.",
+    "penalties.empty.hr": "لم يتم تسجيل أي جزاءات بعد.",
+    "penalties.empty.mine": "لا توجد لديك سجلات جزاءات.",
+    "penalties.automatic": "من الحضور",
+    "penalties.levels": "الإجراء عند كل تكرار",
+    "penalties.occurrenceShort": "#{n}",
+    "penalties.autoWarning": "إنذار آلي",
+    "penalties.autoWarningLevels":
+      "أول {count} تكرارات في الشهر إنذارات كتابية آلية.",
+    "penalties.downloadWarningLetter": "تنزيل خطاب الإنذار",
+    "penalties.downloadFailed": "تعذر تنزيل خطاب الإنذار.",
+    "penalties.filters.includeAutomated": "عرض الإنذارات الآلية",
+    "penalties.decision.auto_warning": "صدر تلقائيًا من النظام",
+    "penalties.timeline.autoIssued": "صدر إنذار آلي",
+    "penalties.scheduleCount": "{count} مخالفة",
+    "penalties.scheduleHint":
+      "الإجراء المطبق عند كل تكرار للمخالفة وفق لائحة الجزاءات المعتمدة.",
+    "penalties.createHint":
+      "سجّل مخالفة تنظيم عمل أو سلوك. تُنشأ مخالفات الحضور تلقائيًا.",
+    "penalties.facts": "التفاصيل",
+    "penalties.pendingAmount": "يُحدد بعد مراجعة الموارد البشرية",
+    "penalties.noDeduction": "لا يوجد خصم",
+    "penalties.holdWhileDisputed": "معلق حتى البت في الاعتراض",
+    "penalties.timeline.title": "مراحل الجزاء",
+    "penalties.timeline.recorded": "التسجيل",
+    "penalties.timeline.fromAttendance": "مكتشف من الحضور",
+    "penalties.timeline.fromHr": "مسجل من الموارد البشرية",
+    "penalties.timeline.hrMark": "قرار الموارد البشرية بشأن الحضور",
+    "penalties.timeline.hrMarkPending":
+      "بانتظار مراجعة الموارد البشرية لوقائع الحضور",
+    "penalties.timeline.responsePending": "لم يرد الموظف بعد",
+    "penalties.timeline.resolutionPending":
+      "بانتظار بت الموارد البشرية في الاعتراض",
+    "penalties.help.employee":
+      "أكّد اطلاعك على هذا الجزاء، أو اعترض عليه مع ذكر السبب إذا كنت لا توافق.",
+    "penalties.help.employeeDisputeOnly":
+      "لا يزال بإمكانك الاعتراض على هذا الجزاء مع ذكر السبب.",
+    "penalties.help.resolve":
+      "اعترض الموظف على هذا الجزاء. يبقى خصم الراتب معلقًا حتى تؤيده أو تلغيه.",
+    "penalties.help.payroll":
+      "اعتمد ليتم خصم هذا المبلغ في مسودة الرواتب التالية، أو علّقه مع ملاحظة.",
+    "penalties.help.none": "لا يلزم أي إجراء منك حاليًا.",
+    "penalties.help.disputedEmployee":
+      "اعتراضك لدى الموارد البشرية. يبقى أي خصم من الراتب معلقًا حتى صدور القرار.",
+    "penalties.help.decision.dispute":
+      "وضّح سبب عدم موافقتك. ستراجع الموارد البشرية السبب قبل متابعة أي خصم.",
+    "penalties.help.decision.uphold":
+      "يبقى الجزاء قائمًا ويمكن متابعة خصمه في مراجعة الرواتب.",
+    "penalties.help.decision.waive": "يُلغى الجزاء ولن يتم أي خصم.",
+    "penalties.help.decision.rerate":
+      "يُعاد احتساب مستوى التكرار والغرامة وفق العدد الحالي للتكرار. ويعود الخصم غير المطبق إلى مراجعة الرواتب.",
+    "penalties.help.decision.approve":
+      "سيتم خصم هذا المبلغ في مسودة الرواتب التالية.",
+    "penalties.help.decision.hold": "لن يُخصم هذا المبلغ حتى يتم اعتماده.",
+    "penalties.help.decision.excused": "لن يصدر جزاء عن واقعة الحضور هذه.",
     "penalties.status.waived": "ملغى",
     "penalties.status.applied": "مطبق",
     "penalties.response.acknowledged": "تم تأكيد الاطلاع",
@@ -5307,9 +5627,10 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "employee.dashboard.pendingCompletion": "بانتظار استكمال الموارد البشرية",
     "employee.dashboard.currentTitle": "الطلبات الجارية",
     "employee.dashboard.currentHint":
-      "طلبات الإجازة وإذن الخروج والسلف وتسوية الإجازة السنوية التي تنتظر الاعتماد أو الاستكمال أو الصرف. اختر طلبًا للاطلاع على تقدّمه.",
+      "طلبات الإجازة وإذن الخروج والسلف وتسوية الإجازة السنوية وتعديل البيانات التي تنتظر الاعتماد أو الاستكمال أو الصرف. اختر طلبًا للاطلاع على تقدّمه.",
     "employee.dashboard.currentEmpty":
-      "ليس لديك طلبات إجازة أو إذن خروج أو سلف أو تسوية إجازة سنوية قيد الإجراء.",
+      "ليس لديك طلبات إجازة أو إذن خروج أو سلف أو تسوية إجازة سنوية أو تعديل بيانات قيد الإجراء.",
+    "employee.dashboard.profileChange": "تعديل بيانات",
     "employee.dashboard.currentError":
       "تعذّر تحميل هذه الطلبات. اضغط تحديث للمحاولة مجددًا:",
     "employee.dashboard.refresh": "تحديث",
@@ -5474,6 +5795,16 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     // Language
     "language.english": "الإنجليزية",
     "language.arabic": "العربية",
+    "language.label": "اللغة",
+    "auth.login.tagline": "إدارة أسهل .. أداء أفضل",
+    "auth.login.feature.reports.title": "تقارير لحظية",
+    "auth.login.feature.reports.subtitle": "لتحسين الأداء",
+    "auth.login.feature.employees.title": "إدارة الموظفين",
+    "auth.login.feature.employees.subtitle": "بكفاءة عالية",
+    "auth.login.feature.procedures.title": "إجراءات مبسطة",
+    "auth.login.feature.procedures.subtitle": "لخدمات إدارية أسرع",
+    "auth.login.feature.secure.title": "بيئة عمل آمنة",
+    "auth.login.feature.secure.subtitle": "وذات امتثال عالي",
 
     // Auth
     "auth.signInToContinue": "سجّل الدخول للمتابعة",
@@ -6939,6 +7270,10 @@ export const translations: Record<AppLanguage, TranslationMap> = {
       "يجب أن يكون المدير المختار موظفاً نشطاً بحساب مستخدم نشط.",
     "employees.form.managerErrors.cycle":
       "لا يمكن أن ينشئ تعيين المدير حلقة في التسلسل الإداري.",
+    "employees.form.managerErrors.duplicate":
+      "هذا المدير معيَّن بالفعل لهذا الموظف ضمن النطاق المعتمد نفسه. لم يتم تغيير أي شيء.",
+    "employees.view.crossCompanyManagers": "المديرون من شركات أخرى",
+    "employees.view.crossCompanyManagerUntil": "حتى {{date}}",
     "employees.form.managerScope": "النطاق التنظيمي المعتمد",
     "employees.form.managerScopePlaceholder": "اختر نطاقاً معتمداً",
     "employees.form.managerAssignmentEnd": "تاريخ انتهاء التعيين",
@@ -8095,6 +8430,12 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "hr.employees.updateFailed": "فشل تحديث الموظف",
     "hr.employees.loadFailed": "فشل تحميل بيانات الموظف",
     "hr.employees.updateSuccess": "تم تحديث الموظف بنجاح",
+    "hr.employees.validationFailed":
+      "تعذّر حفظ بيانات الموظف. راجع أخطاء التحقق في جميع علامات التبويب ثم حاول مرة أخرى.",
+    "hr.employees.crossCompanyAssignmentSaved":
+      "تم تحديث الموظف وتعيين المدير من شركة أخرى. يظهر ضمن «المديرون من شركات أخرى» في صفحة الموظف، بينما يبقى حقل المدير المباشر دون تغيير.",
+    "hr.employees.crossCompanyAssignmentFailed":
+      "تم حفظ ملف الموظف، لكن تعذّر إكمال تعيين المدير بين الشركات. تأكد من ربط حساب مستخدم نشط بالموظف، وراجع المدير والنطاق المعتمد وتاريخ الانتهاء قبل إعادة المحاولة.",
     "hr.employees.noIdError": "لم يتم تقديم معرف الموظف",
     "hr.employees.fixValidationErrors": "يرجى تصحيح أخطاء التحقق في النموذج.",
     "hr.employees.noData": "لا توجد بيانات متاحة",
@@ -10303,5 +10644,85 @@ export const translations: Record<AppLanguage, TranslationMap> = {
       "سجّل أن الموظف أُبلغ بالإنهاء المجدول. للتوثيق فقط.",
     "contractRatings.doneLeftQueue":
       "تم التسجيل. غادر هذا التقييم قائمتك وسيعود بعد إعادة إرسال التقييم المصحح.",
+    "pendingInbox.requestType.EMPLOYEE_PROFILE_CHANGE": "تعديل بيانات",
+    "layout.nav.profileChangeInbox": "تعديلات البيانات",
+    "status.partiallyApproved": "موافق عليه جزئيًا",
+    "profileChange.title": "طلب تعديل بياناتي",
+    "profileChange.requestChange": "طلب تعديل",
+    "profileChange.update": "تحديث",
+    "profileChange.statusTitle": "طلب التعديل الخاص بي",
+    "profileChange.hrReviewHint":
+      "تراجع الموارد البشرية كل تعديل أولًا، ولا تتغير بيانات ملفك إلا بعد الموافقة.",
+    "profileChange.personalSection": "البيانات الشخصية",
+    "profileChange.documentsSection": "المستندات",
+    "profileChange.field.full_name": "الاسم الكامل",
+    "profileChange.field.date_of_birth": "تاريخ الميلاد",
+    "profileChange.field.nationality": "الجنسية",
+    "profileChange.field.email": "البريد الإلكتروني",
+    "profileChange.field.mobile": "رقم الجوال",
+    "profileChange.field.passport_no": "رقم جواز السفر",
+    "profileChange.field.passport_issue_date": "تاريخ إصدار جواز السفر",
+    "profileChange.field.passport_expiry": "تاريخ انتهاء جواز السفر",
+    "profileChange.field.national_id": "رقم الهوية الوطنية",
+    "profileChange.field.id_expiry": "تاريخ انتهاء الهوية الوطنية",
+    "profileChange.field.passport_file": "ملف جواز السفر",
+    "profileChange.field.national_id_file": "ملف الهوية الوطنية",
+    "profileChange.documentFile": "ملف المستند",
+    "profileChange.fileRules":
+      "ملف PDF أو JPG أو PNG بحجم أقصاه {max} ميجابايت. نقرأ المستند ونعبّئ ما نستطيع من البيانات.",
+    "profileChange.uploadPassport": "رفع جواز السفر",
+    "profileChange.uploadNationalId": "رفع الهوية الوطنية",
+    "profileChange.reading": "جارٍ قراءة المستند…",
+    "profileChange.readFromDocument": "مقروء من المستند",
+    "profileChange.readFailed":
+      "تعذّرت قراءة هذا المستند. يُرجى إدخال البيانات يدويًا.",
+    "profileChange.readTimeout":
+      "تستغرق قراءة المستند وقتًا طويلًا. يُرجى إدخال البيانات يدويًا.",
+    "profileChange.checkValues": "راجع هذه القيم قبل الإرسال",
+    "profileChange.invalidType": "اختر ملف PDF أو JPG أو PNG.",
+    "profileChange.invalidSize": "حجم الملف أكبر من 5 ميجابايت.",
+    "profileChange.invalidEmpty": "الملف فارغ.",
+    "profileChange.invalidEmail": "أدخل بريدًا إلكترونيًا صحيحًا.",
+    "profileChange.uploadFailed": "تعذّر رفع المستند.",
+    "profileChange.nothingChanged":
+      "غيّر بيانًا واحدًا على الأقل أو ارفع مستندًا.",
+    "profileChange.submitted": "أُرسل الطلب إلى الموارد البشرية للمراجعة.",
+    "profileChange.submitFailed": "تعذّر إرسال الطلب.",
+    "profileChange.pending": "بانتظار مراجعة الموارد البشرية.",
+    "profileChange.decidedApproved": "وافقت الموارد البشرية على تعديلاتك.",
+    "profileChange.decidedPartial": "وافقت الموارد البشرية على بعض تعديلاتك.",
+    "profileChange.decidedRejected": "رفضت الموارد البشرية تعديلاتك.",
+    "profileChange.hrReason": "سبب الموارد البشرية",
+    "profileChange.approvalTrail": "مسار الاعتماد",
+    "profileChange.cancelRequest": "إلغاء الطلب",
+    "profileChange.cancelConfirm": "هل تريد إلغاء طلب التعديل هذا؟",
+    "profileChange.cancelled": "تم إلغاء الطلب.",
+    "profileChange.cancelFailed": "تعذّر إلغاء الطلب.",
+    "profileChange.hr.title": "طلبات تعديل البيانات",
+    "profileChange.hr.subtitle":
+      "تعديلات البيانات الشخصية وجواز السفر والهوية الوطنية التي قدّمها الموظفون. قرّر في كل حقل؛ الحقول الموافق عليها تُحدّث الملف الشخصي.",
+    "profileChange.hr.changes": "التعديلات المطلوبة",
+    "profileChange.hr.submittedAt": "تاريخ التقديم",
+    "profileChange.hr.review": "مراجعة",
+    "profileChange.hr.empty": "لا توجد طلبات تعديل بيانات.",
+    "profileChange.hr.loadFailed": "تعذّر تحميل طلبات تعديل البيانات.",
+    "profileChange.hr.field": "الحقل",
+    "profileChange.hr.current": "الحالي",
+    "profileChange.hr.requested": "المطلوب",
+    "profileChange.hr.decision": "القرار",
+    "profileChange.hr.approve": "موافقة",
+    "profileChange.hr.reject": "رفض",
+    "profileChange.hr.approveAll": "الموافقة على الكل",
+    "profileChange.hr.submitDecisions": "إرسال القرارات",
+    "profileChange.hr.decideHint":
+      "وافق على كل حقل أو ارفضه ثم أرسل. الحقل المرفوض يحتاج إلى سبب.",
+    "profileChange.hr.decideAll": "قرّر في كل الحقول قبل الإرسال.",
+    "profileChange.hr.rejectReason": "السبب (مطلوب)",
+    "profileChange.hr.rejectReasonFor": "سبب رفض {field}",
+    "profileChange.hr.rejectNoteRequired": "أضف سببًا لكل حقل مرفوض.",
+    "profileChange.hr.decided": "تم حفظ القرارات.",
+    "profileChange.hr.actionFailed": "تعذّر حفظ القرارات.",
+    "profileChange.hr.decidedBy": "صاحب القرار",
+    "profileChange.hr.decisionNote": "ملاحظة القرار",
   },
 };

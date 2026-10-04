@@ -205,3 +205,10 @@ export const getCountryFlag = (nationality?: string): string => {
   if (code) return codeToFlagEmoji(code);
   return "🏳️";
 };
+
+/** Saudi citizens have no passport record, so passport UI is hidden for them. */
+export const isSaudiEmployee = (employee: {
+  is_saudi?: boolean;
+  nationality?: string;
+}): boolean =>
+  Boolean(employee.is_saudi) || getCountryCode(employee.nationality) === "SA";

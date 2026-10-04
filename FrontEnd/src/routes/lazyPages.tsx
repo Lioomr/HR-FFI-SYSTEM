@@ -74,6 +74,9 @@ export const EditEmployeePage = lazy(
 export const ExpiringDocumentsPage = lazy(
   () => import("../pages/hr/employees/ExpiringDocumentsPage"),
 );
+export const ProfileChangeRequestsPage = lazy(
+  () => import("../pages/hr/employees/ProfileChangeRequestsPage"),
+);
 
 // ─── HR: dashboard / import ─────────────────────────────────────────────────
 export const HRDashboardPage = lazy(

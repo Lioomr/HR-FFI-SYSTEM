@@ -28,6 +28,13 @@ def _env_bool(name, default=False):
     return value.strip().lower() in {"1", "true", "yes", "on"}
 
 
+# Automatic late warnings (W01/W02/W07 occurrences 1-3 in a month). Empty keeps the
+# feature off: nothing is hidden from HR and nothing is issued automatically.
+PENALTY_AUTO_WARNINGS_EFFECTIVE_FROM = os.environ.get("PENALTY_AUTO_WARNINGS_EFFECTIVE_FROM", "")
+# Hours after the shift ends before a candidate is issued, so late punches can still arrive.
+PENALTY_AUTO_WARNING_SETTLE_HOURS = os.environ.get("PENALTY_AUTO_WARNING_SETTLE_HOURS", "12")
+
+
 def _env_list(name, default=None):
     value = os.environ.get(name)
     if value is None:

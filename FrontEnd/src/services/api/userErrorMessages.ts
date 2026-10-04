@@ -45,7 +45,9 @@ export function getDetailedHttpErrorMessage(
   if (mapped === "network") return t("common.error.networkDetailed");
   if (mapped === "timeout") return t("common.error.timeoutDetailed");
 
-  if (rawMessage) return rawMessage;
+  // Axios's own "Request failed with status code 404" is not user-facing text.
+  if (rawMessage && !/^request failed with status code \d+$/i.test(rawMessage))
+    return rawMessage;
   return t(fallbackKey);
 }
 
