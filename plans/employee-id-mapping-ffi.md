@@ -1,8 +1,8 @@
-# FFI employee ID mapping proposal
+# FFI employee ID mapping record
 
-Production snapshot: 2026-10-01. **Preview only:** no employee ID, request ID, payroll record, or historical document has been changed by this mapping.
+Production snapshot: 2026-10-01. Applied on 2026-10-04: 61 employee IDs and aliases, 53 matching draft payroll item codes, and 64 leave request references. The old IDs below remain searchable aliases. Paid payroll snapshots and previously issued documents were retained.
 
-## Numbering rule used for this preview
+## Numbering rule used for the applied mapping
 
 Fathi Fouad Itani is reserved `FFI-0001`, Abdulaal Ridha Abdulaal Sultan is reserved `FFI-0002`, and MD Julfiker Ali is assigned `FFI-0003` as requested. All remaining FFI employee profiles, including archived profiles, are ordered by saved `hire_date`, then database primary key (`pk`) for ties. Numbers are never reused after archival. The database `pk` remains the relational identity.
 
@@ -70,9 +70,9 @@ Fathi Fouad Itani is reserved `FFI-0001`, Abdulaal Ridha Abdulaal Sultan is rese
 | FFI-0060 | FFI-306963 | 76 | 2026-09-01 | No |
 | FFI-0061 | FFI-238185 | 85 | 2026-09-15 | No |
 
-## Review before applying
+## Source-data and historical-reference notes
 
-- Profile pk 48, Abdullah Abdulwahab Alshehri, has saved `hire_date=2024-08-01` but `hire_date_raw=2024-01-08`. If the raw date is correct, the order from `FFI-0008` onward changes. Resolve the source of truth first.
+- Profile pk 48, Abdullah Abdulwahab Alshehri, has saved `hire_date=2024-08-01` but `hire_date_raw=2024-01-08`. The applied order uses the saved date, as the user confirmed. Correct the source personnel record separately if needed; do not silently renumber issued IDs.
 - MD Julfiker Ali and archived Mohamed Sami Ibrahim Riad share `2023-05-01`; the requested Julfiker override gives Mohamed `FFI-0004`. Other same-date ties use ascending profile pk: 2024-08-01, 2024-11-24, and 2024-12-04.
-- Existing profile codes occur as text in 53 payroll items in the September 2026 FFI draft, and in two starting-work acknowledgment references: `SWA-FFI-064303-20260830` and `SWA-FFI-306963-20260901`. Those references and any already issued PDFs require an alias or historical preservation rule. `AttendanceLateNotice.reference_number` uses company plus violation number and has an employee profile FK; it is a separate numbering scheme.
-- Profile IDs in foreign keys, payroll snapshots, audit history, and exported documents must stay traceable to the original codes. A production migration should preserve old-to-new aliases, update live lookups atomically, and verify company scope and uniqueness.
+- Existing profile codes occurred as text in 53 payroll items in the September 2026 FFI draft; these matching draft items were updated. Two starting-work acknowledgment references, `SWA-FFI-064303-20260830` and `SWA-FFI-306963-20260901`, were preserved as issued. The old profile codes remain searchable aliases. `AttendanceLateNotice.reference_number` uses company plus violation number and has an employee profile FK; it is a separate numbering scheme.
+- Profile IDs in foreign keys, paid payroll snapshots, audit history, and previously exported documents were retained. Draft payroll item pk 108 for Mohammed Afsar had no matching profile and was left unchanged for separate review.

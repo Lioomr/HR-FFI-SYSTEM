@@ -1,6 +1,6 @@
 # Employee and request ID numbering
 
-Status: local implementation and production mapping prepared, 2026-10-04. This document is the handoff for agents changing employee-facing identifiers. No production identifier has been changed by this work. Run the per-company mapping and reference checks before each migration.
+Status: deployed and applied in production on 2026-10-04. This document is the handoff for agents changing employee-facing identifiers. Merge commits `558ba0c3` and `45e99774` are deployed. The production migration applied 61 FFI, 6 Aseco Pro, and 8 Athroya employee codes; all 75 old codes have aliases. It also updated 53 FFI and 6 Aseco Pro draft payroll text rows, and assigned 64 FFI and 5 Athroya leave references. Existing database primary keys and paid payroll snapshots were retained.
 
 ## Agreed format
 
@@ -8,19 +8,28 @@ Status: local implementation and production mapping prepared, 2026-10-04. This d
 - FFI: `FFI-0001`, `FFI-0002`, then `FFI-0003` for MD Julfiker Ali. His saved hire date ties with archived Mohamed Sami Ibrahim Riad; the user selected MD Julfiker for `0003`.
 - Aseco Pro: `ASECO-0001`, `ASECO-0002`, then employees beginning at `ASECO-0003`.
 - Athroya: `ATH-0001`, `ATH-0002`, then employees beginning at `ATH-0003`.
-- Order each company's other profiles by the authoritative hire date, then database profile ID for ties. Include archived profiles and never reuse their numbers. Athroya profiles without a saved hire date go after dated profiles, ordered by profile creation time. The hire-date source for conflicting raw imports remains to be confirmed.
+- Order each company's other profiles by the saved structured `hire_date`, then database profile ID for ties. Include archived profiles and never reuse their numbers. Athroya profiles without a saved hire date go after dated profiles, ordered by profile creation time. The user confirmed the saved structured date as the ordering source, including the documented raw-import conflicts.
 - Leave request display reference: `LV-` + full employee ID + a two-digit per-employee request sequence, e.g. `LV-FFI-000101`. Define an overflow rule before any employee creates a 100th leave request; never truncate or reuse a reference. Keep numeric primary keys for routes, foreign keys, workflow, and authorization.
 - Search should accept current ID and historical aliases. Employee-linked references must retain the company prefix, because `0001` repeats across companies.
 
-## Production inventory and provisional `0003`
+## Production inventory and assigned `0003`
 
-| Company | Profiles | Provisional `0003` | Current ID | Saved hire date | Issue |
+| Company | Profiles | Assigned `0003` | Historical ID | Saved hire date | Issue |
 | --- | ---: | --- | --- | --- | --- |
 | FFI | 61 | MD Julfiker Ali | `FFI-504054` | 2023-05-01 | Explicit user tie-break; another profile has the same date. |
 | Aseco Pro | 6 | Nawal Ali Saad Alkhathami | `ASECO-050153` | 2025-04-12 | Mohamed Samy Al Ansari has raw 2023-05-01 but saved 2025-10-17. |
 | Athroya | 8 | Mahmoud Saber Helal Khalil | `ATH-931731` | 2025-04-10 | Yasser has raw 2025-01-11 but saved 2025-12-15; two profiles have no saved date. |
 
-FFI also has a raw/saved date conflict for Abdullah Abdulwahab Alshehri (raw 2024-01-08, saved 2024-08-01). Athroya has an archived profile with an `FFI-` code and no hire date. Verify these against source personnel records before finalizing every company mapping.
+FFI also has a raw/saved date conflict for Abdullah Abdulwahab Alshehri (raw 2024-01-08, saved 2024-08-01). Athroya had an archived profile with an `FFI-` code and no hire date; it now has `ATH-0010`, with the old code retained as an alias. The mapping used the saved structured dates confirmed by the user.
+
+## Production rollout record, 2026-10-04
+
+- FFI: 61 employee codes, 61 aliases, 53 matching draft payroll rows, and all 64 leave references applied. `FFI-0001` is Fathi, `FFI-0002` is Abdulaal, and `FFI-0003` is MD Julfiker Ali.
+- Aseco Pro: 6 employee codes, 6 aliases, and 6 draft payroll rows applied. `ASECO-0003` is Nawal Ali Saad Alkhathami. There were no leave requests to backfill.
+- Athroya: 8 employee codes, 8 aliases, and all 5 leave references applied. `ATH-0003` is Mahmoud Saber Helal Khalil. There were no matching draft payroll rows.
+- Verification found 75 unique current employee IDs, 75 distinct historical aliases, no malformed current IDs, and no missing or malformed leave references. The backend health endpoint returned HTTP 200; backend, database, and Redis containers were healthy after the host reboot.
+- One FFI draft payroll item, pk 108 for Mohammed Afsar, contains legacy text `FFI-924A8F` but has no matching employee profile. The migration deliberately left this unmatched draft row unchanged. Review the employee linkage before finalizing that payroll draft.
+- A verified compressed production database backup was saved at `/home/ubuntu/hrffi-backups/employee-id-2026-10-04-preapply-verified.sql.gz` before any employee-code writes.
 
 ## Migration boundaries for each company
 
