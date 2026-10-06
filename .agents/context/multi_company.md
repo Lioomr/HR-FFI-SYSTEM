@@ -57,6 +57,17 @@ Frontend stores `x-active-company-id` and sends it on every request. Company swi
 
 - **Never calculate employee-facing balances from all active `LeaveType` rows** - this leaks policy rows from other companies and duplicates seeded company-specific leave types such as `BUSINESS_TRIP`. Use the employee profile's company, prefer company-specific leave types, and fall back to global (`company = null`) types only when that company has no matching code.
 
+## Managers Across Companies
+
+- An employee has exactly one manager or none. A same-company manager is `EmployeeProfile.manager_profile`; a manager from another company is the one active `core.CrossCompanyManagerAssignment` (partial unique index on `employee`). Assignments never expire (no `end_at`) and carry every manager capability.
+- Write managers only through `employees.services.manager_relationships.set_employee_manager`. Read the displayed manager with `get_effective_manager_profile` (cross-company wins over a leftover direct link). Filter "in force" assignments with `current_cross_company_assignments()`.
+- Never expose the manager's company or any expiry to employees. The HR picker is `GET /api/employees/manager-options/`.
+- `manage.py consolidate_manager_relationships` (dry run; `--apply` writes) fixes legacy duplicates and direct+cross pairs, widens every assignment to the full capability set, and moves open contract ratings to the current manager.
+- Capabilities: `employees.view`, `leaves.approve`, `attendance.approve`, `loans.approve`, `assets.approve`, `announcements.manage`, `permission_requests.approve`, `contract_ratings.rate`. Adding one needs a core migration that widens the `ffi_validate_cross_company_manager_capabilities` trigger and grants it to active rows (see `core.0014`). Every cross-company read/decision names its capability; `manager_scope_q`/`has_manager_access`/`get_valid_manager_user`/`manager_approval_actor_source` without one never cross a company.
+- A manager reaches their own reports without `X-Organization-Scope-Id`: query the request/employee model unscoped and filter with `manager_scope_q(user, ..., cross_company_capability=...)` (it already limits same-company reports to the manager's own company), as the leave, loan, attendance, permission-request, contract-rating and manager-team views do. Show a manager's report through `ManagerTeamMemberSerializer` (no company fields) when the report is in another company.
+- Notifications to a manager from another company: use `notification_company_for_recipient` / `notification_company_id_for_recipient` (`in_app_notifications.services`) so the row and `?company=` link use the manager's own company; `notify_users_for_pending_status` does this and admits the requester's own cross-company manager.
+- Open contract ratings (manager response not submitted, not decided/cancelled) follow the employee's current manager: `set_employee_manager` and the importer re-point `manager_at_creation`.
+
 ## Frontend Company Switcher
 
 - Located in the main navigation layout

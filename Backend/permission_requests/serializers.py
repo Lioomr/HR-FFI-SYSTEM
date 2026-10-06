@@ -9,7 +9,7 @@ from rest_framework import serializers
 from admin_portal.models import SystemSettings
 from core.pdf_signers import display_name
 from core.services import get_workflow_snapshot_read_only, get_workflow_snapshots
-from employees.services.manager_relationships import get_valid_direct_manager_profile
+from employees.services.manager_relationships import PERMISSION_REQUEST_APPROVAL_CAPABILITY, get_valid_manager_profile
 
 from .labels import EXIT_TYPE_LABELS, STATUS_LABELS, profile_department, profile_employee_number, profile_job_title
 from .models import PENDING_STATUSES, REASON_MAX_LENGTH, PermissionRequest, PermissionRequestAttachment
@@ -416,7 +416,10 @@ class PermissionRequestDetailSerializer(PermissionRequestReadSerializer):
         read_only_fields = fields
 
     def get_direct_manager(self, obj):
-        manager_profile = get_valid_direct_manager_profile(obj.employee_profile)
+        # The employee's one manager (possibly from another company); name only, never a company.
+        manager_profile = get_valid_manager_profile(
+            obj.employee_profile, cross_company_capability=PERMISSION_REQUEST_APPROVAL_CAPABILITY
+        )
         if manager_profile is None:
             return None
         return {

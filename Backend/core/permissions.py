@@ -37,9 +37,14 @@ class IsHRManagerOrAdmin(BasePermission):
 
 
 class IsManager(BasePermission):
+    """Direct/delegated manager; a view's ``cross_company_capability`` also admits cross-company managers."""
+
     def has_permission(self, request, view):
         return request.user.is_authenticated and (
-            get_role(request.user) == "SystemAdmin" or has_manager_access(request.user)
+            get_role(request.user) == "SystemAdmin"
+            or has_manager_access(
+                request.user, cross_company_capability=getattr(view, "cross_company_capability", None)
+            )
         )
 
 

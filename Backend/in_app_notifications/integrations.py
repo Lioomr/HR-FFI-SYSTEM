@@ -9,7 +9,7 @@ from .dispatcher import dispatch_notification_channels
 from .i18n import notification_text, request_type_label
 from .i18n import status_label as status_label_text
 from .models import Notification
-from .services import create_notification, create_notifications
+from .services import create_notification, create_notifications, notification_company_id_for_recipient
 
 logger = logging.getLogger(__name__)
 
@@ -88,22 +88,69 @@ def _company_for_request(request_type: str, request_id):
     return None
 
 
-def _company_scoped_recipients(users, company_id):
-    """Fail closed unless each recipient is authorized for the request company."""
+# Request types whose manager stage a manager from another company can decide,
+# with the employee-profile path on the request row.
+_EMPLOYEE_PROFILE_FOR_REQUEST = {
+    "Leave Request": ("leaves.LeaveRequest", ("employee_profile_id", "employee__employee_profile__id")),
+    "Loan Request": ("loans.LoanRequest", ("employee_profile_id",)),
+    "Permission Request": ("permission_requests.PermissionRequest", ("employee_profile_id",)),
+    "Exit Permission": ("permission_requests.PermissionRequest", ("employee_profile_id",)),
+    "Late Permission": ("permission_requests.PermissionRequest", ("employee_profile_id",)),
+    "During Shift Permission": ("permission_requests.PermissionRequest", ("employee_profile_id",)),
+    "Asset Return Request": ("assets.AssetReturnRequest", ("employee_id",)),
+    "Attendance Request": ("attendance.AttendanceRecord", ("employee_profile_id",)),
+    "Attendance Correction": ("attendance.AttendanceCorrectionRequest", ("employee_profile_id",)),
+}
+
+
+def _cross_company_manager_user_ids(request_type: str, request_id) -> set[int]:
+    """The requester's current manager from another company, when there is one."""
+    config = _EMPLOYEE_PROFILE_FOR_REQUEST.get(request_type)
+    if config is None:
+        return set()
+    from django.apps import apps
+
+    from employees.services.manager_relationships import current_cross_company_assignments
+
+    model_label, fields = config
+    try:
+        row = apps.get_model(model_label).objects.filter(pk=request_id).values_list(*fields).first()
+    except Exception:
+        logger.exception(
+            "notification_manager_resolution_failed",
+            extra={"request_type": request_type, "request_id": str(request_id)},
+        )
+        return set()
+    profile_id = next((value for value in (row or ()) if value), None)
+    if profile_id is None:
+        return set()
+    return set(
+        current_cross_company_assignments()
+        .filter(employee_id=profile_id, manager_profile__user__is_active=True)
+        .values_list("manager_profile__user_id", flat=True)
+    )
+
+
+def _company_scoped_recipients(users, company_id, *, request_type: str = "", request_id=None):
+    """Fail closed unless each recipient is authorized for the request company.
+
+    The requester's own manager from another company is also authorized: they
+    decide the manager stage without access to the requester's company.
+    """
     user_ids = [getattr(user, "pk", None) for user in users]
     user_ids = [user_id for user_id in user_ids if user_id]
     if not company_id or not user_ids:
         return []
-    return list(
-        get_user_model()
-        .objects.filter(id__in=user_ids, is_active=True)
-        .filter(
-            Q(employee_profile__company_id=company_id)
-            | Q(organization_access_entries__organization_id=company_id)
-            | Q(groups__name="SystemAdmin")
-        )
-        .distinct()
+    authorized = (
+        Q(employee_profile__company_id=company_id)
+        | Q(organization_access_entries__organization_id=company_id)
+        | Q(groups__name="SystemAdmin")
     )
+    if request_type and request_id is not None:
+        manager_ids = _cross_company_manager_user_ids(request_type, request_id) & set(user_ids)
+        if manager_ids:
+            authorized |= Q(id__in=manager_ids)
+    return list(get_user_model().objects.filter(id__in=user_ids, is_active=True).filter(authorized).distinct())
 
 
 def safe_create_notification(**kwargs):
@@ -130,7 +177,7 @@ def notify_pending_approvers(
 ):
     users = list(users)
     company_id = _company_for_request(request_type, request_id) if any(getattr(user, "pk", None) for user in users) else None
-    users = _company_scoped_recipients(users, company_id)
+    users = _company_scoped_recipients(users, company_id, request_type=request_type, request_id=request_id)
     from core.services.pending_approval_email import _build_action_url, send_pending_approval_email
 
     # Workflows often pass the raw status code; people only ever see the labels.
@@ -149,7 +196,8 @@ def notify_pending_approvers(
         results.append(
             dispatch_notification_channels(
                 recipient=user,
-                company_id=company_id,
+                # A manager from another company opens the request from their own company.
+                company_id=notification_company_id_for_recipient(user, company_id),
                 event_key="approval.pending",
                 title=text["title"],
                 message=text["message"],

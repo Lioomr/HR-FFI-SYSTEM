@@ -652,6 +652,7 @@ class ManagerAttendanceViewSet(viewsets.ReadOnlyModelViewSet):
 
     serializer_class = AttendanceRecordSerializer
     permission_classes = [IsAuthenticated, IsManager]
+    cross_company_capability = "attendance.approve"
     filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
     filterset_fields = ["status"]
     ordering_fields = ["date", "created_at"]

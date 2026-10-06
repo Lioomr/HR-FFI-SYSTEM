@@ -134,23 +134,22 @@ def get_current_scope_ids_for_user(user) -> set[int]:
 
     delegation_scope_ids = get_active_employee_read_scope_ids(user)
     from core.models import CrossCompanyManagerAssignment
+    from employees.services.manager_relationships import current_cross_company_assignments
 
-    now = timezone.now()
-    assignment_scope_ids = CrossCompanyManagerAssignment.objects.filter(
-        manager_profile__user=user,
-        manager_profile__is_archived=False,
-        manager_profile__employment_status=EmployeeProfile.EmploymentStatus.ACTIVE,
-        manager_profile__user__is_active=True,
-        employee__is_archived=False,
-        employee__employment_status=EmployeeProfile.EmploymentStatus.ACTIVE,
-        employee__user__is_active=True,
-        is_active=True,
-        revoked_at__isnull=True,
-        start_at__lte=now,
-        end_at__gte=now,
-        scope__is_active=True,
-        capabilities__contains=[CrossCompanyManagerAssignment.Capability.EMPLOYEE_VIEW],
-    ).values_list("scope_id", flat=True)
+    assignment_scope_ids = (
+        current_cross_company_assignments()
+        .filter(
+            manager_profile__user=user,
+            manager_profile__is_archived=False,
+            manager_profile__employment_status=EmployeeProfile.EmploymentStatus.ACTIVE,
+            manager_profile__user__is_active=True,
+            employee__is_archived=False,
+            employee__employment_status=EmployeeProfile.EmploymentStatus.ACTIVE,
+            employee__user__is_active=True,
+            capabilities__contains=[CrossCompanyManagerAssignment.Capability.EMPLOYEE_VIEW],
+        )
+        .values_list("scope_id", flat=True)
+    )
     return delegation_scope_ids | set(assignment_scope_ids)
 
 

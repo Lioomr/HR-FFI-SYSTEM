@@ -10,7 +10,7 @@ from django.db import transaction
 from django.db.models import Count, Q, prefetch_related_objects
 from django.utils import timezone
 from rest_framework import status
-from rest_framework.exceptions import NotFound, PermissionDenied
+from rest_framework.exceptions import NotFound, PermissionDenied, ValidationError
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
@@ -1057,20 +1057,32 @@ class CrossCompanyManagerAssignmentListCreateView(APIView):
             raise PermissionDenied("Only HRManager or SystemAdmin can create cross-company manager assignments.")
         serializer = CrossCompanyManagerAssignmentSerializer(data=request.data, context={"request": request})
         serializer.is_valid(raise_exception=True)
-        with transaction.atomic():
-            assignment = serializer.save(created_by=request.user)
-            audit(
-                request,
-                "cross_company_manager_assignment_created",
-                entity="cross_company_manager_assignment",
-                entity_id=assignment.id,
-                metadata={
-                    "employee_profile_id": assignment.employee_id,
-                    "manager_profile_id": assignment.manager_profile_id,
-                    "scope_id": assignment.scope_id,
-                },
-            )
-        return success(CrossCompanyManagerAssignmentSerializer(assignment).data, status=201)
+        change = _set_cross_company_manager(request, serializer.validated_data)
+        return success(
+            CrossCompanyManagerAssignmentSerializer(change.assignment).data,
+            status=201 if change.assignment_created else 200,
+        )
+
+
+def _set_cross_company_manager(request, validated_data, *, employee=None):
+    """Route an admin assignment write through the one-manager service."""
+    from django.core.exceptions import ValidationError as DjangoValidationError
+
+    from employees.services.manager_relationships import set_employee_manager
+
+    try:
+        return set_employee_manager(
+            employee or validated_data["employee"],
+            validated_data["manager_profile"],
+            actor=request.user,
+            request=request,
+            source="cross_company_assignment_api",
+            scope=validated_data.get("scope"),
+            reason=validated_data.get("reason", ""),
+        )
+    except DjangoValidationError as exc:
+        detail = exc.message_dict if hasattr(exc, "error_dict") else {"manager_profile_id": exc.messages}
+        raise ValidationError(detail) from exc
 
 
 class CrossCompanyManagerAssignmentDetailView(APIView):
@@ -1100,33 +1112,49 @@ class CrossCompanyManagerAssignmentDetailView(APIView):
         if get_role(request.user) not in {"HRManager", "SystemAdmin"}:
             raise PermissionDenied("Only HRManager or SystemAdmin can change cross-company manager assignments.")
         assignment = self._get_assignment(request, pk)
+        if not assignment.is_active or assignment.revoked_at is not None:
+            raise ValidationError({"non_field_errors": ["A revoked assignment cannot be changed."]})
         serializer = CrossCompanyManagerAssignmentSerializer(
             assignment, data=request.data, partial=True, context={"request": request}
         )
         serializer.is_valid(raise_exception=True)
-        updated_assignment = serializer.save()
-        audit(
-            request,
-            "cross_company_manager_assignment_updated",
-            entity="cross_company_manager_assignment",
-            entity_id=updated_assignment.id,
-        )
+        data = serializer.validated_data
+        if "manager_profile" in data or "scope" in data:
+            change = _set_cross_company_manager(
+                request,
+                {
+                    "manager_profile": data.get("manager_profile", assignment.manager_profile),
+                    "scope": data.get("scope", assignment.scope),
+                    "reason": data.get("reason", ""),
+                },
+                employee=assignment.employee,
+            )
+            updated_assignment = change.assignment
+        else:
+            updated_assignment = serializer.save()
+            audit(
+                request,
+                "cross_company_manager_assignment_updated",
+                entity="cross_company_manager_assignment",
+                entity_id=updated_assignment.id,
+            )
         return success(CrossCompanyManagerAssignmentSerializer(updated_assignment).data)
 
     def delete(self, request, pk):
         if get_role(request.user) not in {"HRManager", "SystemAdmin"}:
             raise PermissionDenied("Only HRManager or SystemAdmin can revoke cross-company manager assignments.")
         assignment = self._get_assignment(request, pk)
-        assignment.is_active = False
-        assignment.revoked_at = timezone.now()
-        assignment.revoked_by = request.user
-        assignment.save(update_fields=["is_active", "revoked_at", "revoked_by", "updated_at"])
-        audit(
-            request,
-            "cross_company_manager_assignment_revoked",
-            entity="cross_company_manager_assignment",
-            entity_id=assignment.id,
-        )
+        if assignment.is_active and assignment.revoked_at is None:
+            from employees.services.manager_relationships import set_employee_manager
+
+            # Revoking the assignment leaves the employee without a manager.
+            set_employee_manager(
+                assignment.employee,
+                None,
+                actor=request.user,
+                request=request,
+                source="cross_company_assignment_api",
+            )
         return success(message="Cross-company manager assignment revoked.")
 
 

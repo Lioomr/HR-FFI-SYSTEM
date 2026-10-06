@@ -11,11 +11,9 @@ import { notifyError, notifySuccess } from "../../../utils/notify";
 import { isForbidden } from "../../../services/api/httpErrors";
 import {
   getEmployee,
-  listEmployees,
   updateEmployee,
 } from "../../../services/api/employeesApi";
 import type { CreateEmployeeDto } from "../../../services/api/employeesApi";
-import type { Employee } from "../../../services/api/employeesApi";
 import { listDepartments } from "../../../services/api/departmentsApi";
 import type { Department } from "../../../services/api/departmentsApi";
 import { listPositions } from "../../../services/api/positionsApi";
@@ -26,12 +24,8 @@ import { listSponsors } from "../../../services/api/sponsorsApi";
 import type { Sponsor } from "../../../services/api/sponsorsApi";
 import { toPayload, fromEmployeeToFormValues } from "./employeeFormMapper";
 import EmployeeForm from "./EmployeeForm";
-import { localizeManagerAssignmentError } from "./managerAssignmentError";
 import { useI18n } from "../../../i18n/useI18n";
 import { useAuthStore } from "../../../auth/authStore";
-import dayjs from "dayjs";
-import { createCrossCompanyManagerAssignment, listOrganizationScopes } from "../../../services/api/managerAssignmentsApi";
-import type { OrganizationScope } from "../../../services/api/managerAssignmentsApi";
 
 export default function EditEmployeePage() {
   const { t } = useI18n();
@@ -58,14 +52,13 @@ export default function EditEmployeePage() {
   const [managerAssignmentError, setManagerAssignmentError] = useState<
     string | null
   >(null);
+  const [managerLabel, setManagerLabel] = useState<string | null>(null);
 
   // Reference data
   const [departments, setDepartments] = useState<Department[]>([]);
   const [positions, setPositions] = useState<Position[]>([]);
   const [taskGroups, setTaskGroups] = useState<TaskGroup[]>([]);
   const [sponsors, setSponsors] = useState<Sponsor[]>([]);
-  const [employees, setEmployees] = useState<Employee[]>([]);
-  const [organizationScopes, setOrganizationScopes] = useState<OrganizationScope[]>([]);
 
   /**
    * Load employee data and reference data
@@ -85,15 +78,13 @@ export default function EditEmployeePage() {
 
       try {
         // Fetch employee and reference data in parallel
-        const [employeeRes, deptRes, posRes, tgRes, sponsorRes, employeesRes, scopesRes] =
+        const [employeeRes, deptRes, posRes, tgRes, sponsorRes] =
           await Promise.all([
             getEmployee(id),
             listDepartments(),
             listPositions(),
             listTaskGroups(),
             listSponsors(),
-            listEmployees({ scope: "all", page: 1, page_size: 1000 }),
-            listOrganizationScopes(),
           ]);
 
         // Check for errors
@@ -111,9 +102,7 @@ export default function EditEmployeePage() {
           isApiError(deptRes) ||
           isApiError(posRes) ||
           isApiError(tgRes) ||
-          isApiError(sponsorRes) ||
-          isApiError(employeesRes) ||
-          isApiError(scopesRes)
+          isApiError(sponsorRes)
         ) {
           notifyError(t("hr.employees.fetchRefDataFailed"));
           setLoading(false);
@@ -125,15 +114,10 @@ export default function EditEmployeePage() {
         setPositions(Array.isArray(posRes.data) ? posRes.data : []);
         setTaskGroups(Array.isArray(tgRes.data) ? tgRes.data : []);
         setSponsors(Array.isArray(sponsorRes.data) ? sponsorRes.data : []);
-        const managerCandidates =
-          (employeesRes.data as any)?.results ||
-          (employeesRes.data as any)?.items ||
-          [];
-        setEmployees(Array.isArray(managerCandidates) ? managerCandidates : []);
-        setOrganizationScopes(scopesRes.data?.items ?? []);
 
         // Prefill form with employee data
         setEmployeeCompanyId(employeeRes.data.company_id ?? null);
+        setManagerLabel(employeeRes.data.manager_profile_name ?? null);
         const formValues = fromEmployeeToFormValues(employeeRes.data);
         form.setFieldsValue(formValues);
 
@@ -186,10 +170,9 @@ export default function EditEmployeePage() {
 
       // Transform form values to API payload
       const payload = toPayload(values) as CreateEmployeeDto;
-      const crossCompany = values.manager_profile_id && values.cross_company_scope_id && values.cross_company_end_at;
-      if (crossCompany) delete (payload as any).manager_profile_id;
-      delete (payload as any).cross_company_scope_id;
-      delete (payload as any).cross_company_end_at;
+      // toPayload drops nulls; a cleared picker must reach the API as null so
+      // the employee's manager is actually removed.
+      payload.manager_profile_id = values.manager_profile_id ?? null;
 
       setSubmitting(true);
       const response = await updateEmployee(id, payload, { scope: "all" });
@@ -205,45 +188,7 @@ export default function EditEmployeePage() {
         return;
       }
 
-      if (crossCompany) {
-        try {
-          await createCrossCompanyManagerAssignment({
-            employee_id: Number(id),
-            manager_profile_id: Number(values.manager_profile_id),
-            scope_id: Number(values.cross_company_scope_id),
-            start_at: new Date().toISOString(),
-            end_at: dayjs(values.cross_company_end_at).toISOString(),
-            capabilities: ["employees.view", "leaves.approve", "attendance.approve"],
-          });
-        } catch (assignmentError: any) {
-          if (isForbidden(assignmentError)) throw assignmentError;
-
-          apply422ToForm(form, assignmentError);
-          const fieldMessage = localizeManagerAssignmentError(
-            getFieldApiError(assignmentError, "manager_profile_id") ??
-              getFieldApiError(assignmentError, "scope_id") ??
-              getFieldApiError(assignmentError, "end_at") ??
-              getFieldApiError(assignmentError, "non_field_errors") ??
-              null,
-            t,
-          );
-          setManagerAssignmentError(fieldMessage ?? null);
-          notifyError(
-            fieldMessage
-              ? `${t("hr.employees.crossCompanyAssignmentFailed")} ${fieldMessage}`
-              : t("hr.employees.crossCompanyAssignmentFailed"),
-          );
-          setSubmitting(false);
-          return;
-        }
-      }
-
-      // Success
-      notifySuccess(
-        crossCompany
-          ? t("hr.employees.crossCompanyAssignmentSaved")
-          : t("hr.employees.updateSuccess"),
-      );
+      notifySuccess(t("hr.employees.updateSuccess"));
       navigate(`/hr/employees/${id}`);
     } catch (err: any) {
       setSubmitting(false);
@@ -329,19 +274,17 @@ export default function EditEmployeePage() {
       />
 
       <Card style={{ borderRadius: 16 }}>
-          <EmployeeForm
+        <EmployeeForm
           form={form}
           currentEmployeeId={id}
+          managerLabel={managerLabel}
           managerAssignmentError={managerAssignmentError}
           refOptions={{
             departments,
             positions,
             taskGroups,
             sponsors,
-            employees,
-            organizationScopes,
           }}
-          employeeCompanyId={employeeCompanyId}
         />
       </Card>
     </div>

@@ -9,7 +9,7 @@ from core.pagination import StandardPagination
 from core.permissions import is_department_ceo_approver_user, is_hr_workflow_approver_user
 from core.responses import error, success
 from core.services.request_references import public_reference_for
-from employees.services.manager_relationships import manager_scope_q
+from employees.services.manager_relationships import CONTRACT_RATING_CAPABILITY, manager_scope_q
 from organization.services import ensure_company_write_allowed, filter_queryset_by_company_scope
 
 from . import services
@@ -32,31 +32,36 @@ class ContractRatingViewSet(viewsets.ReadOnlyModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
-        qs = filter_queryset_by_company_scope(
-            ContractRating.objects.select_related(
-                "employee_profile",
-                "employee_profile__manager_profile__user",
-                "contract_decision",
-                "manager_response__submitted_by",
-                "employee_response__submitted_by",
-                "company",
-                "manager_at_creation",
-                "hr_gate_decided_by",
-                "hr_comment_requested_by",
-                "hr_comment_by",
-                "ceo_decided_by",
-                "employee_notified_of_termination_by",
-            ),
-            self.request,
+        base = ContractRating.objects.select_related(
+            "employee_profile",
+            "employee_profile__manager_profile__user",
+            "contract_decision",
+            "manager_response__submitted_by",
+            "employee_response__submitted_by",
+            "company",
+            "manager_at_creation",
+            "hr_gate_decided_by",
+            "hr_comment_requested_by",
+            "hr_comment_by",
+            "ceo_decided_by",
+            "employee_notified_of_termination_by",
         )
-        scope = (Q(employee_profile__user=user) | manager_scope_q(user, employee_prefix="employee_profile__")) & Q(
-            rating_mode=ContractRating.RatingMode.RATE
+        qs = filter_queryset_by_company_scope(base, self.request)
+        # A manager rates their reports in any company: same-company reports only
+        # inside the manager's own company, another company's report only through
+        # the manager's current assignment carrying ``contract_ratings.rate``.
+        managed = base.filter(
+            manager_scope_q(
+                user, employee_prefix="employee_profile__", cross_company_capability=CONTRACT_RATING_CAPABILITY
+            ),
+            rating_mode=ContractRating.RatingMode.RATE,
         )
         if is_hr_workflow_approver_user(user):
-            return qs
+            return (qs | managed).distinct()
+        scope = Q(employee_profile__user=user, rating_mode=ContractRating.RatingMode.RATE)
         if is_department_ceo_approver_user(user):
             scope |= Q(status="PENDING_CEO") | Q(ceo_decided_by=user)
-        return qs.filter(scope).distinct()
+        return (qs.filter(scope) | managed).distinct()
 
     def list(self, request, *args, **kwargs):
         qs = self.get_queryset()

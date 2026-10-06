@@ -755,20 +755,6 @@ export default function ViewEmployeePage() {
               employee.manager_profile_name || employee.manager_name,
             )}
           />
-          {(employee.cross_company_managers ?? []).length > 0 && (
-            <StatItem
-              icon={<ApartmentOutlined />}
-              label={t("employees.view.crossCompanyManagers")}
-              value={(employee.cross_company_managers ?? []).map((item) => (
-                <div key={item.id}>
-                  {item.manager_name} ({item.manager_company_name}){" "}
-                  {t("employees.view.crossCompanyManagerUntil", {
-                    date: formatDate(item.end_at),
-                  })}
-                </div>
-              ))}
-            />
-          )}
           <StatItem
             icon={<SafetyCertificateOutlined />}
             label={t("employees.view.documentsStatus")}

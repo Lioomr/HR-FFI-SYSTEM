@@ -164,6 +164,14 @@ class DelegationRuleSerializer(serializers.ModelSerializer):
 
 
 class CrossCompanyManagerAssignmentSerializer(serializers.ModelSerializer):
+    """Admin view of an employee's cross-company manager.
+
+    Writes go through ``set_employee_manager``: an employee keeps exactly one
+    manager, the assignment never expires, and it always carries every manager
+    capability. ``scope_id`` is optional; the most specific active scope that
+    contains both companies is used (or created) when it is omitted.
+    """
+
     employee_id = serializers.PrimaryKeyRelatedField(
         source="employee", queryset=EmployeeProfile.objects.none(), write_only=True
     )
@@ -171,24 +179,21 @@ class CrossCompanyManagerAssignmentSerializer(serializers.ModelSerializer):
         source="manager_profile", queryset=EmployeeProfile.objects.none(), write_only=True
     )
     scope_id = serializers.PrimaryKeyRelatedField(
-        source="scope", queryset=OrganizationScope.objects.filter(is_active=True), write_only=True
+        source="scope", queryset=OrganizationScope.objects.filter(is_active=True), write_only=True, required=False
     )
     employee = serializers.SerializerMethodField(read_only=True)
     manager_profile = serializers.SerializerMethodField(read_only=True)
     scope = serializers.SerializerMethodField(read_only=True)
-    capabilities = serializers.ListField(
-        child=serializers.ChoiceField(choices=CrossCompanyManagerAssignment.Capability.values),
-        allow_empty=False,
-        required=False,
-    )
 
     class Meta:
         model = CrossCompanyManagerAssignment
         fields = [
             "id", "employee", "employee_id", "manager_profile", "manager_profile_id", "scope", "scope_id",
-            "start_at", "end_at", "capabilities", "reason", "is_active", "revoked_at", "revoked_by", "created_by", "created_at", "updated_at",
+            "start_at", "capabilities", "reason", "is_active", "revoked_at", "revoked_by", "created_by", "created_at", "updated_at",
         ]
-        read_only_fields = ["id", "revoked_at", "revoked_by", "created_by", "created_at", "updated_at"]
+        read_only_fields = [
+            "id", "start_at", "capabilities", "is_active", "revoked_at", "revoked_by", "created_by", "created_at", "updated_at",
+        ]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -198,14 +203,14 @@ class CrossCompanyManagerAssignmentSerializer(serializers.ModelSerializer):
             user__is_active=True,
             company__is_active=True,
         )
-        self.fields["employee_id"].queryset = active_profiles
-        self.fields["manager_profile_id"].queryset = active_profiles
+        employee_profiles = EmployeeProfile.objects.filter(is_archived=False, company__is_active=True)
         request = self.context.get("request")
         if request and get_role(request.user) == "HRManager" and not user_has_all_company_access(request.user):
             accessible_company_ids = get_user_accessible_company_ids(request.user)
-            scoped_profiles = active_profiles.filter(company_id__in=accessible_company_ids)
-            self.fields["employee_id"].queryset = scoped_profiles
-            self.fields["manager_profile_id"].queryset = scoped_profiles
+            active_profiles = active_profiles.filter(company_id__in=accessible_company_ids)
+            employee_profiles = employee_profiles.filter(company_id__in=accessible_company_ids)
+        self.fields["employee_id"].queryset = employee_profiles
+        self.fields["manager_profile_id"].queryset = active_profiles
 
     @staticmethod
     def _profile_data(profile):
@@ -221,20 +226,24 @@ class CrossCompanyManagerAssignmentSerializer(serializers.ModelSerializer):
         return {"id": obj.scope_id, "code": obj.scope.code, "name": obj.scope.name}
 
     def validate(self, attrs):
+        from django.core.exceptions import ValidationError as DjangoValidationError
+
         from employees.services.manager_relationships import validate_cross_company_manager_assignment
 
         instance = getattr(self, "instance", None)
+        if instance is not None and "employee" in attrs and attrs["employee"].pk != instance.employee_id:
+            raise serializers.ValidationError({"employee_id": "The employee of an assignment cannot be changed."})
         employee = attrs.get("employee") or getattr(instance, "employee", None)
         manager_profile = attrs.get("manager_profile") or getattr(instance, "manager_profile", None)
-        scope = attrs.get("scope") or getattr(instance, "scope", None)
-        start_at = attrs.get("start_at") or getattr(instance, "start_at", None)
-        end_at = attrs.get("end_at") or getattr(instance, "end_at", None)
-        validate_cross_company_manager_assignment(
-            employee, manager_profile, scope=scope, start_at=start_at, end_at=end_at, assignment=instance
-        )
+        scope = attrs.get("scope")
+        try:
+            validate_cross_company_manager_assignment(employee, manager_profile, scope=scope)
+        except DjangoValidationError as exc:
+            detail = exc.message_dict if hasattr(exc, "error_dict") else {"manager_profile_id": exc.messages}
+            raise serializers.ValidationError(detail) from exc
         request = self.context.get("request")
-        if request and get_role(request.user) == "HRManager" and not user_has_all_company_access(request.user):
-            scope_company_ids = set(scope.memberships.values_list("company_id", flat=True)) if scope else set()
+        if scope and request and get_role(request.user) == "HRManager" and not user_has_all_company_access(request.user):
+            scope_company_ids = set(scope.memberships.values_list("company_id", flat=True))
             if not scope_company_ids.issubset(get_user_accessible_company_ids(request.user)):
                 raise serializers.ValidationError({"scope_id": "The approved scope is outside your organization access."})
         return attrs

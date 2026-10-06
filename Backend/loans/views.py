@@ -20,7 +20,6 @@ from core.responses import error, success
 from core.services import (
     get_ceo_approver_users,
     get_cfo_approver_users,
-    get_direct_manager_user,
     get_disbursement_approver_users,
     get_hr_approver_users,
     notify_profile_request_status_whatsapp,
@@ -28,7 +27,7 @@ from core.services import (
     send_request_submission_email,
 )
 from core.services.request_references import public_reference_for
-from employees.services.manager_relationships import manager_scope_q
+from employees.services.manager_relationships import get_valid_manager_user, manager_scope_q
 from organization.services import filter_queryset_by_accessible_companies, filter_queryset_by_company_scope
 
 from .models import LoanRequest
@@ -648,8 +647,10 @@ class LoanRequestViewSet(viewsets.ModelViewSet):
             requester_name = request.user.full_name or request.user.email
             details = [f"Loan Type: {instance.loan_type}", f"Requested Amount: {instance.requested_amount}"]
             if instance.status == LoanRequest.RequestStatus.PENDING_MANAGER:
-                manager = get_direct_manager_user(request.user)
-                if manager:
+                manager = get_valid_manager_user(
+                    getattr(request.user, "employee_profile", None), cross_company_capability="loans.approve"
+                )
+                if manager and manager.email:
                     notify_users_for_pending_status(
                         users=[manager],
                         request_type="Loan Request",

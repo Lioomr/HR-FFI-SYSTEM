@@ -34,7 +34,11 @@ from core.services import (
 from core.services.request_references import next_reference_for_profile
 from core.services.workflow_engine import begin_recorded_transition, record_workflow_transition
 from employees.models import EmployeeProfile
-from employees.services.manager_relationships import get_valid_manager_user, manager_approval_actor_source
+from employees.services.manager_relationships import (
+    PERMISSION_REQUEST_APPROVAL_CAPABILITY,
+    get_valid_manager_user,
+    manager_approval_actor_source,
+)
 
 from .labels import EXIT_TYPE_LABELS, STATUS_LABELS
 from .models import ACTIVE_STATUSES, PENDING_STATUSES, PermissionRequest, PermissionRequestAttachment
@@ -58,9 +62,8 @@ MANAGER_ACTION_PATH = "/manager/permission-requests/{id}"
 HR_ACTION_PATH = "/hr/permission-requests/{id}"
 
 INTERVAL_CONFLICT_MESSAGE = "An active Exit or During Shift Permission already overlaps this time."
-NO_APPROVER_MESSAGE = (
-    "No eligible approver is available for this permission request. Ask HR to assign your direct manager."
-)
+NO_APPROVER_MESSAGE = "No eligible approver is available for this permission request. Ask HR to assign your manager."
+MANAGER_STAGE_ACTOR_MESSAGE = "Only the requester's manager or their delegate can decide the manager stage."
 SELF_DECISION_MESSAGE = "You cannot approve or reject your own permission request."
 
 
@@ -107,13 +110,14 @@ def eligible_hr_approvers(company_id, *, exclude_user_id=None):
 def resolve_initial_status(user, profile: EmployeeProfile):
     """Return ``(status, manager_user)`` for a new request, or refuse an un-actionable one.
 
-    The direct manager comes from the employee relationship service, which already
-    rejects a self-assigned, archived, inactive, or cross-company manager. Without a
-    valid manager the request starts at HR, provided an HR approver other than the
-    requester exists; otherwise nobody could ever decide it.
+    The manager comes from the employee relationship service: the employee's
+    manager from another company when there is one, otherwise the valid
+    same-company manager. Without a valid manager the request starts at HR,
+    provided an HR approver other than the requester exists; otherwise nobody
+    could ever decide it.
     """
 
-    manager_user = get_valid_manager_user(profile)
+    manager_user = get_valid_manager_user(profile, cross_company_capability=PERMISSION_REQUEST_APPROVAL_CAPABILITY)
     if manager_user is not None and manager_user.pk != user.pk:
         return Status.PENDING_MANAGER, manager_user
     if eligible_hr_approvers(profile.company_id, exclude_user_id=user.pk).exists():
@@ -140,7 +144,11 @@ def can_actor_decide(
     if not actor or not getattr(actor, "is_authenticated", False) or actor.pk == instance.employee_id:
         return False
     if instance.status == Status.PENDING_MANAGER:
-        return bool(manager_approval_actor_source(actor, instance.employee_profile))
+        return bool(
+            manager_approval_actor_source(
+                actor, instance.employee_profile, capability=PERMISSION_REQUEST_APPROVAL_CAPABILITY
+            )
+        )
     if instance.status == Status.PENDING_HR:
         return is_hr_approver(actor)
     return False
@@ -379,11 +387,11 @@ def apply_manager_decision(instance: PermissionRequest, *, actor, decision: str,
         locked = _lock(instance)
         if locked.employee_id == actor.pk:
             raise PermissionRequestError(SELF_DECISION_MESSAGE, status=403)
-        actor_source = manager_approval_actor_source(actor, locked.employee_profile)
+        actor_source = manager_approval_actor_source(
+            actor, locked.employee_profile, capability=PERMISSION_REQUEST_APPROVAL_CAPABILITY
+        )
         if not actor_source:
-            raise PermissionRequestError(
-                "Only the requester's direct or delegated manager can decide the manager stage.", status=403
-            )
+            raise PermissionRequestError(MANAGER_STAGE_ACTOR_MESSAGE, status=403)
         if locked.status != Status.PENDING_MANAGER:
             raise PermissionRequestError("This permission request is no longer pending manager approval.")
 

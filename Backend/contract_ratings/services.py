@@ -24,7 +24,13 @@ from employees.contract_expiry import (
     notify_hr_renewal_settlement_review,
 )
 from employees.models import ContractDecision, EmployeeProfile
-from employees.services.manager_relationships import get_valid_direct_manager_user, manager_approval_actor_source
+from employees.services.manager_relationships import (
+    CONTRACT_RATING_CAPABILITY,
+    active_cross_company_manager_assignments_for_employee,
+    get_valid_direct_manager_user,
+    get_valid_manager_user,
+    manager_approval_actor_source,
+)
 
 from .models import ContractRating, ContractRatingResponse
 from .permissions import require_company_access
@@ -33,7 +39,14 @@ from .scoring import build_comparison_summary, compute_average_and_grade
 S = ContractRating.Status
 R = ContractRatingResponse
 RESPONSE_STATES = {S.PENDING_RESPONSES, S.WAITING_MANAGER, S.WAITING_EMPLOYEE}
+FINAL_STATES = {S.DECIDED, S.CANCELLED}
+MISSING_RATER_MESSAGE = "A valid manager or linked employee account is missing."
 logger = logging.getLogger(__name__)
+
+
+def current_rater_manager(profile):
+    """The manager who rates ``profile`` now: a cross-company manager wins over a direct one."""
+    return get_valid_manager_user(profile, cross_company_capability=CONTRACT_RATING_CAPABILITY)
 
 
 def _locked(rating_id):
@@ -122,7 +135,7 @@ def ensure_contract_rating(profile, *, actor=None, only_if_due_on=None):
         defaults={
             "employee_profile": profile,
             "company_id": profile.company_id,
-            "manager_at_creation": get_valid_direct_manager_user(profile),
+            "manager_at_creation": current_rater_manager(profile),
             "department_snapshot": profile.department_name_en or profile.department,
             "section_snapshot": str(profile.task_group_ref or ""),
             "job_title_snapshot": profile.job_title_en or profile.job_title,
@@ -181,8 +194,8 @@ def submit_hr_gate_decision(rating_id, *, actor, rating_mode):
     )
     if mode == ContractRating.RatingMode.RATE:
         _notify(rating, "opened", ["manager", "employee"])
-        if not get_valid_direct_manager_user(profile) or not profile.user_id:
-            _notify(rating, "missing_rater", ["hr"], "A valid manager or linked employee account is missing.")
+        if not current_rater_manager(profile) or not profile.user_id:
+            _notify(rating, "missing_rater", ["hr"], MISSING_RATER_MESSAGE)
     else:
         _notify(rating, "sent_directly_to_ceo", ["ceo"])
     return rating
@@ -205,13 +218,18 @@ def _recompute_status(rating):
 
 def _submit_response(rating_id, actor, data, rater_type):
     rating, profile = _locked(rating_id)
-    require_company_access(actor, rating)
     manager = rater_type == R.RaterType.MANAGER
     if manager:
-        if not manager_approval_actor_source(actor, profile):
+        actor_source = manager_approval_actor_source(actor, profile, capability=CONTRACT_RATING_CAPABILITY)
+        if not actor_source:
             raise PermissionDenied("Only the current manager or their delegate may submit.")
-    elif profile.user_id != actor.id:
-        raise PermissionDenied("Only the rated employee may submit.")
+        # The manager assignment itself authorizes a manager from another company.
+        if actor_source != "cross_company_assignment":
+            require_company_access(actor, rating)
+    else:
+        require_company_access(actor, rating)
+        if profile.user_id != actor.id:
+            raise PermissionDenied("Only the rated employee may submit.")
     if rating.rating_mode != ContractRating.RatingMode.RATE:
         raise ValueError("This rating was not routed for manager and employee evaluation.")
     if rating.status not in RESPONSE_STATES:
@@ -606,3 +624,117 @@ def acknowledge_termination_notice(rating_id, *, actor):
     )
     _record(rating, "contract_rating_termination_acknowledged", actor, start=start)
     return rating
+
+
+# ---------------------------------------------------------------------------
+# Manager changes: open ratings follow the employee's current manager
+# ---------------------------------------------------------------------------
+
+
+def open_ratings_awaiting_manager(profile_ids=None):
+    """Ratings not finalized whose manager response has not been submitted.
+
+    A submitted manager response and a decided/cancelled rating are historical
+    and never re-pointed. A response returned by the CEO is awaiting the manager again.
+    """
+    queryset = ContractRating.objects.exclude(status__in=FINAL_STATES).exclude(
+        manager_response__status=R.Status.SUBMITTED
+    )
+    if profile_ids is not None:
+        queryset = queryset.filter(employee_profile_id__in=list(profile_ids))
+    return queryset
+
+
+def lock_open_ratings_awaiting_manager(profile_ids) -> None:
+    """Lock the ratings a manager change may re-point.
+
+    Called before the employee profile is locked, matching ``_locked``'s
+    rating-then-profile order so a concurrent submission cannot deadlock.
+    """
+    list(
+        open_ratings_awaiting_manager(profile_ids)
+        .select_for_update(of=("self",))
+        .order_by("pk")
+        .values_list("pk", flat=True)
+    )
+
+
+def _manager_label(user):
+    if user is None:
+        return None
+    return {"user_id": user.pk, "name": user.full_name or user.email}
+
+
+def reassign_open_ratings_to_current_manager(profiles, *, actor=None, request=None, source, notify=True):
+    """Point every open rating of ``profiles`` at the employee's current manager.
+
+    Returns one change entry per re-pointed rating. Idempotent.
+    """
+    changes = []
+    for profile in profiles:
+        new_manager = current_rater_manager(profile)
+        stale = (
+            open_ratings_awaiting_manager([profile.pk])
+            .exclude(manager_at_creation=new_manager)
+            .select_related("manager_at_creation")
+            .select_for_update(of=("self",))
+            .order_by("pk")
+        )
+        for rating in stale:
+            previous = rating.manager_at_creation
+            rating.manager_at_creation = new_manager
+            rating.save(update_fields=["manager_at_creation", "updated_at"])
+            change = {
+                "rating_id": rating.pk,
+                "employee_profile_id": profile.pk,
+                "previous_manager": _manager_label(previous),
+                "new_manager": _manager_label(new_manager),
+            }
+            audit(
+                request,
+                "contract_rating_manager_reassigned",
+                entity="ContractRating",
+                entity_id=rating.pk,
+                actor=actor,
+                metadata={
+                    "employee_profile_id": profile.pk,
+                    "previous_manager_user_id": getattr(previous, "pk", None),
+                    "new_manager_user_id": getattr(new_manager, "pk", None),
+                    "source": source,
+                },
+            )
+            if notify and rating.rating_mode == ContractRating.RatingMode.RATE and rating.status in RESPONSE_STATES:
+                if new_manager is not None:
+                    _notify(rating, "opened", ["manager"])
+                else:
+                    _notify(rating, "missing_rater", ["hr"], MISSING_RATER_MESSAGE)
+            changes.append(change)
+    return changes
+
+
+def open_rating_manager_mismatches():
+    """Open ratings whose recorded manager is not the manager the employee has now.
+
+    The target treats any usable cross-company assignment as the manager, as
+    ``consolidate_manager_relationships`` grants it every capability.
+    """
+    rows = []
+    ratings = (
+        open_ratings_awaiting_manager()
+        .select_related("employee_profile__manager_profile__user", "employee_profile__user", "manager_at_creation")
+        .order_by("employee_profile_id", "pk")
+    )
+    for rating in ratings:
+        profile = rating.employee_profile
+        assignment = (
+            active_cross_company_manager_assignments_for_employee(profile)
+            .select_related("manager_profile__user")
+            .order_by("-id")
+            .first()
+        )
+        target = assignment.manager_profile.user if assignment is not None else get_valid_direct_manager_user(profile)
+        if getattr(target, "pk", None) != rating.manager_at_creation_id:
+            rows.append(
+                {"rating": rating, "profile": profile, "previous": rating.manager_at_creation, "target": target}
+            )
+    return rows

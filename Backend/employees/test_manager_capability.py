@@ -284,6 +284,9 @@ class ManagerCapabilityTests(APITestCase):
                 "reporting_cycles",
                 "active_employees_without_manager_profile",
                 "manager_group_users_without_direct_reports",
+                "multiple_active_cross_company_manager_assignments",
+                "direct_and_cross_company_manager",
+                "cross_company_assignments_missing_capabilities",
             },
         )
         self.assertTrue(

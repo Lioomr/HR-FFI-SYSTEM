@@ -9,7 +9,7 @@ from channels.layers import get_channel_layer
 from django.conf import settings
 from django.core.exceptions import ObjectDoesNotExist
 from django.db import IntegrityError, transaction
-from django.db.models import Prefetch
+from django.db.models import Prefetch, Q
 
 from .models import Notification, NotificationDelivery
 from .serializers import NotificationSerializer
@@ -25,6 +25,42 @@ def _recipient_company(recipient, company=None):
     except (AttributeError, ObjectDoesNotExist):
         profile = None
     return getattr(profile, "company", None) if profile else None
+
+
+def recipient_can_open_company(recipient, company_id) -> bool:
+    """Whether ``recipient`` may select ``company_id`` (own company, granted access, or SystemAdmin)."""
+    if not company_id or not getattr(recipient, "pk", None):
+        return False
+    from django.contrib.auth import get_user_model
+
+    return (
+        get_user_model()
+        .objects.filter(pk=recipient.pk)
+        .filter(
+            Q(employee_profile__company_id=company_id)
+            | Q(organization_access_entries__organization_id=company_id)
+            | Q(groups__name="SystemAdmin")
+        )
+        .exists()
+    )
+
+
+def notification_company_for_recipient(recipient, company):
+    """The company to file a notification under so the recipient can open it.
+
+    A manager from another company cannot select the employee's company; the
+    record is opened from the manager's own company, so it is filed there.
+    """
+    if company is None or recipient_can_open_company(recipient, company.pk):
+        return company
+    return _recipient_company(recipient) or company
+
+
+def notification_company_id_for_recipient(recipient, company_id):
+    if not company_id or recipient_can_open_company(recipient, company_id):
+        return company_id
+    own_company = _recipient_company(recipient)
+    return own_company.pk if own_company is not None else company_id
 
 
 # Signed-in app areas whose pages load company-scoped data.
