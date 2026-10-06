@@ -190,7 +190,12 @@ class EmployeeProfile(models.Model):
         verbose_name = _("Employee Profile")
         verbose_name_plural = _("Employee Profiles")
 
-    def clean(self):
+    # Fields whose change can invalidate the manager relationship checked in clean().
+    MANAGER_VALIDATION_FIELDS = frozenset(
+        {"manager_profile", "manager_profile_id", "company", "company_id", "user", "user_id"}
+    )
+
+    def clean(self, validate_manager=True):
         super().clean()
         errors = {}
         if not self.is_archived and self.company_id is None:
@@ -205,7 +210,7 @@ class EmployeeProfile(models.Model):
             if reference and reference.company_id != self.company_id:
                 errors[field_name] = _("The selected reference must belong to the employee's company.")
 
-        if self.manager_profile_id:
+        if validate_manager and self.manager_profile_id:
             from employees.services.manager_relationships import validate_manager_assignment
 
             try:
@@ -272,7 +277,15 @@ class EmployeeProfile(models.Model):
         # Enforce tenant integrity for both new records and later relationship or
         # status changes. Archived legacy profiles may remain company-less because
         # ``clean()`` explicitly permits that state.
-        self.clean()
+        # A partial save (``update_fields``) that touches none of the fields the
+        # manager check depends on must not be blocked by a stale manager link,
+        # e.g. contract renewals or invite acceptance.
+        validate_manager = (
+            creating
+            or update_fields is None
+            or bool(self.MANAGER_VALIDATION_FIELDS & set(update_fields))
+        )
+        self.clean(validate_manager=validate_manager)
         super().save(*args, **kwargs)
 
 

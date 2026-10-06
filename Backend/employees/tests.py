@@ -6,6 +6,7 @@ from unittest.mock import patch
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.core.cache import cache
+from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import IntegrityError, connection
 from django.test import TestCase, override_settings
@@ -289,6 +290,41 @@ class EmployeeProfileTests(TestCase):
 
         self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
         self.assertIn("linked to a user account", response.data["message"])
+
+    def test_partial_save_of_unrelated_fields_ignores_stale_manager(self):
+        profile = EmployeeProfile.objects.create(
+            user=self.employee_user,
+            company=self.company,
+            employee_id="EMP-PARTIAL-SAVE",
+        )
+        stale_manager = EmployeeProfile.objects.create(
+            company=self.company,
+            employee_id="EMP-PARTIAL-MANAGER",
+            full_name="Stale Manager",
+        )
+        EmployeeProfile.objects.filter(pk=profile.pk).update(manager_profile=stale_manager)
+        profile.refresh_from_db()
+
+        profile.contract_expiry = date(2030, 1, 1)
+        profile.save(update_fields=["contract_expiry", "updated_at"])
+
+        profile.refresh_from_db()
+        self.assertEqual(profile.contract_expiry, date(2030, 1, 1))
+
+    def test_partial_save_touching_manager_still_validates_manager(self):
+        profile = EmployeeProfile.objects.create(
+            user=self.employee_user,
+            company=self.company,
+            employee_id="EMP-PARTIAL-VALIDATE",
+        )
+        no_login_manager = EmployeeProfile.objects.create(
+            company=self.company,
+            employee_id="EMP-PARTIAL-NOLOGIN",
+            full_name="No Login Manager",
+        )
+        profile.manager_profile = no_login_manager
+        with self.assertRaises(ValidationError):
+            profile.save(update_fields=["manager_profile"])
 
     def test_employee_me_endpoint(self):
         EmployeeProfile.objects.create(
