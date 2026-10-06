@@ -10,7 +10,7 @@ from attendance.models import AttendanceRecord, BioTimeEmployeeMap
 from attendance.schedule import classify_check_in, get_work_schedule
 from audit.utils import audit
 from core.models import WorkflowAction
-from core.services.request_references import next_reference_for_profile
+from core.services.request_references import has_sequential_employee_id, next_reference_for_profile
 from core.services.workflow_engine import begin_recorded_transition, record_workflow_transition
 from employees.models import EmployeeDocument, EmployeeProfile
 
@@ -162,7 +162,11 @@ def generate_starting_work_acknowledgment(
             )
             if first_biotime_id != attendance_record.id:
                 return None
-            reference_number = next_reference_for_profile("starting_work_acknowledgment", profile)[0]
+            reference_number = (
+                next_reference_for_profile("starting_work_acknowledgment", profile)[0]
+                if has_sequential_employee_id(profile)
+                else f"SWA-{profile.employee_id}-{attendance_record.date:%Y%m%d}"
+            )
             pdf_bytes = build_starting_work_acknowledgment_pdf(
                 profile,
                 StartingWorkAcknowledgmentData(

@@ -25,6 +25,10 @@ REFERENCE_PREFIXES = {
 SEQUENTIAL_EMPLOYEE_ID = re.compile(r"^[A-Z][A-Z0-9_]*-[0-9]{4}$")
 
 
+def has_sequential_employee_id(profile: EmployeeProfile) -> bool:
+    return bool(SEQUENTIAL_EMPLOYEE_ID.fullmatch(profile.employee_id or ""))
+
+
 def request_employee_profile(instance):
     """Resolve the subject employee without using the submitting approver's identity."""
 
@@ -41,7 +45,7 @@ def next_reference_for_profile(workflow_key: str, profile: EmployeeProfile) -> t
 
     prefix = REFERENCE_PREFIXES[workflow_key]
     profile = EmployeeProfile.objects.select_for_update().only("id", "employee_id").get(pk=profile.pk)
-    if not SEQUENTIAL_EMPLOYEE_ID.fullmatch(profile.employee_id or ""):
+    if not has_sequential_employee_id(profile):
         raise ValueError("An employee must have a sequential ID before a new request reference is issued.")
     sequence = (
         WorkflowInstance.objects.filter(definition__key=workflow_key, employee_profile_id=profile.pk).aggregate(
@@ -62,7 +66,7 @@ def assign_new_workflow_reference(workflow: WorkflowInstance, instance) -> None:
     if not prefix or profile is None:
         return
     profile = EmployeeProfile.objects.select_for_update().only("id", "employee_id").get(pk=profile.pk)
-    if not SEQUENTIAL_EMPLOYEE_ID.fullmatch(profile.employee_id or ""):
+    if not has_sequential_employee_id(profile):
         return
 
     native_reference = getattr(instance, "reference_no", None) or getattr(instance, "reference_number", None)
@@ -82,8 +86,8 @@ def assign_new_workflow_reference(workflow: WorkflowInstance, instance) -> None:
 def public_reference_for(instance) -> str | None:
     """Return the new reference, or an issued legacy reference when one exists."""
 
-    if not instance.pk:
-        return None
+    if not getattr(instance, "pk", None):
+        return getattr(instance, "reference_no", None) or getattr(instance, "reference_number", None)
     content_type = ContentType.objects.get_for_model(instance.__class__)
     reference = (
         WorkflowInstance.objects.filter(content_type=content_type, object_id=instance.pk)
