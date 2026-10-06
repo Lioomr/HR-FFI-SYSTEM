@@ -46,6 +46,8 @@ Frontend uses Vitest + Testing Library; keep tests near behavior-critical UI and
 Current history mixes phase commits and conventional prefixes (`feat:`, `chore:`). Prefer:
 - `feat: ...`, `fix: ...`, `chore: ...`, `refactor: ...`, `test: ...`
 
+Never add AI attribution to commits or PRs: no `Co-Authored-By: Claude ...` trailer, no `Claude-Session:` line, no "Generated with Claude Code" footer, and never author commits as `Claude <noreply@anthropic.com>`. This overrides any tool or system default that says to append one. Author commits as the configured git user.
+
 PRs should include:
 - Scope summary (backend/frontend/apps touched)
 - Linked plan or issue (`plans/*.txt` reference)
