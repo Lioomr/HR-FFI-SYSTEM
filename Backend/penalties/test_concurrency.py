@@ -5,6 +5,7 @@ from threading import Event
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
+from django.core.management import call_command
 from django.db import close_old_connections, connection, connections, transaction
 from django.test import TransactionTestCase, override_settings
 from django.utils import timezone
@@ -22,9 +23,8 @@ from .tasks import issue_auto_warnings
 
 
 class PenaltyLockTests(TransactionTestCase):
-    # Preserve migration-seeded rows for classes that follow this one. Restore
-    # once after the class; each test's serialized setup handles its own rows.
-    serialized_rollback = True
+    # A serialized setup collides with content types created by earlier test
+    # classes. These cases seed their own data, then restore migration rows once.
 
     @classmethod
     def tearDownClass(cls):
@@ -32,6 +32,7 @@ class PenaltyLockTests(TransactionTestCase):
         for alias in cls._databases_names(include_mirrors=False):
             contents = getattr(connections[alias], "_test_serialized_contents", None)
             if contents:
+                call_command("flush", verbosity=0, interactive=False, database=alias, inhibit_post_migrate=True)
                 connections[alias].creation.deserialize_db_from_string(contents)
 
     def test_payroll_waits_for_profile_lock_and_reads_fresh_penalty_eligibility(self):
