@@ -104,6 +104,13 @@ ALLOWED_HOSTS = _env_list("DJANGO_ALLOWED_HOSTS", ["localhost", "127.0.0.1"] if 
 if not DEBUG and not ALLOWED_HOSTS:
     raise ImproperlyConfigured("DJANGO_ALLOWED_HOSTS must be set when DJANGO_DEBUG is false.")
 
+if not DEBUG:
+    # The container health check calls the app over loopback (Host: 127.0.0.1:8000).
+    # Loopback is only reachable from inside the container, so allow it in production.
+    for _loopback_host in ("localhost", "127.0.0.1"):
+        if _loopback_host not in ALLOWED_HOSTS:
+            ALLOWED_HOSTS.append(_loopback_host)
+
 if DEBUG:
     local_hosts = {"localhost", "127.0.0.1", "[::1]"}
     non_local_hosts = [host for host in ALLOWED_HOSTS if host not in local_hosts and not host.endswith(".localhost")]
