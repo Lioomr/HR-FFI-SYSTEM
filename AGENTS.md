@@ -54,77 +54,41 @@ PRs should include:
 - Notes for migrations, env vars, or breaking API changes
 
 ## Security & Configuration Tips
-Keep secrets in `.env` (never commit credentials).  
+Keep secrets in `.env` (never commit credentials). Never print secret values in output or logs.  
 Validate role-based permissions server-side for every endpoint.  
-Run pre-commit checks before pushing: `pre-commit run --all-files`.
+Run pre-commit checks before pushing when available: `pre-commit run --all-files`.
 
 ## Deployment Handoff
-For AWS production deployment, Docker service layout, real server paths, and production debugging workflow, read `AWS_AGENT_DEPLOYMENT_HANDOFF.md` before making deployment-related changes.
+For AWS production deployment, Docker service layout, real server paths, and production debugging workflow, read `AWS_AGENT_DEPLOYMENT_HANDOFF.md` before making deployment-related changes. Prefer infrastructure-as-code over ad-hoc CLI changes, and verify AWS details against documentation instead of guessing.
 
-## Agent Knowledge & Context Strategy
-You have access to a rich context library in the `.agents/` directory. To maximize performance and keep token usage low:
-- **Do not guess architecture, project standards, or workflows.** 
-- **Start here:** Always read `.agents/context/INDEX.md` first to map your current task to the correct context file.
-- **Lazy Load:** Only use `view_file` to read the specific files from `.agents/context/`, `.agents/rules/`, or `.agents/skills/` that are explicitly required for your task. Do NOT bulk-load the entire folder.
-- **Cross-module map:** For architecture, feature planning, or work crossing modules, read `.agents/context/system_map.md` after the index. For a narrow task, skip it and load only the matching context note(s).
-- **Ponytail (required for coding tasks):** Read and apply `.agents/rules/ponytail.md` before changing code and when reviewing the resulting diff. It supplements these repository rules; it never overrides explicit task requirements, security, API, workflow, testing, or deployment guidance.
+## Agent Context Library
+`.agents/` holds focused notes on this system's architecture, conventions and workflows. Start from `.agents/context/INDEX.md` to find the note for your task, and read only the files you need from `.agents/context/`, `.agents/rules/` and `.agents/skills/`. For work crossing modules, also read `.agents/context/system_map.md`. Prefer these notes and the source over guessing at architecture or standards.
 
-## Trace Linked Features Before Changes
+Default to the smallest correct change after understanding the real flow (`.agents/rules/ponytail.md`): reuse existing helpers and components, fix shared root causes, and avoid unrequested abstractions. Treat it as a strong default, not a limit. Use a larger change when the problem calls for it, and say why. It never overrides task requirements, security, API, workflow, testing, or deployment guidance.
 
-Before editing a feature, identify its connected screens, API clients/routes, backend models/serializers/services, permissions and company scope, workflow history/delegation, notifications/audit, feature flags or runtime toggles, translations, and tests. Use source search and the repository's `graphify` map where available. Do this impact check before changing code or toggles; inspect each relevant toggle's default and consumers, and never flip a toggle unless the task explicitly asks.
+## Understand Connected Features Before Changing Them
+Before editing a feature, trace what it touches: screens, API clients and routes, backend models/serializers/services, permissions and company scope, workflow history and delegation, notifications and audit, feature flags or runtime toggles, translations, and tests. Check each relevant toggle's default and consumers, and do not flip a toggle unless the task asks.
 
-## Design Features to Fit the Existing System
+When designing a new feature, extend existing models, APIs, approval workflows, inboxes, notifications and UI components where they fit. Make it standalone only when its purpose or lifecycle is genuinely separate, and document why. Do not create parallel approval, permission or notification systems without a clear reason.
 
-Before proposing a new feature, map the related features, shared data, users, workflows, and business rules. Prefer extending existing models, APIs, approval workflows, inboxes, notifications, and UI components when they fit. A feature may have its own pages and business rules while still using those shared capabilities. Make it standalone only when its purpose or lifecycle is genuinely separate; document why it is separate and how users reach it. Do not create parallel approval, permission, or notification systems without a clear reason.
+## Requests and Approval Trails
+For request and approval work, read `.agents/context/workflow_engine.md`. The employee dashboard's **Current Requests** summarizes leave, permission, loan, and annual-leave-settlement requests, and its cards link to request-specific pages. The leave request list/detail is the reference for approval trails: `LeaveApprovalMap` shows stage progress, `ApprovalTimeline` shows recorded decisions, and `PendingActionBanner` shows the current waiting stage/actor. Keep a clear path from every affected request to its real approval trail, and do not infer a trail from status labels alone. Check each request kind separately; annual-leave settlements currently link to the balance page and do not share the leave detail/history route.
 
-## Refresh Docker After Runtime Changes
+When a task asks a request page to show approval progress, decide whether it means the summary card, the list, or the detail page, and keep the linked pages consistent. Confirm backend workflow history and actor-specific serializer fields exist before building the UI. Update the relevant tests and context docs when behavior changes.
 
-Before reporting a code or runtime change complete, rebuild and recreate the Docker service(s) that contain the changed files so the running system uses the new version. Backend code/dependency changes normally require `backend`, `notification-worker`, and `celery-beat`; frontend changes require `frontend`; Compose or shared-image changes require every affected service. Then check the selected Compose stack with `docker compose ... ps` and report the result. Use the correct Compose file/profile from `.agents/context/local_dev_setup.md`. Never use `down -v` as a routine rebuild because it deletes persistent volumes. Documentation-only changes do not need a container rebuild. If Docker is unavailable or rebuilding fails, state which service was not refreshed; do not claim it is updated.
+## Docker and the Shared Local Stack
+After a code or runtime change, rebuild and recreate the affected Docker service(s) so the running system uses it, then check `docker compose ... ps` and report the result. Backend changes normally affect `backend`, `notification-worker` and `celery-beat`; frontend changes affect `frontend`; Compose or shared-image changes affect every service that uses them. Documentation-only changes need no rebuild. If Docker is unavailable or a rebuild fails, say which service was not refreshed. Use the Compose file and profile from `.agents/context/local_dev_setup.md`. Never use `down -v` as a routine rebuild; it deletes persistent volumes.
 
-For request and approval work, read `.agents/context/workflow_engine.md`. The employee dashboard's **Current Requests** is a summary of leave, permission, loan, and annual-leave-settlement requests. Its cards link to request-specific experiences. The leave request list/detail is the current approval-trail example: `LeaveApprovalMap` shows stage progress, `ApprovalTimeline` shows recorded decisions, and `PendingActionBanner` identifies the current waiting stage/actor. Preserve or add a clear path from every affected request to its real approval trail. Do not infer a trail from status labels alone. Verify each request kind separately; annual-leave settlements currently link to the balance page, so do not assume they have the same detail/history route as leave.
-
-When a task asks for a request page to show approval progress, determine whether it means the summary card, request list, or request detail, then keep the linked experiences consistent. Confirm backend workflow history and actor-specific serializer fields are available before implementing the UI. Update the relevant tests and focused context docs with any behavior change.
-
-## Shared Docker Stack: Avoid Overwriting Other Sessions
-
-The local stack in `docker-compose.dev.yml` (project `hr-ffi-system`, containers `ffi_hr_*`, ports 5173/8000/5432) is shared by every Claude and Codex session on this machine. The last build wins: whichever checkout rebuilt last is what `localhost:5173` serves, even if another session built after you.
-
-- Run the stack through `tools/dev-compose.sh` (or `tools\dev-compose.ps1`) instead of calling `docker compose -f docker-compose.dev.yml` directly. It stamps each image with the git commit, a dirty flag and the checkout path, and refuses `up`/`build`/`down` and other changing commands against the shared stack from a git worktree.
-- Only rebuild the shared stack from the main checkout `D:\HR-FFI-SYSTEM`. From a worktree (`.codex/worktrees/*`, `D:\HR-FFI-SYSTEM-*`, temp worktrees), verify with tests and `npm run build`, or run a separate stack with its own `FFI_CONTAINER_PREFIX`, ports and `-p` project (see the header of `docker-compose.dev.yml`). Set `FFI_ALLOW_SHARED_STACK=1` only when the user explicitly asked for that.
-- Before rebuilding, check `git status` and recently changed files for other sessions' uncommitted work. A build ships whatever is on disk.
-- After every rebuild, confirm the running container serves your change, not only that it is up: `curl http://localhost:5173/build-info.json`, `docker inspect ffi_hr_frontend --format "{{json .Config.Labels}}"`, and a grep for a new class or string in `/usr/share/nginx/html/assets/`. For the backend, check `showmigrations` or the changed endpoint. Report the check in your summary.
-- If the user reports that a shipped change is missing, first check the container's creation time and `com.ffi.build.*` labels. Another session may have rebuilt from a different checkout; rebuild from the main checkout instead of re-editing the code.
-- Commit finished work promptly. Uncommitted changes exist in one folder only, so a build from any other checkout silently drops them.
-- Two agents must not edit the same feature files at once. If files you are about to change were edited by another agent in the last few minutes, stop and ask the user.
+The stack in `docker-compose.dev.yml` (project `hr-ffi-system`, containers `ffi_hr_*`, ports 5173/8000/5432) is shared by every Claude and Codex session on this machine, and the last build wins.
+- Run it through `tools/dev-compose.sh` or `tools\dev-compose.ps1`. They stamp each image with the commit, dirty flag and checkout path, and refuse mutating commands from a git worktree. Set `FFI_ALLOW_SHARED_STACK=1` only when the user explicitly asks.
+- Rebuild the shared stack only from the main checkout (not a worktree). From a worktree, verify with tests and `npm run build`, or run a separate stack with its own `FFI_CONTAINER_PREFIX`, ports and `-p` project (see the header of `docker-compose.dev.yml`).
+- Before rebuilding, check `git status` for other sessions' uncommitted work, because a build ships whatever is on disk. If files you are about to change were edited by another agent in the last few minutes, stop and ask the user.
+- After a rebuild, confirm the running container serves your change: `curl http://localhost:5173/build-info.json`, `docker inspect ffi_hr_frontend --format "{{json .Config.Labels}}"`, and a grep for a new string in `/usr/share/nginx/html/assets/`. For the backend, check `showmigrations` or the changed endpoint.
+- If a shipped change seems missing, first check the container's creation time and `com.ffi.build.*` labels; another session may have rebuilt from a different checkout.
+- Commit finished work promptly, because uncommitted changes exist in one folder only.
 
 ## Engineering References
-
-For work involving API schemas, frontend/backend type alignment, company-scoping safety, production migrations, Celery dispatch, or feature-level regression tests, read `.agents/context/engineering_references.md`. Apply the relevant PostHog and Vinta patterns incrementally in the existing FFI architecture; they do not replace FFI's plans, API rules, workflow engine, or security policy.
+For API schemas, frontend/backend type alignment, company-scoping safety, production migrations, Celery dispatch, or feature-level regression tests, read `.agents/context/engineering_references.md`. Apply the relevant PostHog and Vinta patterns incrementally within the existing FFI architecture; they do not replace FFI's plans, API rules, workflow engine, or security policy.
 
 ## graphify
-
-This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.
-
-When the user types `/graphify`, use the installed graphify skill or instructions before doing anything else.
-
-Rules:
-- For codebase questions, first run `graphify query "<question>"` when graphify-out/graph.json exists. Use `graphify path "<A>" "<B>"` for relationships and `graphify explain "<concept>"` for focused concepts. These return a scoped subgraph, usually much smaller than GRAPH_REPORT.md or raw grep output.
-- Dirty graphify-out/ files are expected after hooks or incremental updates; dirty graph files are not a reason to skip graphify. Only skip graphify if the task is about stale or incorrect graph output, or the user explicitly says not to use it.
-- If graphify-out/wiki/index.md exists, use it for broad navigation instead of raw source browsing.
-- Read graphify-out/GRAPH_REPORT.md only for broad architecture review or when query/path/explain do not surface enough context.
-- After modifying code, run `graphify update .` to keep the graph current (AST-only, no API cost).
-
-Use Graphify to locate and trace relevant code before applying Ponytail's minimal-change guidance. Understand the actual flow first, then choose the smallest correct change.
-
-## AWS Guidance
-
-- Prefer the AWS MCP Server for AWS interactions — it provides sandboxed execution, observability, and audit logging. If unavailable, use the AWS CLI directly.
-- Before starting a task, check whether a relevant AWS skill is available. Load the skill with `retrieve_skill` and prefer its guidance over general knowledge.
-- When uncertain about specific AWS details (API parameters, permissions, limits, error codes), verify against documentation rather than guessing. State uncertainty explicitly if you cannot confirm.
-- When creating infrastructure, prefer infrastructure-as-code (AWS CDK or CloudFormation) over direct CLI commands.
-- When working with infrastructure, follow AWS Well-Architected Framework principles.
-- Do not use em dashes in AWS resource names or descriptions. Use hyphens instead.
-
-### Secret Safety
-
-- MUST load the `aws-secrets-manager` skill first for any secret, credential, API key, token, or password task. MUST NOT call `secretsmanager get-secret-value` or `batch-get-secret-value`, and MUST NOT hit the Secrets Manager Agent daemon directly. MUST use `{{resolve:secretsmanager:secret-id:SecretString:json-key}}` with `asm-exec` so the secret resolves at runtime without entering context.
+A knowledge graph lives in `graphify-out/` (god nodes, communities, cross-file relationships). When the user types `/graphify`, use the graphify skill. For codebase questions it is often faster than raw search: `graphify query "<question>"`, `graphify path "<A>" "<B>"`, `graphify explain "<concept>"`. Fall back to normal search when the graph is stale or does not answer the question, and read `GRAPH_REPORT.md` only for broad architecture review. After substantial code changes, `graphify update .` refreshes the graph (AST-only, no API cost).
