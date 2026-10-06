@@ -346,7 +346,7 @@ export default function AnnualLeaveSettlementsPage() {
           ) : (
             <div style={{ fontWeight: 600 }}>{record.employee_name || "—"}</div>
           )}
-          <div style={{ fontSize: 12, color: "#64748b" }}>#{record.id}</div>
+          <div style={{ fontSize: 12, color: "#64748b" }}>{record.public_reference || `#${record.id}`}</div>
         </div>
       ),
     },

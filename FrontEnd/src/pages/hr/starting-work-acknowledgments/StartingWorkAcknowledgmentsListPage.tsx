@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import {
   Button,
   Grid,
+  Input,
   Modal,
   Segmented,
   Space,
@@ -74,6 +75,7 @@ export default function StartingWorkAcknowledgmentsListPage() {
   const [statusFilter, setStatusFilter] =
     useState<StartingWorkAcknowledgmentStatus>(DEFAULT_STATUS_FILTER);
   const [page, setPage] = useState(1);
+  const [search, setSearch] = useState("");
 
   const [items, setItems] = useState<StartingWorkAcknowledgment[]>([]);
   const [total, setTotal] = useState(0);
@@ -93,6 +95,7 @@ export default function StartingWorkAcknowledgmentsListPage() {
           page,
           page_size: PAGE_SIZE,
           status: statusFilter,
+          ...(search ? { search } : {}),
         });
         if (isApiError(response)) {
           setError(response.message || t("startingWork.loadFailed"));
@@ -124,7 +127,7 @@ export default function StartingWorkAcknowledgmentsListPage() {
         setRefreshing(false);
       }
     },
-    [page, statusFilter, t],
+    [page, search, statusFilter, t],
   );
 
   useEffect(() => {
@@ -381,6 +384,16 @@ export default function StartingWorkAcknowledgmentsListPage() {
             }}
           />
         </div>
+        <Input.Search
+          aria-label={t("common.search")}
+          placeholder={t("jobOffers.field.referenceNumber")}
+          allowClear
+          onSearch={(value) => {
+            setSearch(value.trim());
+            setPage(1);
+          }}
+          style={{ width: 260, maxWidth: "100%" }}
+        />
       </div>
 
       {loading ? (

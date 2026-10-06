@@ -9,6 +9,7 @@ from rest_framework import serializers
 
 from core.permissions import get_role
 from core.services import get_workflow_snapshot, get_workflow_snapshot_read_only, get_workflow_snapshots
+from core.services.request_references import public_reference_for
 from hr_reference.models import Department, Position, Sponsor, TaskGroup
 from in_app_notifications.models import Notification
 from organization.services import get_user_accessible_company_ids
@@ -60,6 +61,7 @@ class UserMinimalSerializer(serializers.ModelSerializer):
 
 
 class ContractDecisionReadSerializer(serializers.ModelSerializer):
+    reference_no = serializers.SerializerMethodField()
     rating = serializers.SerializerMethodField()
     employee = serializers.SerializerMethodField()
     decision_type_label = serializers.CharField(source="get_decision_type_display", read_only=True)
@@ -72,6 +74,7 @@ class ContractDecisionReadSerializer(serializers.ModelSerializer):
         fields = [
             "rating",
             "id",
+            "reference_no",
             "company",
             "employee",
             "decision_type",
@@ -120,6 +123,11 @@ class ContractDecisionReadSerializer(serializers.ModelSerializer):
             "ceo_decision": rating.ceo_decision,
             "ceo_comment": rating.ceo_comment,
         }
+
+    def get_reference_no(self, obj):
+        from core.services.request_references import public_reference_for
+
+        return public_reference_for(obj)
 
     def get_employee(self, obj):
         profile = obj.employee_profile
@@ -670,6 +678,7 @@ class EmployeeImportSerializer(serializers.ModelSerializer):
 
 
 class EmployeeDeletionRequestReadSerializer(serializers.ModelSerializer):
+    reference_no = serializers.SerializerMethodField()
     employee_profile_id = serializers.IntegerField(read_only=True)
     target_user_id = serializers.IntegerField(read_only=True)
     company_id = serializers.IntegerField(read_only=True)
@@ -683,6 +692,7 @@ class EmployeeDeletionRequestReadSerializer(serializers.ModelSerializer):
         model = EmployeeDeletionRequest
         fields = [
             "id",
+            "reference_no",
             "company_id",
             "company_name",
             "employee_profile_id",
@@ -732,6 +742,9 @@ class EmployeeDeletionRequestReadSerializer(serializers.ModelSerializer):
         request = self.context.get("request")
         actor = getattr(request, "user", None)
         return get_workflow_snapshot(obj, actor=actor)
+
+    def get_reference_no(self, obj):
+        return public_reference_for(obj)
 
 
 class EmployeeDeletionRequestCreateSerializer(serializers.ModelSerializer):
@@ -982,6 +995,7 @@ class ProfileChangeRequestListSerializer(serializers.ListSerializer):
 
 
 class ProfileChangeRequestReadSerializer(serializers.ModelSerializer):
+    reference_no = serializers.SerializerMethodField()
     employee = serializers.SerializerMethodField()
     items = serializers.SerializerMethodField()
     attachments = serializers.SerializerMethodField()
@@ -997,6 +1011,7 @@ class ProfileChangeRequestReadSerializer(serializers.ModelSerializer):
         list_serializer_class = ProfileChangeRequestListSerializer
         fields = [
             "id",
+            "reference_no",
             "employee",
             "status",
             "items",
@@ -1013,6 +1028,9 @@ class ProfileChangeRequestReadSerializer(serializers.ModelSerializer):
     def get_employee(self, obj):
         profile = obj.employee_profile
         return {"id": profile.pk, "full_name": profile.full_name, "employee_number": profile.employee_number}
+
+    def get_reference_no(self, obj):
+        return public_reference_for(obj)
 
     def get_items(self, obj):
         return [{key: item.get(key) for key in self.ITEM_KEYS} for item in obj.items or []]

@@ -63,7 +63,7 @@ def make_user(db, company):
             EmployeeProfile.objects.create(
                 user=user,
                 company=tenant,
-                employee_id=f"PERM-{number:05d}",
+                employee_id=f"{tenant.employee_id_prefix or tenant.code}-{number:04d}",
                 full_name=label,
                 manager_profile=manager.employee_profile if manager is not None else None,
             )

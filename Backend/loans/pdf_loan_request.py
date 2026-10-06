@@ -20,6 +20,7 @@ from core.pdf_forms import (
     request_company_code,
 )
 from core.pdf_signers import signer_signatures
+from core.services.request_references import public_reference_for
 
 FIELD_MAP_FILENAME = "loan_request_blank_field_map.json"
 TEMPLATE_FILENAME = "loan_request_blank.pdf"
@@ -263,7 +264,11 @@ def build_loan_request_values(instance: Any) -> dict[str, str]:
         ("disbursement", "Disbursement", "disbursed_by", "disbursed_at", "pending_disbursement", None),
     )
     values: dict[str, str] = {
-        "reference_no": f"LN-{getattr(instance, 'id', 0):05d}" if getattr(instance, "id", None) else "",
+        "reference_no": (
+            (public_reference_for(instance) if hasattr(instance, "_meta") else None) or f"LN-{instance.id:05d}"
+            if getattr(instance, "id", None)
+            else ""
+        ),
         "request_date": _format_date(getattr(instance, "created_at", None)),
         "filed_date": _format_date(getattr(instance, "filed_at", None) or getattr(instance, "created_at", None)),
         "employee_name": _blank(

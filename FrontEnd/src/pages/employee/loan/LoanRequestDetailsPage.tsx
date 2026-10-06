@@ -124,7 +124,7 @@ export default function EmployeeLoanRequestDetailsPage() {
   return (
     <div style={{ maxWidth: 960, margin: "0 auto" }}>
       <PageHeader
-        title={t("loans.details.titlePrefix") + " #" + id}
+        title={t("loans.details.titlePrefix") + " " + (item?.public_reference || "#" + id)}
         breadcrumb={t("loans.details.subtitle")}
         actions={
           <>

@@ -633,6 +633,7 @@ function RequestList({
   );
   // The API has no permission_type filter, so this narrows the loaded page only.
   const [typeFilter, setTypeFilter] = useState<PermissionType | "all">("all");
+  const [search, setSearch] = useState("");
   const load = useCallback(async () => {
     setLoading(true);
     try {
@@ -642,7 +643,7 @@ function RequestList({
           : inbox === "manager"
             ? getManagerPermissionRequests
             : getHrPermissionRequests;
-      const response = await fetcher({ status, page, page_size: 10 });
+      const response = await fetcher({ status, search: search || undefined, page, page_size: 10 });
       if (isApiError(response)) {
         notification.error({
           message: t("permissionRequests.error.load"),
@@ -661,7 +662,7 @@ function RequestList({
     } finally {
       setLoading(false);
     }
-  }, [inbox, page, status, t]);
+  }, [inbox, page, search, status, t]);
   useEffect(() => {
     void load();
   }, [load]);
@@ -740,6 +741,15 @@ function RequestList({
       <WorkspaceCard
         toolbar={
           <>
+            <Input.Search
+              aria-label={t("permissionRequests.list.reference")}
+              placeholder={t("permissionRequests.list.reference")}
+              allowClear
+              onSearch={(value) => {
+                setSearch(value.trim());
+                setPage(1);
+              }}
+            />
             <Select
               aria-label={t("permissionRequests.list.typeFilter")}
               value={typeFilter}
@@ -791,6 +801,8 @@ function RequestList({
             {
               title: t("permissionRequests.list.reference"),
               dataIndex: "reference_no",
+              render: (_reference: string, record: PermissionRequest) =>
+                record.public_reference || record.reference_no,
             },
             ...(inbox !== "mine"
               ? [
@@ -1091,7 +1103,7 @@ export function PermissionRequestDetailPage({
   return (
     <div>
       <PageHeader
-        title={request.reference_no}
+        title={request.public_reference || request.reference_no}
         actions={
           // The permission PDF is the Exit Permission form.
           isExit ? (

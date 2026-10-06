@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from core.pdf_forms import load_form_assets, render_mapped_form
 from core.pdf_signers import signature_for_user
+from core.services.request_references import public_reference_for
 
 from .criteria import CRITERIA
 
@@ -37,7 +38,7 @@ def build_contract_rating_pdf(rating, *, response=_DEFAULT_RESPONSE, include_dec
 
     profile = rating.employee_profile
     values = {
-        "reference_no": f"CR-{rating.id}",
+        "reference_no": public_reference_for(rating) or f"CR-{rating.id}",
         "document_date": rating.created_at.date().isoformat(),
         "employee_name": profile.full_name,
         "position": rating.job_title_snapshot,

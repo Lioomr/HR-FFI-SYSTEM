@@ -9,7 +9,7 @@ Status: deployed and applied in production on 2026-10-04. This document is the h
 - Aseco Pro: `ASECO-0001`, `ASECO-0002`, then employees beginning at `ASECO-0003`.
 - Athroya: `ATH-0001`, `ATH-0002`, then employees beginning at `ATH-0003`.
 - Order each company's other profiles by the saved structured `hire_date`, then database profile ID for ties. Include archived profiles and never reuse their numbers. Athroya profiles without a saved hire date go after dated profiles, ordered by profile creation time. The user confirmed the saved structured date as the ordering source, including the documented raw-import conflicts.
-- Leave request display reference: `LV-` + full employee ID + a two-digit per-employee request sequence, e.g. `LV-FFI-000101`. Define an overflow rule before any employee creates a 100th leave request; never truncate or reuse a reference. Keep numeric primary keys for routes, foreign keys, workflow, and authorization.
+- Request display reference: type prefix + `-` + full employee ID + a per-employee, per-type sequence with a minimum width of two digits, e.g. `LV-FFI-000101`, `LN-FFI-000101`, then `LN-FFI-000102`. The 100th request uses `100` without truncation. Keep numeric primary keys for routes, foreign keys, workflow, and authorization.
 - Search should accept current ID and historical aliases. Employee-linked references must retain the company prefix, because `0001` repeats across companies.
 
 ## Production inventory and assigned `0003`
@@ -62,3 +62,23 @@ This clean rollout checkout starts from production commit `2eb130fc` and depends
 - `Backend/job_offers/starting_work_service.py`: acknowledgment reference embedding employee ID.
 
 The production database and local checkout can differ. Check deployed migrations and code before any production rollout. This document is intended for agents working on employee, leave, payroll, hiring, attendance, or search flows.
+
+## All workflow request references (new submissions)
+
+The same employee-based format applies to every active employee-linked workflow request. A sequence is scoped to the employee profile and request type; each company remains distinguishable through the full employee ID. Workflow references are stored on `WorkflowInstance` and exposed as `reference_no` in workflow snapshots or as `public_reference` in APIs. Each newly submitted request receives its reference while the employee row is locked. Existing database primary keys and numeric URLs remain the internal identity and authorization path.
+
+| Request type | Prefix | Example for employee `FFI-0001` |
+| --- | --- | --- |
+| Leave | `LV` | `LV-FFI-000101` |
+| Permission | `PERM` | `PERM-FFI-000101` |
+| Loan | `LN` | `LN-FFI-000101` |
+| Annual leave settlement | `AED` | `AED-FFI-000101` |
+| Profile change | `PC` | `PC-FFI-000101` |
+| Employee archive request | `EA` | `EA-FFI-000101` |
+| Asset return | `AR` | `AR-FFI-000101` |
+| Contract decision | `CD` | `CD-FFI-000101` |
+| Contract rating | `CR` | `CR-FFI-000101` |
+| Job offer | `JO` | `JO-FFI-000101` |
+| Starting work acknowledgment | `SWA` | `SWA-FFI-000101` |
+
+Attendance records are system events, not submitted workflow requests. Attendance correction requests have a reserved `AC` prefix if that retired API is restored; no new correction requests can currently be submitted. References already issued under earlier formats remain valid and searchable. Historical records without a public reference retain their numeric display fallback; this rollout does not silently renumber them or rewrite archived PDFs. New references are allocated only to new submissions, and the sequence never reuses a reference already stored for that employee and type.

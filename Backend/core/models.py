@@ -66,6 +66,11 @@ class WorkflowInstance(models.Model):
     content_type = models.ForeignKey(ContentType, on_delete=models.CASCADE)
     object_id = models.PositiveIntegerField()
     content_object = GenericForeignKey("content_type", "object_id")
+    employee_profile = models.ForeignKey(
+        "employees.EmployeeProfile", on_delete=models.SET_NULL, null=True, blank=True, related_name="request_workflows"
+    )
+    reference_no = models.CharField(max_length=64, unique=True, null=True, blank=True, editable=False)
+    reference_sequence = models.PositiveIntegerField(null=True, blank=True, editable=False)
 
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.DRAFT)
     current_stage = models.CharField(max_length=100, blank=True, default="")
@@ -95,7 +100,11 @@ class WorkflowInstance(models.Model):
     class Meta:
         ordering = ["-updated_at", "-id"]
         constraints = [
-            models.UniqueConstraint(fields=["content_type", "object_id"], name="core_wfinstance_unique_object")
+            models.UniqueConstraint(fields=["content_type", "object_id"], name="core_wfinstance_unique_object"),
+            models.UniqueConstraint(
+                fields=["definition", "employee_profile", "reference_sequence"],
+                name="core_wfinstance_unique_employee_ref_seq",
+            ),
         ]
         indexes = [
             models.Index(fields=["status", "current_approver_role"], name="core_wfins_stat_role_idx"),

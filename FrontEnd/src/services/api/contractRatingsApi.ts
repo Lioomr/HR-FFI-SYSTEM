@@ -82,6 +82,7 @@ export interface RatingCriteriaPayload {
 /** Header fields present in every role's payload. */
 export interface ContractRatingHeader {
   id: number;
+  reference_no?: string | null;
   status: ContractRatingStatus;
   rating_mode: RatingMode | "";
   company: number;

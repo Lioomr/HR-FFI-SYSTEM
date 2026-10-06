@@ -1,11 +1,13 @@
 import logging
 import os
+import re
 from datetime import date
 from glob import glob
 from io import BytesIO
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
+from django.contrib.contenttypes.models import ContentType
 from django.db import transaction
 from django.db.models import Prefetch, Q
 from django.http import FileResponse, HttpResponse
@@ -25,6 +27,7 @@ from rest_framework.views import APIView
 
 from audit.utils import audit
 from core.files import read_field_file_bytes
+from core.models import WorkflowInstance
 from core.pagination import StandardPagination
 from core.pdf import merge_pdfs
 from core.permissions import IsDepartmentCEOApprover, IsHRWorkflowApprover, get_role
@@ -2301,9 +2304,21 @@ class AnnualLeavePaymentRequestViewSet(viewsets.ModelViewSet):
         # (the employee dashboard lists only the caller's requests).
         mine = self.request.query_params.get("mine", "").lower() in {"1", "true"}
         if role in {"SystemAdmin", "HRManager", "CEO"} and not mine:
-            return filter_queryset_by_company_scope(qs, self.request)
-        qs = qs.filter(employee=self.request.user)
-        return filter_queryset_by_company_scope(qs, self.request)
+            qs = filter_queryset_by_company_scope(qs, self.request)
+        else:
+            qs = filter_queryset_by_company_scope(qs.filter(employee=self.request.user), self.request)
+        search = self.request.query_params.get("search", "").strip()
+        if search:
+            content_type = ContentType.objects.get_for_model(AnnualLeavePaymentRequest)
+            workflow_ids = WorkflowInstance.objects.filter(
+                content_type=content_type, reference_no__icontains=search
+            ).values("object_id")
+            condition = Q(pk__in=workflow_ids) | Q(employee_profile__employee_id__icontains=search)
+            legacy_match = re.fullmatch(r"AED-(\d+)", search, flags=re.IGNORECASE)
+            if legacy_match:
+                condition |= Q(pk=int(legacy_match.group(1)))
+            qs = qs.filter(condition)
+        return qs
 
     def retrieve(self, request, *args, **kwargs):
         instance = self.get_object()

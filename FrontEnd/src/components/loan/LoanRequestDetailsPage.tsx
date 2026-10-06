@@ -320,7 +320,7 @@ export default function LoanRequestDetailsPage({
             employeeName
           )
         }
-        secondarySubtitle={requestAgeLabel(t, item.created_at)}
+        secondarySubtitle={`${item.public_reference || `#${item.id}`} · ${requestAgeLabel(t, item.created_at)}`}
         tags={
           <ApprovalStatusTag
             label={approvalStatusLabel(item.status as string, t)}

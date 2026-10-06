@@ -56,6 +56,7 @@ export type AnnualLeavePaymentReviewDecision = "forward" | "carry_forward";
  */
 export interface AnnualLeavePaymentRequest {
   id: number;
+  public_reference?: string;
   /** EmployeeProfile id — the value `employee_profile` filters on. */
   employee_id: number | null;
   employee_name: string | null;

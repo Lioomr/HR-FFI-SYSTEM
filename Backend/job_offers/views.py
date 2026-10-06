@@ -16,6 +16,7 @@ from audit.utils import audit
 from core.permissions import IsHRManagerOrAdmin, get_role, is_department_ceo_approver_user
 from core.responses import error, success
 from core.services.messaging_providers import is_e164
+from core.services.request_references import next_reference_for_profile
 from core.services.workflow_engine import can_user_act_on_instance, sync_workflow
 from organization.models import OrganizationNode
 from organization.services import filter_queryset_by_company_scope, get_active_company_for_request
@@ -272,8 +273,10 @@ class JobOfferListCreateView(APIView):
                 ),
                 **signer_snapshot(request.user),
             )
-            _, profile_created = ensure_prehire_profile_for_offer(offer)
-            sync_workflow(offer, actor=request.user)
+            profile, profile_created = ensure_prehire_profile_for_offer(offer)
+            offer.reference_number = next_reference_for_profile("job_offer", profile)[0]
+            offer.save(update_fields=["reference_number"])
+            sync_workflow(offer, actor=request.user, new_request=True)
         audit(
             request,
             "job_offer_created",
@@ -877,6 +880,13 @@ class StartingWorkAcknowledgmentListView(APIView):
                     status=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 )
             queryset = queryset.filter(status=status_filter)
+        search = (request.query_params.get("search") or "").strip()
+        if search:
+            queryset = queryset.filter(
+                Q(reference_number__icontains=search)
+                | Q(employee_profile__employee_id__icontains=search)
+                | Q(employee_profile__full_name__icontains=search)
+            )
         paginator = JobOfferPagination()
         page = paginator.paginate_queryset(queryset, request)
         serializer = StartingWorkAcknowledgmentSerializer(page, many=True, context={"request": request})

@@ -23,8 +23,8 @@ def test_employee_submits_a_valid_request(team, client_for, notifications):
 
     assert response.status_code == 201, response.data
     data = response.data["data"]
-    assert data["reference_no"].startswith(f"PERM-{timezone.localdate():%Y%m%d}-")
-    assert len(data["reference_no"]) == len("PERM-20260910-0001")
+    assert data["reference_no"] == f"PERM-{team.employee.employee_profile.employee_id}01"
+    assert data["public_reference"] == data["reference_no"]
     assert data["status"] == Status.PENDING_MANAGER
     assert data["status_label"] == "Pending Manager"
     assert data["duration_minutes"] == 90
@@ -226,10 +226,19 @@ def test_reference_numbers_are_unique_and_sequential(team, make_user, client_for
     colleague = make_user("Employee", manager=team.manager)
 
     first = _post(client_for, team.employee).data["data"]["reference_no"]
-    second = _post(client_for, colleague).data["data"]["reference_no"]
+    second_response = _post(
+        client_for,
+        team.employee,
+        from_time="13:00",
+        to_time="14:00",
+    )
+    assert second_response.status_code == 201, second_response.data
+    second = second_response.data["data"]["reference_no"]
+    colleague_first = _post(client_for, colleague).data["data"]["reference_no"]
 
-    assert first != second
-    assert int(second.rsplit("-", 1)[1]) == int(first.rsplit("-", 1)[1]) + 1
+    assert first == f"PERM-{team.employee.employee_profile.employee_id}01"
+    assert second == f"PERM-{team.employee.employee_profile.employee_id}02"
+    assert colleague_first == f"PERM-{colleague.employee_profile.employee_id}01"
 
 
 def test_submission_requires_the_employee_company_to_be_the_active_company(team, other_company, client_for):

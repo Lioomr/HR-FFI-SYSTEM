@@ -131,6 +131,12 @@ export default function MyLoanRequestsPage() {
 
   const columns: ColumnsType<LoanRequest> = [
     {
+      title: t("permissionRequests.list.reference"),
+      key: "public_reference",
+      width: 170,
+      render: (_, record) => record.public_reference || `#${record.id}`,
+    },
+    {
       title: t("loans.list.colAmount"),
       key: "requested_amount",
       width: 140,

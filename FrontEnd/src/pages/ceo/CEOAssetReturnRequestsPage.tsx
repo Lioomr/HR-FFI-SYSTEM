@@ -19,7 +19,11 @@ export default function CEOAssetReturnRequestsPage() {
       rejectTitle={t("ceo.assets.returnRejectTitle")}
       detailColumn={{
         title: t("common.notes"),
-        render: (record) => record.note,
+        render: (record) => (
+          <span>
+            <strong>{record.reference_no || `#${record.id}`}</strong> · {record.note}
+          </span>
+        ),
       }}
       fetcher={getCEOAssetReturnRequests}
       approve={approveCEOAssetReturnRequest}

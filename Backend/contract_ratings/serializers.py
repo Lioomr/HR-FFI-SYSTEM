@@ -102,6 +102,13 @@ class ContractRatingResponseReadSerializer(serializers.ModelSerializer):
 
 
 class ContractRatingReadSerializer(serializers.ModelSerializer):
+    reference_no = serializers.SerializerMethodField()
+
+    def get_reference_no(self, obj):
+        from core.services.request_references import public_reference_for
+
+        return public_reference_for(obj)
+
     manager_response = ContractRatingResponseReadSerializer(read_only=True)
     employee_response = ContractRatingResponseReadSerializer(read_only=True)
 
@@ -109,6 +116,7 @@ class ContractRatingReadSerializer(serializers.ModelSerializer):
         model = ContractRating
         fields = (
             "id",
+            "reference_no",
             "contract_decision",
             "company",
             "status",
@@ -155,6 +163,7 @@ class ContractRatingReadSerializer(serializers.ModelSerializer):
         profile = obj.employee_profile
         header = {
             "id": obj.id,
+            "reference_no": self.get_reference_no(obj),
             "status": obj.status,
             "rating_mode": obj.rating_mode,
             "company": obj.company_id,

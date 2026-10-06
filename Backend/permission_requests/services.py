@@ -17,7 +17,6 @@ from datetime import date
 
 from django.db import IntegrityError, transaction
 from django.db.models import Q
-from django.db.models.functions import Length
 from django.utils import timezone
 
 from admin_portal.models import SystemSettings
@@ -32,6 +31,7 @@ from core.services import (
     notify_profile_request_status_whatsapp,
     notify_users_for_pending_status,
 )
+from core.services.request_references import next_reference_for_profile
 from core.services.workflow_engine import begin_recorded_transition, record_workflow_transition
 from employees.models import EmployeeProfile
 from employees.services.manager_relationships import get_valid_manager_user, manager_approval_actor_source
@@ -51,7 +51,6 @@ REQUEST_TYPE_BY_PERMISSION_TYPE = {
     PermissionRequest.PermissionType.LATE: "Late Permission",
     PermissionRequest.PermissionType.DURING_SHIFT: "During Shift Permission",
 }
-REFERENCE_PREFIX = "PERM"
 REFERENCE_ATTEMPTS = 5
 
 EMPLOYEE_ACTION_PATH = "/employee/permission-requests/{id}"
@@ -241,18 +240,6 @@ def add_permission_request_attachments(*, instance: PermissionRequest, user, fil
         _create_attachments(instance=locked, user=user, files=files, metadata=metadata)
 
 
-def _next_reference_no(on_date) -> str:
-    prefix = f"{REFERENCE_PREFIX}-{on_date:%Y%m%d}-"
-    last = (
-        PermissionRequest.objects.filter(reference_no__startswith=prefix)
-        .order_by(Length("reference_no").desc(), "-reference_no")
-        .values_list("reference_no", flat=True)
-        .first()
-    )
-    sequence = int(last.rsplit("-", 1)[1]) + 1 if last else 1
-    return f"{prefix}{sequence:04d}"
-
-
 def submit_permission_request(*, user, profile: EmployeeProfile, data: dict):
     """Create a request owned by ``user``. Returns ``(instance, manager_user)``.
 
@@ -283,7 +270,7 @@ def submit_permission_request(*, user, profile: EmployeeProfile, data: dict):
                     employee=user,
                     employee_profile=profile,
                     company_id=profile.company_id,
-                    reference_no=_next_reference_no(request_date),
+                    reference_no=next_reference_for_profile("permission_request", profile)[0],
                     permission_type=permission_type,
                     request_date=request_date,
                     from_time=data["from_time"],
@@ -306,7 +293,7 @@ def submit_permission_request(*, user, profile: EmployeeProfile, data: dict):
                 )
             return instance, manager_user
         except IntegrityError:
-            # Reference numbers are generated per day and can race between users.
+            # Retry transient uniqueness conflicts while issuing a reference.
             if attempt >= REFERENCE_ATTEMPTS:
                 raise
 

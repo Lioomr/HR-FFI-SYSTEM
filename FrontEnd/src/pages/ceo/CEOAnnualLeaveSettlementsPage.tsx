@@ -206,7 +206,7 @@ export default function CEOAnnualLeaveSettlementsPage() {
           <div style={{ fontWeight: 600, color: "#0f172a" }}>
             {employeeName(record)}
           </div>
-          <div style={{ fontSize: 12, color: "#64748b" }}>#{record.id}</div>
+          <div style={{ fontSize: 12, color: "#64748b" }}>{record.public_reference || `#${record.id}`}</div>
         </div>
       ),
     },

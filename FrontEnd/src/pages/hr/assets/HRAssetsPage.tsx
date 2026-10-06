@@ -725,6 +725,12 @@ export default function HRAssetsPage() {
 
   const returnRequestColumns: ColumnsType<AssetReturnRequest> = [
     {
+      title: t("permissionRequests.list.reference"),
+      key: "reference_no",
+      render: (_, record) => record.reference_no || `#${record.id}`,
+      width: 170,
+    },
+    {
       title: t("hr.assets.employee"),
       dataIndex: "employee_name",
       key: "employee_name",

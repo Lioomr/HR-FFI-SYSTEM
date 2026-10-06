@@ -24,6 +24,7 @@ from rest_framework.response import Response
 from announcements.models import Announcement
 from audit.utils import audit
 from core.exporting import audit_export, xlsx_response
+from core.models import WorkflowInstance
 from core.pagination import EmployeePagination, StandardPagination
 from core.permissions import get_role, is_department_ceo_approver_user
 from core.response_cache import (
@@ -2064,6 +2065,21 @@ class ContractDecisionViewSet(viewsets.ReadOnlyModelViewSet):
         status_value = request.query_params.get("status")
         if status_value:
             queryset = queryset.filter(status=status_value)
+
+        search = (request.query_params.get("search") or "").strip()
+        if search:
+            reference_ids = WorkflowInstance.objects.filter(
+                definition__key="contract_decision", reference_no__icontains=search
+            ).values("object_id")
+            alias_profile_ids = EmployeeIdAlias.objects.filter(old_employee_id__icontains=search).values(
+                "employee_profile_id"
+            )
+            queryset = queryset.filter(
+                Q(pk__in=reference_ids)
+                | Q(employee_profile__employee_id__icontains=search)
+                | Q(employee_profile_id__in=alias_profile_ids)
+                | Q(employee_profile__full_name__icontains=search)
+            )
         employee_id = request.query_params.get("employee_id")
         if employee_id:
             queryset = queryset.filter(employee_profile__employee_id__icontains=employee_id)
@@ -2203,6 +2219,21 @@ class EmployeeDeletionRequestViewSet(viewsets.ModelViewSet):
         status_value = request.query_params.get("status")
         if status_value:
             queryset = queryset.filter(status=status_value)
+
+        search = (request.query_params.get("search") or "").strip()
+        if search:
+            reference_ids = WorkflowInstance.objects.filter(
+                definition__key="employee_deletion_request", reference_no__icontains=search
+            ).values("object_id")
+            alias_profile_ids = EmployeeIdAlias.objects.filter(old_employee_id__icontains=search).values(
+                "employee_profile_id"
+            )
+            queryset = queryset.filter(
+                Q(pk__in=reference_ids)
+                | Q(employee_profile__employee_id__icontains=search)
+                | Q(employee_profile_id__in=alias_profile_ids)
+                | Q(request_snapshot__employee_id__icontains=search)
+            )
 
         page = self.paginate_queryset(queryset)
         serializer = self.get_serializer(page if page is not None else queryset, many=True)
@@ -2447,6 +2478,20 @@ def _profile_change_list_response(view, queryset):
                 "Validation error", errors={"status": [f"Unsupported status. Use one of: {allowed}."]}, status=422
             )
         queryset = queryset.filter(status=status_param)
+    search = (view.request.query_params.get("search") or "").strip()
+    if search:
+        reference_ids = WorkflowInstance.objects.filter(
+            definition__key="employee_profile_change", reference_no__icontains=search
+        ).values("object_id")
+        alias_profile_ids = EmployeeIdAlias.objects.filter(old_employee_id__icontains=search).values(
+            "employee_profile_id"
+        )
+        queryset = queryset.filter(
+            Q(pk__in=reference_ids)
+            | Q(employee_profile__employee_id__icontains=search)
+            | Q(employee_profile_id__in=alias_profile_ids)
+            | Q(employee_profile__full_name__icontains=search)
+        )
     queryset = queryset.order_by("-created_at", "-id")
     page = view.paginate_queryset(queryset)
     items = page if page is not None else list(queryset)

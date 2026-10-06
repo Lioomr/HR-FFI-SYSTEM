@@ -16,6 +16,7 @@ from rest_framework.permissions import IsAuthenticated
 
 from audit.utils import audit
 from core.files import read_field_file_bytes
+from core.models import WorkflowInstance
 from core.pagination import StandardPagination
 from core.pdf import merge_pdfs
 from core.permissions import IsDepartmentCEOApprover, get_role
@@ -28,7 +29,8 @@ from core.services import (
     send_request_submission_email,
     sync_leave_obligations,
 )
-from employees.models import EmployeeProfile
+from core.services.request_references import public_reference_for
+from employees.models import EmployeeIdAlias, EmployeeProfile
 from employees.services.manager_relationships import (
     get_valid_manager_user,
     manager_scope_q,
@@ -76,6 +78,22 @@ from .services.return_requests import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _search_return_requests(queryset, term):
+    term = (term or "").strip()
+    if not term:
+        return queryset
+    reference_ids = WorkflowInstance.objects.filter(
+        definition__key="asset_return_request", reference_no__icontains=term
+    ).values("object_id")
+    alias_profile_ids = EmployeeIdAlias.objects.filter(old_employee_id__icontains=term).values("employee_profile_id")
+    return queryset.filter(
+        Q(pk__in=reference_ids)
+        | Q(employee__employee_id__icontains=term)
+        | Q(employee_id__in=alias_profile_ids)
+        | Q(asset__asset_code__icontains=term)
+    )
 
 
 def _configure_sensitive_download(response, filename):
@@ -314,7 +332,7 @@ def _build_return_request_pdf(req: AssetReturnRequest) -> bytes:
     doc = RequestDocument(
         title_en="Asset Return Request",
         title_ar="طلب إعادة أصل",
-        reference_no=str(req.id),
+        reference_no=public_reference_for(req) or str(req.id),
         employee=_asset_employee_block(req.employee),
         details=details,
         approvals=approvals,
@@ -852,6 +870,7 @@ class AssetViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(status=status_param)
         if asset_id:
             queryset = queryset.filter(asset_id=asset_id)
+        queryset = _search_return_requests(queryset, request.query_params.get("search"))
 
         page = self.paginate_queryset(queryset.order_by("-requested_at"))
         serializer = AssetReturnRequestSerializer(page if page is not None else queryset, many=True)
@@ -991,6 +1010,7 @@ class AssetViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(status=status_param)
         if asset_id:
             queryset = queryset.filter(asset_id=asset_id)
+        queryset = _search_return_requests(queryset, request.query_params.get("search"))
 
         page = self.paginate_queryset(queryset.order_by("-requested_at"))
         serializer = AssetReturnRequestSerializer(page if page is not None else queryset, many=True)
@@ -1409,6 +1429,8 @@ class ManagerAssetReturnRequestViewSet(viewsets.ReadOnlyModelViewSet):
         else:
             queryset = queryset.filter(status=AssetReturnRequest.RequestStatus.PENDING_MANAGER)
 
+        queryset = _search_return_requests(queryset, request.query_params.get("search"))
+
         page = self.paginate_queryset(queryset.order_by("-requested_at"))
         serializer = self.get_serializer(page if page is not None else queryset, many=True)
         if page is not None:
@@ -1514,8 +1536,12 @@ class CEOAssetReturnRequestViewSet(viewsets.ReadOnlyModelViewSet):
             qs = filter_queryset_by_accessible_companies(qs, self.request, field_name="asset__company_id")
         status_param = self.request.query_params.get("status")
         if status_param:
-            return qs.filter(status=status_param)
-        return qs.filter(status=AssetReturnRequest.RequestStatus.PENDING_CEO)
+            qs = qs.filter(status=status_param)
+        else:
+            qs = qs.filter(status=AssetReturnRequest.RequestStatus.PENDING_CEO)
+        if self.action == "list":
+            qs = _search_return_requests(qs, self.request.query_params.get("search"))
+        return qs
 
     @action(detail=True, methods=["post"])
     def approve(self, request, pk=None):

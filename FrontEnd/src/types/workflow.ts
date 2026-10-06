@@ -20,6 +20,7 @@ export interface WorkflowHistoryEntry {
 }
 
 export interface WorkflowSnapshot {
+  reference_no?: string | null;
   status:
     | "draft"
     | "submitted"
