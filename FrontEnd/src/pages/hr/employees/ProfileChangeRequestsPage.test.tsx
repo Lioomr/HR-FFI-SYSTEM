@@ -93,26 +93,99 @@ const renderPage = async () => {
 
 const decide = (drawer: HTMLElement, field: string, choice: string) =>
   fireEvent.click(
-    within(within(drawer).getByRole("radiogroup", { name: field })).getByText(
-      choice,
-    ),
+    within(
+      within(drawer).getByRole("radiogroup", { name: `Decision for ${field}` }),
+    ).getByText(choice),
   );
 
 describe("ProfileChangeRequestsPage", () => {
-  it("lists pending requests and shows each field with current and requested values", async () => {
+  it("shows each changed field as a card with its current and requested values", async () => {
     const drawer = await renderPage();
     expect(get).toHaveBeenCalledWith(BASE, {
       params: { status: "PENDING_HR", page: 1, page_size: 20 },
     });
-    expect(within(drawer).getByText("A1234567")).toBeInTheDocument();
-    expect(within(drawer).getByText("B7654321")).toBeInTheDocument();
-    expect(within(drawer).getByText("Read from document")).toBeInTheDocument();
+    // No horizontal-scrolling table: every field is its own labelled card.
     expect(
-      within(drawer).getByRole("button", { name: /passport-scan\.pdf/ }),
+      within(drawer).queryByRole("columnheader", { name: "Field" }),
+    ).not.toBeInTheDocument();
+    const passport = within(drawer).getByRole("region", {
+      name: "Passport number",
+    });
+    expect(within(passport).getByText("Current")).toBeInTheDocument();
+    expect(within(passport).getByText("A1234567")).toBeInTheDocument();
+    expect(within(passport).getByText("Requested")).toBeInTheDocument();
+    expect(within(passport).getByText("B7654321")).toBeInTheDocument();
+    expect(
+      within(passport).getByText("Read from document"),
+    ).toBeInTheDocument();
+
+    const mobile = within(drawer).getByRole("region", {
+      name: "Mobile number",
+    });
+    expect(within(mobile).getByText("0500000000")).toBeInTheDocument();
+    expect(within(mobile).getByText("0511111111")).toBeInTheDocument();
+    expect(
+      within(mobile).queryByText("Read from document"),
+    ).not.toBeInTheDocument();
+
+    const file = within(drawer).getByRole("region", { name: "Passport file" });
+    expect(within(file).getByText("No current value")).toBeInTheDocument();
+    expect(
+      within(file).getByRole("button", { name: /passport-scan\.pdf/ }),
+    ).toBeInTheDocument();
+
+    expect(
+      within(drawer).getByText("0 of 3 fields decided"),
     ).toBeInTheDocument();
     expect(
       within(drawer).getByRole("button", { name: "Submit decisions" }),
     ).toBeDisabled();
+  });
+
+  it("enables submit only after every field is decided one by one", async () => {
+    const drawer = await renderPage();
+    const submit = within(drawer).getByRole("button", {
+      name: "Submit decisions",
+    });
+    decide(drawer, "Passport number", "Approve");
+    expect(
+      await within(drawer).findByText("1 of 3 fields decided"),
+    ).toBeInTheDocument();
+    decide(drawer, "Mobile number", "Approve");
+    expect(submit).toBeDisabled();
+    decide(drawer, "Passport file", "Approve");
+    expect(
+      await within(drawer).findByText("3 of 3 fields decided"),
+    ).toBeInTheDocument();
+    await waitFor(() => expect(submit).toBeEnabled());
+  });
+
+  it("asks for a required reason inline when a field is rejected", async () => {
+    const drawer = await renderPage();
+    expect(
+      within(drawer).queryByLabelText("Reason for rejecting Mobile number"),
+    ).not.toBeInTheDocument();
+    decide(drawer, "Mobile number", "Reject");
+    const reason = within(drawer).getByLabelText(
+      "Reason for rejecting Mobile number",
+    );
+    expect(reason).toHaveAttribute("aria-required", "true");
+    expect(reason).toHaveAttribute("aria-invalid", "true");
+    expect(
+      within(drawer).getByText("Add a reason for each rejected field."),
+    ).toBeInTheDocument();
+    fireEvent.change(reason, { target: { value: "Wrong number" } });
+    await waitFor(() =>
+      expect(reason).toHaveAttribute("aria-invalid", "false"),
+    );
+    expect(
+      within(drawer).queryByText("Add a reason for each rejected field."),
+    ).not.toBeInTheDocument();
+    // Switching back to approve hides the reason box again.
+    decide(drawer, "Mobile number", "Approve");
+    expect(
+      within(drawer).queryByLabelText("Reason for rejecting Mobile number"),
+    ).not.toBeInTheDocument();
   });
 
   it("requires every field decided and a reason for each rejection", async () => {

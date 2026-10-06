@@ -5412,6 +5412,12 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "profileChange.hr.actionFailed": "Couldn’t save the decisions.",
     "profileChange.hr.decidedBy": "Decided by",
     "profileChange.hr.decisionNote": "Decision note",
+    "profileChange.hr.noCurrentValue": "No current value",
+    "profileChange.hr.decisionFor": "Decision for {field}",
+    "profileChange.hr.rejectReasonLabel": "Reason for rejection",
+    "profileChange.hr.rejectReasonHelp":
+      "Required. The employee will see this reason.",
+    "profileChange.hr.progress": "{done} of {total} fields decided",
   },
 
   ar: {
@@ -10724,5 +10730,10 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "profileChange.hr.actionFailed": "تعذّر حفظ القرارات.",
     "profileChange.hr.decidedBy": "صاحب القرار",
     "profileChange.hr.decisionNote": "ملاحظة القرار",
+    "profileChange.hr.noCurrentValue": "لا توجد قيمة حالية",
+    "profileChange.hr.decisionFor": "القرار بشأن {field}",
+    "profileChange.hr.rejectReasonLabel": "سبب الرفض",
+    "profileChange.hr.rejectReasonHelp": "مطلوب. سيظهر هذا السبب للموظف.",
+    "profileChange.hr.progress": "تم البتّ في {done} من {total}",
   },
 };

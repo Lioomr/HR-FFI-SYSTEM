@@ -1,21 +1,28 @@
 import { useCallback, useEffect, useState } from "react";
+import type { CSSProperties } from "react";
 import { Link } from "react-router-dom";
 import {
   Alert,
   Button,
   Card,
+  ConfigProvider,
   Descriptions,
   Drawer,
+  Grid,
   Input,
   Radio,
   Select,
   Space,
-  Table,
   Tag,
   Typography,
   message,
+  theme,
 } from "antd";
 import {
+  ArrowLeftOutlined,
+  ArrowRightOutlined,
+  CheckOutlined,
+  CloseOutlined,
   EyeOutlined,
   FileSearchOutlined,
   ReloadOutlined,
@@ -42,7 +49,7 @@ import { getHttpErrorMessage } from "../../../services/api/httpErrors";
 import { useI18n } from "../../../i18n/useI18n";
 import { formatDateOnly, formatDateTime } from "../../../utils/dateTime";
 
-const { Text } = Typography;
+const { Text, Title } = Typography;
 const PAGE_SIZE = 20;
 
 const STATUS_COLORS: Record<ProfileChangeStatus, string> = {
@@ -63,13 +70,25 @@ type StatusFilter = ProfileChangeStatus | "ALL";
 type RowDecision = { decision?: "approve" | "reject"; note: string };
 const FILE_FIELDS = ["passport_file", "national_id_file"];
 
+// Long names, e-mails and ids must wrap instead of widening the drawer.
+const WRAP: CSSProperties = {
+  overflowWrap: "anywhere",
+  wordBreak: "break-word",
+  minWidth: 0,
+};
+
 /**
  * HR queue for employee profile change requests. HR decides every field in
  * one submission; approved fields are applied server-side, rejected ones
  * need a reason the employee sees.
  */
 export default function ProfileChangeRequestsPage() {
-  const { t } = useI18n();
+  const { t, language } = useI18n();
+  const { token } = theme.useToken();
+  const screens = Grid.useBreakpoint();
+  // Current/requested sit side by side unless the screen is phone-narrow.
+  const stackValues = screens.sm === false;
+  const isPhone = screens.md === false;
   const [messageApi, messageContext] = message.useMessage();
   const { openPreview, previewModal } = useFilePreview();
   const [status, setStatus] = useState<StatusFilter>("PENDING_HR");
@@ -146,9 +165,11 @@ export default function ProfileChangeRequestsPage() {
     );
 
   const canAct = Boolean(selected?.can_act && selected.status === "PENDING_HR");
+  const decidedCount = (selected?.items ?? []).filter(
+    (item) => decisions[item.field]?.decision,
+  ).length;
   const allDecided = Boolean(
-    selected?.items.length &&
-    selected.items.every((item) => decisions[item.field]?.decision),
+    selected?.items.length && decidedCount === selected.items.length,
   );
   const missingNote = Boolean(
     selected?.items.some(
@@ -210,7 +231,9 @@ export default function ProfileChangeRequestsPage() {
   };
 
   const statusTag = (value: ProfileChangeStatus) => (
-    <Tag color={STATUS_COLORS[value]}>{t(STATUS_KEYS[value], value)}</Tag>
+    <Tag color={STATUS_COLORS[value]} style={{ marginInlineEnd: 0 }}>
+      {t(STATUS_KEYS[value], value)}
+    </Tag>
   );
 
   const requestedValue = (
@@ -220,11 +243,25 @@ export default function ProfileChangeRequestsPage() {
     const attachment = FILE_FIELDS.includes(item.field)
       ? request.attachments?.find((entry) => entry.field === item.field)
       : undefined;
-    if (!attachment) return <Text strong>{item.new}</Text>;
+    if (!attachment) {
+      return (
+        <Text strong style={{ ...WRAP, fontSize: 15 }}>
+          {item.new}
+        </Text>
+      );
+    }
     return (
       <Button
-        size="small"
         icon={<EyeOutlined />}
+        style={{
+          ...WRAP,
+          maxWidth: "100%",
+          minHeight: 44,
+          height: "auto",
+          whiteSpace: "normal",
+          textAlign: "start",
+          alignSelf: "flex-start",
+        }}
         onClick={() =>
           openPreview({
             title: fieldLabel(item.field),
@@ -241,55 +278,237 @@ export default function ProfileChangeRequestsPage() {
     );
   };
 
-  const decisionCell = (item: ProfileChangeItem) => {
-    if (!canAct) {
-      return (
-        <Space direction="vertical" size={2}>
-          {item.decision === "approved" ? (
-            <Tag color="green">{t("status.approved")}</Tag>
-          ) : item.decision === "rejected" ? (
-            <Tag color="red">{t("status.rejected")}</Tag>
-          ) : (
-            <Tag>{t("status.pending")}</Tag>
-          )}
-          {item.note ? <Text type="secondary">{item.note}</Text> : null}
-        </Space>
-      );
-    }
+  const decisionControl = (item: ProfileChangeItem) => {
     const row = decisions[item.field];
+    const noteId = `profile-change-note-${item.field}`;
+    const noteMissing = row?.decision === "reject" && !row.note.trim();
     return (
-      <Space direction="vertical" size={6} style={{ minWidth: 180 }}>
-        <div role="radiogroup" aria-label={fieldLabel(item.field)}>
-          <Radio.Group
-            optionType="button"
-            buttonStyle="solid"
-            size="small"
-            value={row?.decision}
-            onChange={(event) =>
-              setRow(item.field, { decision: event.target.value })
-            }
-            options={[
-              { value: "approve", label: t("profileChange.hr.approve") },
-              { value: "reject", label: t("profileChange.hr.reject") },
-            ]}
-          />
-        </div>
-        {row?.decision === "reject" ? (
-          <Input.TextArea
-            aria-label={t("profileChange.hr.rejectReasonFor", {
+      <Space orientation="vertical" size={8} style={{ width: "100%" }}>
+        {/* The selected option takes the colour of the decision it records. */}
+        <ConfigProvider
+          theme={{
+            token: {
+              controlHeightLG: 44,
+              colorPrimary:
+                row?.decision === "reject"
+                  ? token.colorError
+                  : token.colorSuccess,
+            },
+          }}
+        >
+          <div
+            role="radiogroup"
+            aria-label={t("profileChange.hr.decisionFor", {
               field: fieldLabel(item.field),
             })}
-            placeholder={t("profileChange.hr.rejectReason")}
-            autoSize={{ minRows: 1, maxRows: 4 }}
-            maxLength={500}
-            status={row.note.trim() ? undefined : "error"}
-            value={row.note}
-            onChange={(event) =>
-              setRow(item.field, { note: event.target.value })
-            }
-          />
+          >
+            <Radio.Group
+              block
+              optionType="button"
+              buttonStyle="solid"
+              size="large"
+              value={row?.decision}
+              onChange={(event) =>
+                setRow(item.field, { decision: event.target.value })
+              }
+              options={[
+                {
+                  value: "approve",
+                  label: (
+                    <span>
+                      <CheckOutlined aria-hidden />{" "}
+                      {t("profileChange.hr.approve")}
+                    </span>
+                  ),
+                },
+                {
+                  value: "reject",
+                  label: (
+                    <span>
+                      <CloseOutlined aria-hidden />{" "}
+                      {t("profileChange.hr.reject")}
+                    </span>
+                  ),
+                },
+              ]}
+            />
+          </div>
+        </ConfigProvider>
+        {row?.decision === "reject" ? (
+          <div>
+            <label
+              htmlFor={noteId}
+              style={{ display: "block", marginBottom: 4, fontWeight: 500 }}
+            >
+              {t("profileChange.hr.rejectReasonLabel")}{" "}
+              <Text type="danger" aria-hidden>
+                *
+              </Text>
+            </label>
+            <Input.TextArea
+              id={noteId}
+              aria-label={t("profileChange.hr.rejectReasonFor", {
+                field: fieldLabel(item.field),
+              })}
+              aria-required
+              aria-invalid={noteMissing}
+              aria-describedby={`${noteId}-help`}
+              placeholder={t("profileChange.hr.rejectReason")}
+              autoSize={{ minRows: 2, maxRows: 5 }}
+              maxLength={500}
+              status={noteMissing ? "error" : undefined}
+              value={row.note}
+              onChange={(event) =>
+                setRow(item.field, { note: event.target.value })
+              }
+            />
+            <Text
+              id={`${noteId}-help`}
+              type={noteMissing ? "danger" : "secondary"}
+              style={{ fontSize: 12 }}
+            >
+              {t("profileChange.hr.rejectReasonHelp")}
+            </Text>
+          </div>
         ) : null}
       </Space>
+    );
+  };
+
+  const decidedResult = (item: ProfileChangeItem) => (
+    <Space orientation="vertical" size={2} style={{ width: "100%" }}>
+      {item.decision === "approved" ? (
+        <Tag color="green" style={{ marginInlineEnd: 0 }}>
+          {t("status.approved")}
+        </Tag>
+      ) : item.decision === "rejected" ? (
+        <Tag color="red" style={{ marginInlineEnd: 0 }}>
+          {t("status.rejected")}
+        </Tag>
+      ) : (
+        <Tag style={{ marginInlineEnd: 0 }}>{t("status.pending")}</Tag>
+      )}
+      {item.note ? (
+        <Text type="secondary" style={WRAP}>
+          {item.note}
+        </Text>
+      ) : null}
+    </Space>
+  );
+
+  const fieldCard = (
+    request: ProfileChangeRequest,
+    item: ProfileChangeItem,
+  ) => {
+    const choice = canAct
+      ? decisions[item.field]?.decision
+      : item.decision === "approved"
+        ? "approve"
+        : item.decision === "rejected"
+          ? "reject"
+          : undefined;
+    const accent =
+      choice === "approve"
+        ? token.colorSuccess
+        : choice === "reject"
+          ? token.colorError
+          : token.colorBorder;
+    const headingId = `profile-change-field-${item.field}`;
+    const valueBox: CSSProperties = {
+      ...WRAP,
+      padding: "8px 12px",
+      borderRadius: token.borderRadius,
+      display: "flex",
+      flexDirection: "column",
+      gap: 2,
+    };
+    return (
+      <section
+        key={item.field}
+        aria-labelledby={headingId}
+        style={{
+          border: `1px solid ${token.colorBorderSecondary}`,
+          borderInlineStart: `4px solid ${accent}`,
+          borderRadius: token.borderRadiusLG,
+          padding: 12,
+          background: token.colorBgContainer,
+          display: "flex",
+          flexDirection: "column",
+          gap: 10,
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
+            alignItems: "center",
+            gap: 8,
+          }}
+        >
+          <Text strong id={headingId} style={{ ...WRAP, fontSize: 15 }}>
+            {fieldLabel(item.field)}
+          </Text>
+          {item.source === "ocr" ? (
+            <Tag
+              color="purple"
+              icon={<FileSearchOutlined />}
+              style={{ marginInlineEnd: 0 }}
+            >
+              {t("profileChange.readFromDocument")}
+            </Tag>
+          ) : null}
+        </div>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: stackValues
+              ? "minmax(0, 1fr)"
+              : "minmax(0, 1fr) auto minmax(0, 1fr)",
+            gap: stackValues ? 6 : 10,
+          }}
+        >
+          <div style={{ ...valueBox, background: token.colorFillQuaternary }}>
+            <Text type="secondary" style={{ fontSize: 12 }}>
+              {t("profileChange.hr.current")}
+            </Text>
+            {item.old ? (
+              <Text type="secondary" delete={choice !== "reject"} style={WRAP}>
+                {item.old}
+              </Text>
+            ) : (
+              <Text type="secondary" italic style={WRAP}>
+                {t("profileChange.hr.noCurrentValue")}
+              </Text>
+            )}
+          </div>
+          {stackValues ? null : (
+            <Text
+              type="secondary"
+              aria-hidden
+              style={{ alignSelf: "center", fontSize: 16 }}
+            >
+              {language === "ar" ? (
+                <ArrowLeftOutlined />
+              ) : (
+                <ArrowRightOutlined />
+              )}
+            </Text>
+          )}
+          <div
+            style={{
+              ...valueBox,
+              background: token.colorPrimaryBg,
+              border: `1px solid ${token.colorPrimaryBorder}`,
+            }}
+          >
+            <Text type="secondary" style={{ fontSize: 12 }}>
+              {t("profileChange.hr.requested")}
+            </Text>
+            {requestedValue(request, item)}
+          </div>
+        </div>
+        {canAct ? decisionControl(item) : decidedResult(item)}
+      </section>
     );
   };
 
@@ -297,14 +516,18 @@ export default function ProfileChangeRequestsPage() {
     {
       title: t("permissionRequests.list.reference"),
       key: "reference_no",
-      render: (_: unknown, row: ProfileChangeRequest) => row.reference_no || `#${row.id}`,
+      render: (_: unknown, row: ProfileChangeRequest) =>
+        row.reference_no || `#${row.id}`,
     },
     {
       title: t("common.employee"),
       key: "employee",
       render: (_: unknown, row: ProfileChangeRequest) => (
-        <div>
-          <Link to={`/hr/employees/${row.employee.id}`}>
+        <div style={WRAP}>
+          <Link
+            to={`/hr/employees/${row.employee.id}`}
+            style={{ color: "var(--brand-primary)", fontWeight: 500 }}
+          >
             {row.employee.full_name}
           </Link>
           <div>
@@ -318,8 +541,13 @@ export default function ProfileChangeRequestsPage() {
     {
       title: t("profileChange.hr.changes"),
       key: "changes",
-      render: (_: unknown, row: ProfileChangeRequest) =>
-        row.items.map((item) => fieldLabel(item.field)).join(", ") || "—",
+      render: (_: unknown, row: ProfileChangeRequest) => (
+        <span style={WRAP}>
+          {row.items
+            .map((item) => fieldLabel(item.field))
+            .join(language === "ar" ? "، " : ", ") || "—"}
+        </span>
+      ),
     },
     {
       title: t("profileChange.hr.submittedAt"),
@@ -336,49 +564,64 @@ export default function ProfileChangeRequestsPage() {
       title: t("common.actions"),
       key: "actions",
       render: (_: unknown, row: ProfileChangeRequest) => (
-        <Button size="small" onClick={() => void openDetail(row)}>
+        <Button
+          size={isPhone ? "middle" : "small"}
+          block={isPhone}
+          onClick={() => void openDetail(row)}
+        >
           {t("profileChange.hr.review")}
         </Button>
       ),
     },
   ];
 
-  const itemColumns = selected
-    ? [
-        {
-          title: t("profileChange.hr.field"),
-          key: "field",
-          render: (_: unknown, item: ProfileChangeItem) => (
-            <Space direction="vertical" size={2}>
-              <Text strong>{fieldLabel(item.field)}</Text>
-              {item.source === "ocr" ? (
-                <Tag color="purple" icon={<FileSearchOutlined />}>
-                  {t("profileChange.readFromDocument")}
-                </Tag>
-              ) : null}
-            </Space>
-          ),
-        },
-        {
-          title: t("profileChange.hr.current"),
-          key: "old",
-          render: (_: unknown, item: ProfileChangeItem) => (
-            <Text type="secondary">{item.old || "—"}</Text>
-          ),
-        },
-        {
-          title: t("profileChange.hr.requested"),
-          key: "new",
-          render: (_: unknown, item: ProfileChangeItem) =>
-            requestedValue(selected, item),
-        },
-        {
-          title: t("profileChange.hr.decision"),
-          key: "decision",
-          render: (_: unknown, item: ProfileChangeItem) => decisionCell(item),
-        },
-      ]
-    : [];
+  const drawerFooter =
+    selected && canAct ? (
+      <div
+        style={{
+          display: "flex",
+          flexDirection: isPhone ? "column" : "row",
+          alignItems: isPhone ? "stretch" : "center",
+          justifyContent: "space-between",
+          gap: isPhone ? 8 : 16,
+        }}
+      >
+        <div role="status" aria-live="polite" style={WRAP}>
+          <Text strong>
+            {t("profileChange.hr.progress", {
+              done: decidedCount,
+              total: selected.items.length,
+            })}
+          </Text>
+          {missingNote ? (
+            <div>
+              <Text type="danger" style={{ fontSize: 12 }}>
+                {t("profileChange.hr.rejectNoteRequired")}
+              </Text>
+            </div>
+          ) : null}
+        </div>
+        <div style={{ display: "flex", gap: 8 }}>
+          <Button
+            size="large"
+            style={{ flex: isPhone ? "1 1 0" : undefined }}
+            onClick={approveAll}
+          >
+            {t("profileChange.hr.approveAll")}
+          </Button>
+          <Button
+            type="primary"
+            size="large"
+            style={{ flex: isPhone ? "1 1 0" : undefined }}
+            loading={submitting}
+            disabled={!allDecided || missingNote}
+            onClick={() => void submitDecisions()}
+          >
+            {t("profileChange.hr.submitDecisions")}
+          </Button>
+        </div>
+      </div>
+    ) : null;
 
   return (
     <div>
@@ -429,13 +672,12 @@ export default function ProfileChangeRequestsPage() {
 
       <Card variant="borderless" style={{ borderRadius: 12 }}>
         <ResponsiveTable<ProfileChangeRequest>
-          mobileCard={{ titleKey: "employee" }}
+          mobileCard={{ titleKey: "employee", extraKey: "status" }}
           rowKey="id"
           loading={loading}
           columns={columns}
           dataSource={items}
           size="small"
-          scroll={{ x: "max-content" }}
           locale={{ emptyText: t("profileChange.hr.empty") }}
           pagination={{
             current: page,
@@ -450,20 +692,37 @@ export default function ProfileChangeRequestsPage() {
       <Drawer
         open={Boolean(selected)}
         onClose={() => setSelected(null)}
-        title={selected ? selected.employee.full_name : ""}
-        width="min(760px, 100vw)"
+        title={
+          selected ? (
+            <div style={WRAP}>
+              <div>{selected.employee.full_name}</div>
+              <Space size={8} wrap style={{ marginTop: 2 }}>
+                <Text type="secondary" style={{ fontWeight: 400 }}>
+                  {selected.reference_no || `#${selected.id}`}
+                </Text>
+                {statusTag(selected.status)}
+              </Space>
+            </div>
+          ) : (
+            ""
+          )
+        }
+        width={isPhone ? "100vw" : "min(900px, 100vw)"}
+        footer={drawerFooter}
+        styles={{
+          body: { padding: isPhone ? 16 : 24 },
+          footer: {
+            paddingBlock: 12,
+            paddingInline: isPhone ? 16 : 24,
+            paddingBottom: "calc(12px + env(safe-area-inset-bottom))",
+          },
+        }}
         destroyOnHidden
       >
         {selected ? (
-          <Space direction="vertical" size={16} style={{ width: "100%" }}>
+          <Space orientation="vertical" size={16} style={{ width: "100%" }}>
             <PendingActionBanner workflow={selected.workflow} />
             <Descriptions column={1} bordered size="small">
-              <Descriptions.Item label={t("permissionRequests.list.reference")}>
-                {selected.reference_no || `#${selected.id}`}
-              </Descriptions.Item>
-              <Descriptions.Item label={t("common.status")}>
-                {statusTag(selected.status)}
-              </Descriptions.Item>
               <Descriptions.Item label={t("profileChange.hr.submittedAt")}>
                 {formatDateTime(selected.submitted_at)}
               </Descriptions.Item>
@@ -475,7 +734,7 @@ export default function ProfileChangeRequestsPage() {
               ) : null}
               {selected.decision_note ? (
                 <Descriptions.Item label={t("profileChange.hr.decisionNote")}>
-                  {selected.decision_note}
+                  <span style={WRAP}>{selected.decision_note}</span>
                 </Descriptions.Item>
               ) : null}
             </Descriptions>
@@ -486,29 +745,14 @@ export default function ProfileChangeRequestsPage() {
                 title={t("profileChange.hr.decideHint")}
               />
             ) : null}
-            <Table<ProfileChangeItem>
-              rowKey="field"
-              size="small"
-              pagination={false}
-              scroll={{ x: "max-content" }}
-              columns={itemColumns}
-              dataSource={selected.items}
-            />
-            {canAct ? (
-              <Space wrap>
-                <Button onClick={approveAll}>
-                  {t("profileChange.hr.approveAll")}
-                </Button>
-                <Button
-                  type="primary"
-                  loading={submitting}
-                  disabled={!allDecided || missingNote}
-                  onClick={() => void submitDecisions()}
-                >
-                  {t("profileChange.hr.submitDecisions")}
-                </Button>
+            <div>
+              <Title level={5} style={{ marginTop: 0 }}>
+                {t("profileChange.hr.changes")} ({selected.items.length})
+              </Title>
+              <Space orientation="vertical" size={12} style={{ width: "100%" }}>
+                {selected.items.map((item) => fieldCard(selected, item))}
               </Space>
-            ) : null}
+            </div>
             <ApprovalTimeline workflow={selected.workflow} />
           </Space>
         ) : null}
