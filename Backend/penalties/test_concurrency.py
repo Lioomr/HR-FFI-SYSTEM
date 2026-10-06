@@ -22,13 +22,14 @@ from .tasks import issue_auto_warnings
 
 
 class PenaltyLockTests(TransactionTestCase):
-    # The teardown flush would otherwise delete migration-seeded rows (groups,
-    # catalog) for later tests and for --reuse-db runs of the shared test DB.
+    # Preserve migration-seeded rows for classes that follow this one. Restore
+    # once after the class; each test's serialized setup handles its own rows.
     serialized_rollback = True
 
-    def _fixture_teardown(self):
-        super()._fixture_teardown()
-        for alias in self._databases_names(include_mirrors=False):
+    @classmethod
+    def tearDownClass(cls):
+        super().tearDownClass()
+        for alias in cls._databases_names(include_mirrors=False):
             contents = getattr(connections[alias], "_test_serialized_contents", None)
             if contents:
                 connections[alias].creation.deserialize_db_from_string(contents)
