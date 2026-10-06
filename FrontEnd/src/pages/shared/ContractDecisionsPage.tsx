@@ -399,6 +399,11 @@ export default function ContractDecisionsPage() {
           <Typography.Text type="secondary" style={{ fontSize: 12 }}>
             {item.employee.employee_id}
           </Typography.Text>
+          {item.reference_no && (
+            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+              {item.reference_no}
+            </Typography.Text>
+          )}
         </span>
       ),
     },
@@ -987,7 +992,8 @@ export default function ContractDecisionsPage() {
     ? records.filter(
         (item) =>
           item.employee.full_name.toLowerCase().includes(query) ||
-          item.employee.employee_id.toLowerCase().includes(query),
+          item.employee.employee_id.toLowerCase().includes(query) ||
+          item.reference_no?.toLowerCase().includes(query),
       )
     : records;
 

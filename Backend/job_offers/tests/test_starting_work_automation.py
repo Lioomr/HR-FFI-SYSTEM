@@ -61,7 +61,7 @@ class StartingWorkAcknowledgmentAutomationTests(TestCase):
         self.profile = EmployeeProfile.objects.create(
             user=self.employee,
             company=self.company,
-            employee_id="SWA-EMP-100",
+            employee_id="SWA-0001",
             full_name="BioTime Employee",
             department="Operations",
             job_title="Operator",
@@ -142,7 +142,16 @@ class StartingWorkAcknowledgmentAutomationTests(TestCase):
             employee_profile=self.profile
         )
         self.assertEqual(acknowledgment.job_offer, self.offer)
-        self.assertEqual(acknowledgment.reference_number, "SWA-SWA-EMP-100-20260401")
+        self.assertEqual(acknowledgment.reference_number, "SWA-SWA-000101")
+        client = APIClient()
+        client.force_authenticate(user=self.hr)
+        search_response = client.get(
+            "/starting-work-acknowledgments/",
+            {"search": acknowledgment.reference_number},
+            HTTP_X_ACTIVE_COMPANY_ID=str(self.company.id),
+        )
+        self.assertEqual(search_response.status_code, 200)
+        self.assertEqual(search_response.data["data"]["count"], 1)
         self.assertEqual(acknowledgment.status, StartingWorkAcknowledgment.Status.PENDING_HR)
         self.assertTrue(acknowledgment.generated_by_system)
         self.assertEqual(acknowledgment.document.document_type, EmployeeDocument.DocumentType.OTHER)
@@ -151,7 +160,7 @@ class StartingWorkAcknowledgmentAutomationTests(TestCase):
         self.assertEqual(acknowledgment.document.extracted_fields["ocr"], "skipped")
         self.assertEqual(
             acknowledgment.document.original_filename,
-            "starting-work-acknowledgment-SWA-EMP-100-20260401.pdf",
+            "starting-work-acknowledgment-SWA-SWA-000101.pdf",
         )
         self.assertTrue(acknowledgment.document.file.read().startswith(b"%PDF"))
         notify.assert_called_once_with(acknowledgment)

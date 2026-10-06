@@ -4,6 +4,7 @@ from django.utils import timezone
 from rest_framework import serializers
 
 from core.services import get_workflow_snapshot_read_only, get_workflow_snapshots
+from core.services.request_references import public_reference_for
 from employees.models import EmployeeProfile
 
 from .models import LoanRequest
@@ -22,6 +23,7 @@ class LoanRequestListSerializer(serializers.ListSerializer):
 
 
 class LoanRequestReadSerializer(serializers.ModelSerializer):
+    public_reference = serializers.SerializerMethodField()
     employee = serializers.SerializerMethodField()
     decision_history = serializers.SerializerMethodField()
     target_deduction_period = serializers.SerializerMethodField()
@@ -34,6 +36,7 @@ class LoanRequestReadSerializer(serializers.ModelSerializer):
         list_serializer_class = LoanRequestListSerializer
         fields = [
             "id",
+            "public_reference",
             "employee",
             "requested_amount",
             "approved_amount",
@@ -68,6 +71,9 @@ class LoanRequestReadSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         ]
+
+    def get_public_reference(self, obj):
+        return public_reference_for(obj) or f"LN-{obj.pk:05d}"
 
     def get_employee(self, obj):
         profile = obj.employee_profile

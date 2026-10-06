@@ -30,6 +30,7 @@ from core.services import (
     get_workflow_snapshot,
     sync_workflow,
 )
+from core.services.workflow_engine import begin_recorded_transition
 from employees.models import EmployeeDeletionRequest, EmployeeDocument, EmployeeProfile
 from hr_reference.models import Department, Position
 from leaves.models import LeaveRequest, LeaveType
@@ -541,6 +542,24 @@ class WorkflowSnapshotTests(TestCase):
             position_ref=self.position,
             hire_date=date(2024, 6, 1),
         )
+
+    def test_new_loan_references_increment_per_employee_and_keep_numeric_identity(self):
+        self.employee_profile.employee_id = "CORE-0003"
+        self.employee_profile.save(update_fields=["employee_id"])
+        references = []
+        for _ in range(2):
+            loan = LoanRequest.objects.create(
+                employee=self.employee,
+                employee_profile=self.employee_profile,
+                company=self.company,
+                requested_amount=Decimal("100.00"),
+                reason="Reference sequence",
+            )
+            begin_recorded_transition(loan, actor=self.employee, new_instance=True)
+            references.append(get_workflow_snapshot(loan, actor=self.employee)["reference_no"])
+
+        self.assertEqual(references, ["LN-CORE-000301", "LN-CORE-000302"])
+        self.assertNotEqual(LoanRequest.objects.first().pk, LoanRequest.objects.last().pk)
 
     def test_leave_snapshot_exposes_current_stage_and_history(self):
         leave_type = LeaveType.objects.create(

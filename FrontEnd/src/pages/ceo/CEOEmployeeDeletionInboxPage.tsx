@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Button, Grid, Segmented, Table, Typography } from "antd";
+import { Button, Grid, Input, Segmented, Space, Table, Typography } from "antd";
 import type { ColumnsType } from "antd/es/table";
 
 import ApprovalQueuePage from "../../components/ceo/ApprovalQueuePage";
@@ -45,6 +45,8 @@ export default function CEOEmployeeDeletionInboxPage() {
   const [statusFilter, setStatusFilter] =
     useState<EmployeeArchiveStatus>("PENDING_CEO");
   const [page, setPage] = useState(1);
+  const [searchInput, setSearchInput] = useState("");
+  const [search, setSearch] = useState("");
   const [items, setItems] = useState<EmployeeArchiveRequest[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -61,6 +63,7 @@ export default function CEOEmployeeDeletionInboxPage() {
       try {
         const response = await listEmployeeArchiveRequests({
           status: statusFilter,
+          search: search || undefined,
           page,
           page_size: PAGE_SIZE,
         });
@@ -87,7 +90,7 @@ export default function CEOEmployeeDeletionInboxPage() {
         setRefreshing(false);
       }
     },
-    [statusFilter, page, t],
+    [statusFilter, page, search, t],
   );
 
   useEffect(() => {
@@ -113,6 +116,11 @@ export default function CEOEmployeeDeletionInboxPage() {
   };
 
   const columns: ColumnsType<EmployeeArchiveRequest> = [
+    {
+      title: t("permissionRequests.list.reference"),
+      key: "reference_no",
+      render: (_, record) => record.reference_no || `#${record.id}`,
+    },
     {
       title: t("employees.removalInbox.colEmployee"),
       key: "employee",
@@ -220,7 +228,19 @@ export default function CEOEmployeeDeletionInboxPage() {
       onRefresh={() => load({ isRefresh: true })}
       refreshing={refreshing}
       filters={
-        <Segmented
+        <Space wrap>
+          <Input.Search
+            aria-label={t("permissionRequests.list.reference")}
+            placeholder={t("permissionRequests.list.reference")}
+            value={searchInput}
+            onChange={(event) => setSearchInput(event.target.value)}
+            onSearch={(value) => {
+              setSearch(value.trim());
+              setPage(1);
+            }}
+            allowClear
+          />
+          <Segmented
           options={segmentedOptions}
           value={statusFilter}
           aria-label={t("common.status")}
@@ -228,7 +248,8 @@ export default function CEOEmployeeDeletionInboxPage() {
             setStatusFilter(value as EmployeeArchiveStatus);
             setPage(1);
           }}
-        />
+          />
+        </Space>
       }
     >
       <Table

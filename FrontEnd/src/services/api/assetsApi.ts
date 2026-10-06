@@ -128,6 +128,7 @@ export interface AssetDamageReport {
 
 export interface AssetReturnRequest {
   id: number;
+  reference_no?: string | null;
   company_id?: number;
   company_name?: string;
   asset: number;
@@ -215,6 +216,7 @@ export async function listMyAssetDamageReports(params?: {
 }
 
 export async function listMyAssetReturnRequests(params?: {
+  search?: string;
   page?: number;
   page_size?: number;
   status?: string;
@@ -239,6 +241,7 @@ export async function listAssetDamageReports(params?: {
 }
 
 export async function listAssetReturnRequests(params?: {
+  search?: string;
   page?: number;
   page_size?: number;
   status?: string;
@@ -380,6 +383,7 @@ export async function rejectCEOAssetDamageReport(
 }
 
 export async function getCEOAssetReturnRequests(params?: {
+  search?: string;
   status?: string;
   page?: number;
   page_size?: number;

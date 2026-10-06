@@ -59,7 +59,7 @@ class JobOfferApiTests(APITestCase):
         self.hr_profile = EmployeeProfile.objects.create(
             user=self.hr,
             company=self.company,
-            employee_id="JO-HR-1",
+            employee_id="FFI-9001",
             full_name="Nour Hassan",
             job_title="HR Business Partner",
         )
@@ -68,12 +68,12 @@ class JobOfferApiTests(APITestCase):
         EmployeeProfile.objects.create(
             user=self.employee_user,
             company=self.company,
-            employee_id="JO-EMP-1",
+            employee_id="FFI-9002",
             full_name="Ordinary Employee",
         )
         self.prehire = EmployeeProfile.objects.create(
             company=self.company,
-            employee_id="JO-PRE-1",
+            employee_id="FFI-9003",
             full_name="Candidate One",
             employment_status=EmployeeProfile.EmploymentStatus.PREHIRE,
         )
@@ -172,7 +172,7 @@ class JobOfferApiTests(APITestCase):
         offer = JobOffer.objects.get()
         self.assertEqual(offer.company, self.company)
         self.assertEqual(offer.status, JobOffer.Status.DRAFT)
-        self.assertRegex(offer.reference_number, rf"^JO-FFI-{timezone.localdate().year}-0001$")
+        self.assertEqual(offer.reference_number, f"JO-{offer.employee_profile.employee_id}01")
         self.assertEqual(offer.hr_signer_user, self.hr)
         self.assertEqual(offer.hr_signer_name, "Nour Hassan")
         self.assertEqual(offer.hr_signer_title, "HR Business Partner")
@@ -257,9 +257,8 @@ class JobOfferApiTests(APITestCase):
         self.assertEqual(first.status_code, status.HTTP_201_CREATED, first.data)
         self.assertEqual(second.status_code, status.HTTP_201_CREATED, second.data)
         first_offer, second_offer = JobOffer.objects.order_by("id")
-        year = timezone.localdate().year
-        self.assertEqual(first_offer.reference_number, f"JO-FFI-{year}-0001")
-        self.assertEqual(second_offer.reference_number, f"JO-FFI-{year}-0002")
+        self.assertEqual(first_offer.reference_number, f"JO-{first_offer.employee_profile.employee_id}01")
+        self.assertEqual(second_offer.reference_number, f"JO-{second_offer.employee_profile.employee_id}02")
         self.assertNotEqual(first_offer.reference_number, second_offer.reference_number)
         self.assertEqual(first_offer.hr_signer_name, "Nour Hassan")
         self.assertEqual(first_offer.hr_signer_title, "HR Business Partner")

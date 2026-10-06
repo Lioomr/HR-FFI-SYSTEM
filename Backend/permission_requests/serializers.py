@@ -251,6 +251,7 @@ class PermissionRequestListSerializer(serializers.ListSerializer):
 READ_FIELDS = [
     "id",
     "reference_no",
+    "public_reference",
     "permission_type",
     "request_date",
     "from_time",
@@ -305,6 +306,7 @@ class PermissionRequestAttachmentReadSerializer(serializers.ModelSerializer):
 
 
 class PermissionRequestReadSerializer(serializers.ModelSerializer):
+    public_reference = serializers.SerializerMethodField()
     employee = serializers.SerializerMethodField()
     company_id = serializers.PrimaryKeyRelatedField(source="company", read_only=True)
     company_name = serializers.CharField(source="company.name", read_only=True)
@@ -338,6 +340,11 @@ class PermissionRequestReadSerializer(serializers.ModelSerializer):
             "department": profile_department(profile),
             "job_title": profile_job_title(profile),
         }
+
+    def get_public_reference(self, obj):
+        from core.services.request_references import public_reference_for
+
+        return public_reference_for(obj) or obj.reference_no
 
     def get_status_label(self, obj):
         return STATUS_LABELS.get(obj.status, (obj.status, obj.status))[0]

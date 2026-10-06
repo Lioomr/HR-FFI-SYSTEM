@@ -43,6 +43,7 @@ export type PermissionActor = { id: number; email: string; full_name: string };
 export type PermissionRequest = {
   id: number;
   reference_no: string;
+  public_reference?: string;
   permission_type: PermissionType;
   request_date: string;
   /** Null for Late Permission, which has no employee-entered times. */
@@ -111,6 +112,7 @@ export type PermissionRequest = {
 /** The server has no permission_type filter; filter a loaded page client-side. */
 type Filters = {
   status?: PermissionStatus | "all";
+  search?: string;
   date_from?: string;
   date_to?: string;
   page?: number;

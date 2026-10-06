@@ -257,6 +257,9 @@ export default function CEOEmployeeDeletionDetailPage() {
           {t("employees.removalDetail.employeeSection")}
         </SectionTitle>
         <Descriptions column={{ xs: 1, sm: 1, md: 2 }} size="small" bordered>
+          <Descriptions.Item label={t("permissionRequests.list.reference")}>
+            {data.reference_no || `#${data.id}`}
+          </Descriptions.Item>
           <Descriptions.Item label={t("employees.removalDetail.fullName")}>
             {displayName}
           </Descriptions.Item>

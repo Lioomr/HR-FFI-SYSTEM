@@ -19,6 +19,7 @@ export type LoanType = "open" | "installment";
 
 export interface LoanRequest {
   id: number;
+  public_reference?: string;
   company_id?: number;
   company_name?: string;
   employee: {
@@ -64,6 +65,7 @@ export interface LoanRequest {
 
 export async function getManagerLoanRequests(params?: {
   status?: LoanStatus;
+  search?: string;
   page?: number;
   page_size?: number;
 }) {
@@ -89,6 +91,7 @@ export async function createLoanRequest(payload: {
 
 export async function getMyLoanRequests(params?: {
   status?: LoanStatus;
+  search?: string;
   page?: number;
   page_size?: number;
 }) {
@@ -144,6 +147,7 @@ export async function rejectManagerLoanRequest(
 
 export async function getFinanceLoanRequests(params?: {
   status?: LoanStatus;
+  search?: string;
   employee_id?: number | string;
   date_from?: string;
   date_to?: string;
@@ -159,6 +163,7 @@ export async function getFinanceLoanRequests(params?: {
 
 export async function getHRLoanRequests(params?: {
   status?: LoanStatus;
+  search?: string;
   employee_id?: number | string;
   date_from?: string;
   date_to?: string;
@@ -203,6 +208,7 @@ export async function rejectFinanceLoanRequest(
 
 export async function getCFOLoanRequests(params?: {
   status?: LoanStatus;
+  search?: string;
   page?: number;
   page_size?: number;
 }) {
@@ -255,6 +261,7 @@ export async function referCFOLoanRequestToCEO(
 
 export async function getCEOLoanRequests(params?: {
   status?: LoanStatus;
+  search?: string;
   page?: number;
   page_size?: number;
 }) {
@@ -296,6 +303,7 @@ export async function rejectCEOLoanRequest(
 
 export async function getDisbursementLoanRequests(params?: {
   status?: LoanStatus;
+  search?: string;
   page?: number;
   page_size?: number;
 }) {

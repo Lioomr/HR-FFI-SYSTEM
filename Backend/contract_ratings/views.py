@@ -8,6 +8,7 @@ from rest_framework.permissions import IsAuthenticated
 from core.pagination import StandardPagination
 from core.permissions import is_department_ceo_approver_user, is_hr_workflow_approver_user
 from core.responses import error, success
+from core.services.request_references import public_reference_for
 from employees.services.manager_relationships import manager_scope_q
 from organization.services import ensure_company_write_allowed, filter_queryset_by_company_scope
 
@@ -87,7 +88,8 @@ class ContractRatingViewSet(viewsets.ReadOnlyModelViewSet):
         except ValueError as exc:
             return error("PDF unavailable", errors=[str(exc)], status=503)
         response = HttpResponse(pdf_bytes, content_type="application/pdf")
-        response["Content-Disposition"] = f'attachment; filename="contract_rating_{rating.id}.pdf"'
+        reference = public_reference_for(rating) or f"CR-{rating.id}"
+        response["Content-Disposition"] = f'attachment; filename="contract_rating_{reference}.pdf"'
         return response
 
     @action(detail=False, methods=["get"])

@@ -24,6 +24,7 @@ from core.permissions import get_role
 from in_app_notifications.i18n import normalize_language
 
 from .pending_approval_email import get_direct_manager_user
+from .request_references import assign_new_workflow_reference
 
 _ORDER_PARK_OFFSET = 1000
 
@@ -1875,7 +1876,9 @@ def _adapter_for_instance(instance):
 
 
 @transaction.atomic
-def sync_workflow(instance, *, actor=None, workflow_key: str | None = None) -> WorkflowInstance:
+def sync_workflow(
+    instance, *, actor=None, workflow_key: str | None = None, new_request: bool = False
+) -> WorkflowInstance:
     from employees.services.manager_relationships import fallback_invalid_manager_stage
 
     fallback_invalid_manager_stage(instance, actor=actor)
@@ -1890,6 +1893,8 @@ def sync_workflow(instance, *, actor=None, workflow_key: str | None = None) -> W
         object_id=instance.pk,
         defaults={"definition": definition},
     )
+    if new_request:
+        assign_new_workflow_reference(workflow, instance)
 
     snapshot = snapshot_builder(instance)
     workflow.definition = definition
@@ -2025,6 +2030,7 @@ def begin_recorded_transition(instance, *, actor=None, new_instance: bool = Fals
                 "history_mode": RECORDED_HISTORY,
             },
         )
+        assign_new_workflow_reference(workflow, instance)
         return TransitionStart(workflow.id, WorkflowInstance.Status.DRAFT, "", "", None)
 
     workflow = sync_workflow(instance, actor=actor)
@@ -2167,6 +2173,9 @@ def _workflow_snapshot_from_instance(instance, workflow, *, actor=None, use_pref
             "full_name": actor.full_name,
         }
     return {
+        "reference_no": workflow.reference_no
+        or getattr(instance, "reference_no", None)
+        or getattr(instance, "reference_number", None),
         "status": workflow.status,
         "current_stage": workflow.current_stage,
         "current_actor": current_actor,

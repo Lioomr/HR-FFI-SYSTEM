@@ -329,6 +329,7 @@ export default function ContractRatingsPage() {
             }}
           >
             {item.employee.full_name || item.employee.employee_id}
+            {item.reference_no && ` (${item.reference_no})`}
           </Link>
         ),
       },
@@ -454,7 +455,7 @@ export default function ContractRatingsPage() {
   const header = (
     <PageHeader
       title={t("contractRatings.detailTitle")}
-      subtitle={record.employee.full_name}
+      subtitle={[record.employee.full_name, record.reference_no].filter(Boolean).join(" · ")}
       actions={
         <Space wrap>
           <Button

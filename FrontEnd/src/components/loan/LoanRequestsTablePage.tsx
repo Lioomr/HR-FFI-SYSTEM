@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
-import { Button, Select, Tag } from "antd";
+import { Button, Input, Select, Space, Tag } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { EyeOutlined } from "@ant-design/icons";
 
@@ -36,6 +36,7 @@ type Props = {
   headerActions?: ReactNode;
   fetcher: (params?: {
     status?: LoanStatus;
+    search?: string;
     page?: number;
     page_size?: number;
   }) => Promise<ApiResponse<PaginatedResponse<LoanRequest>>>;
@@ -84,6 +85,7 @@ export default function LoanRequestsTablePage({
   const [statusFilter, setStatusFilter] = useState<LoanStatus | undefined>(
     defaultStatus,
   );
+  const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [items, setItems] = useState<LoanRequest[]>([]);
@@ -99,6 +101,7 @@ export default function LoanRequestsTablePage({
       try {
         const res = await fetcher({
           status: statusFilter,
+          search: search || undefined,
           page: targetPage,
           page_size: PAGE_SIZE,
         });
@@ -115,7 +118,7 @@ export default function LoanRequestsTablePage({
         setRefreshing(false);
       }
     },
-    [fetcher, statusFilter, t],
+    [fetcher, statusFilter, search, t],
   );
 
   useEffect(() => {
@@ -128,6 +131,12 @@ export default function LoanRequestsTablePage({
     t("manager.requests.unknown");
 
   const columns: ColumnsType<LoanRequest> = [
+    {
+      title: t("permissionRequests.list.reference"),
+      key: "public_reference",
+      width: 170,
+      render: (_, record) => record.public_reference || `#${record.id}`,
+    },
     {
       title: t("payroll.runDetails.colEmployee"),
       key: "employee",
@@ -246,6 +255,16 @@ export default function LoanRequestsTablePage({
       }
       resultsCount={t("common.requestsCount", { count: total })}
       filters={
+        <Space wrap>
+          <Input.Search
+            aria-label={t("permissionRequests.list.reference")}
+            placeholder={t("permissionRequests.list.reference")}
+            allowClear
+            onSearch={(value) => {
+              setSearch(value.trim());
+              setPage(1);
+            }}
+          />
         <Select
           className="ffi-toolbar__field"
           style={{ maxWidth: 320 }}
@@ -262,6 +281,7 @@ export default function LoanRequestsTablePage({
             value: status,
           }))}
         />
+        </Space>
       }
     >
       <ResponsiveTable

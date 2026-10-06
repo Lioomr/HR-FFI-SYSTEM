@@ -3,7 +3,7 @@ from decimal import Decimal
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import resolve
 from django.utils import timezone
 from rest_framework import status
@@ -34,6 +34,7 @@ def last_day_everyone_works(day):
     return day
 
 
+@override_settings(PENALTIES_EFFECTIVE_FROM="2099-01-01")
 class AttendancePolicyApiTests(TestCase):
     def setUp(self):
         self.client = APIClient()
@@ -184,9 +185,7 @@ class AttendancePolicyApiTests(TestCase):
         self.assertEqual(detail.data["data"]["employee_name_en"], "Foreign Person")
         # A first occurrence is a warning with no payroll deduction.
         self.assertIsNone(detail.data["data"]["payroll_status"])
-        self.assertEqual(
-            self._get(self.hr, VIOLATIONS_URL, self.head_office).status_code, status.HTTP_403_FORBIDDEN
-        )
+        self.assertEqual(self._get(self.hr, VIOLATIONS_URL, self.head_office).status_code, status.HTTP_403_FORBIDDEN)
 
     def test_employee_violation_history_is_own_and_honors_the_selected_company(self):
         own = self._late_violation(self.profile)
@@ -203,9 +202,7 @@ class AttendancePolicyApiTests(TestCase):
             self._get(self.employee, f"{VIOLATIONS_URL}{own.id}/", self.company_b).status_code,
             status.HTTP_404_NOT_FOUND,
         )
-        self.assertEqual(
-            self._get(self.foreign, VIOLATIONS_URL, self.company_a).status_code, status.HTTP_403_FORBIDDEN
-        )
+        self.assertEqual(self._get(self.foreign, VIOLATIONS_URL, self.company_a).status_code, status.HTTP_403_FORBIDDEN)
 
     def test_hr_can_explicitly_request_only_their_own_violations_and_notices(self):
         hr_profile = self._profile(self.hr, self.company_a, "ATTAPI-HR01", "HR Self Service")
@@ -217,9 +214,7 @@ class AttendancePolicyApiTests(TestCase):
         notices = self._get(self.hr, f"{NOTICES_URL}?mine=true", self.company_a)
 
         self.assertEqual(self._ids(violations), {own.id})
-        self.assertEqual(
-            {row["employee_profile_id"] for row in notices.data["data"]["items"]}, {hr_profile.id}
-        )
+        self.assertEqual({row["employee_profile_id"] for row in notices.data["data"]["items"]}, {hr_profile.id})
 
     def test_today_summary_serializes_the_policy_result_for_the_own_company(self):
         violation = self._late_violation(self.profile)
@@ -268,9 +263,7 @@ class AttendancePolicyApiTests(TestCase):
             return self._ids(self._get(self.hr, f"{VIOLATIONS_URL}?{query}", self.company_a))
 
         self.assertEqual(ids("lifecycle=void"), {coworker.id})
-        self.assertEqual(
-            ids("lifecycle=active,void"), {earlier.id, own_today.id, coworker_earlier.id, coworker.id}
-        )
+        self.assertEqual(ids("lifecycle=active,void"), {earlier.id, own_today.id, coworker_earlier.id, coworker.id})
         self.assertEqual(ids("payroll_status=void"), {coworker.id})
         self.assertEqual(ids("payroll_status=pending"), {own_today.id})
         self.assertEqual(ids(f"employee_profile_id={self.coworker_profile.id}"), {coworker_earlier.id, coworker.id})
@@ -284,7 +277,9 @@ class AttendancePolicyApiTests(TestCase):
         # Employees keep their own-only scope even when filtering by another employee.
         self.assertEqual(
             self._ids(
-                self._get(self.employee, f"{VIOLATIONS_URL}?employee_profile_id={self.coworker_profile.id}", self.company_a)
+                self._get(
+                    self.employee, f"{VIOLATIONS_URL}?employee_profile_id={self.coworker_profile.id}", self.company_a
+                )
             ),
             set(),
         )
@@ -312,17 +307,11 @@ class AttendancePolicyApiTests(TestCase):
         self.assertEqual(response.data["message"], ATTENDANCE_UNAVAILABLE_UNMAPPED_MESSAGE)
         self.assertFalse(AttendanceDailyResult.objects.filter(employee_profile=self.profile).exists())
         # Company checks still come first: another company is a 404, not a mapping disclosure.
-        self.assertEqual(
-            self._get(self.employee, SUMMARY_URL, self.company_b).status_code, status.HTTP_404_NOT_FOUND
-        )
+        self.assertEqual(self._get(self.employee, SUMMARY_URL, self.company_b).status_code, status.HTTP_404_NOT_FOUND)
 
     def test_today_summary_rejects_another_company_and_head_office_context(self):
         self._late_violation(self.profile)
 
-        self.assertEqual(
-            self._get(self.employee, SUMMARY_URL, self.company_b).status_code, status.HTTP_404_NOT_FOUND
-        )
+        self.assertEqual(self._get(self.employee, SUMMARY_URL, self.company_b).status_code, status.HTTP_404_NOT_FOUND)
         self.assertEqual(self._get(self.hr, SUMMARY_URL, self.head_office).status_code, status.HTTP_403_FORBIDDEN)
-        self.assertEqual(
-            self._get(self.employee, SUMMARY_URL, self.head_office).status_code, status.HTTP_403_FORBIDDEN
-        )
+        self.assertEqual(self._get(self.employee, SUMMARY_URL, self.head_office).status_code, status.HTTP_403_FORBIDDEN)

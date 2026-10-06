@@ -121,6 +121,7 @@ export type StartingWorkAcknowledgmentListResponse =
 
 export type StartingWorkAcknowledgmentListParams = {
   status?: StartingWorkAcknowledgmentStatus;
+  search?: string;
   page?: number;
   page_size?: number;
 };

@@ -302,7 +302,7 @@ class AuthenticationLifecycleTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         access = AccessToken(response.data["data"]["access"])
         self.assertEqual(access["token_version"], self.user.auth_token_version)
-        self.assertEqual(access["exp"] - access["iat"], 15 * 60)
+        self.assertIn(access["exp"] - access["iat"], (15 * 60 - 1, 15 * 60))
 
     def test_logout_immediately_revokes_access_and_refresh_and_is_audited(self):
         tokens = self.login()

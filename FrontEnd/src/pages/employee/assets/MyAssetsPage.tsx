@@ -101,6 +101,8 @@ export default function MyAssetsPage() {
   const [returnRequests, setReturnRequests] = useState<AssetReturnRequest[]>(
     [],
   );
+  const [returnSearchInput, setReturnSearchInput] = useState("");
+  const [returnSearch, setReturnSearch] = useState("");
   const [returnPage, setReturnPage] = useState(1);
   const [returnPageSize, setReturnPageSize] = useState(5);
   const [returnTotal, setReturnTotal] = useState(0);
@@ -147,6 +149,7 @@ export default function MyAssetsPage() {
           page: returnPage,
           page_size: returnPageSize,
           asset: requestAssetFilter,
+          search: returnSearch || undefined,
         }),
       ]);
 
@@ -187,6 +190,7 @@ export default function MyAssetsPage() {
     returnPage,
     returnPageSize,
     requestAssetFilter,
+    returnSearch,
   ]);
 
   const dataSource = useMemo(
@@ -251,6 +255,12 @@ export default function MyAssetsPage() {
   ];
 
   const returnColumns: ColumnsType<AssetReturnRequest> = [
+    {
+      title: t("permissionRequests.list.reference"),
+      key: "reference_no",
+      render: (_, record) => record.reference_no || `#${record.id}`,
+      width: 170,
+    },
     {
       title: t("assets.assetCode"),
       dataIndex: "asset_code",
@@ -654,7 +664,22 @@ export default function MyAssetsPage() {
 
   const returnView = (
     <WorkspaceCard
-      toolbar={requestAssetFilterSelect}
+      toolbar={
+        <Space wrap>
+          {requestAssetFilterSelect}
+          <Input.Search
+            aria-label={t("permissionRequests.list.reference")}
+            placeholder={t("permissionRequests.list.reference")}
+            value={returnSearchInput}
+            onChange={(event) => setReturnSearchInput(event.target.value)}
+            onSearch={(value) => {
+              setReturnSearch(value.trim());
+              setReturnPage(1);
+            }}
+            allowClear
+          />
+        </Space>
+      }
       title={t("assets.returnRequests", "Return Requests")}
       count={t("common.requestsCount", { count: returnTotal })}
       busy={requestLoading && returnRequests.length > 0}

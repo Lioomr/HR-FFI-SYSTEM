@@ -165,6 +165,11 @@ export function RatingHeaderDetails({
   const { employee } = rating;
   return (
     <Descriptions bordered size="small" column={{ xs: 1, sm: 1, md: 1, lg: 2, xl: 3 }}>
+      {rating.reference_no && (
+        <Descriptions.Item label={t("jobOffers.field.referenceNumber")}>
+          {rating.reference_no}
+        </Descriptions.Item>
+      )}
       <Descriptions.Item label={t("contractRatings.employee")}>
         {profileHref ? (
           <Link to={profileHref}>{employee.full_name}</Link>

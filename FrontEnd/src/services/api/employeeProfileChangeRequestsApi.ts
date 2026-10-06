@@ -51,6 +51,7 @@ export type ProfileChangeRequestAttachment = {
 
 export type ProfileChangeRequest = {
   id: number;
+  reference_no?: string | null;
   employee: { id: number; full_name: string; employee_number: string | null };
   status: ProfileChangeStatus;
   items: ProfileChangeItem[];
@@ -87,6 +88,7 @@ export type ProfileChangeDecision = {
 
 type ListParams = {
   status?: ProfileChangeStatus;
+  search?: string;
   page?: number;
   page_size?: number;
 };

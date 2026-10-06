@@ -122,6 +122,9 @@ export default function ProfileChangeRequestStatus({
     <Space direction="vertical" size={8} style={{ width: "100%" }}>
       {messageContext}
       {modalContext}
+      <Text type="secondary">
+        {t("permissionRequests.list.reference")}: {request.reference_no || `#${request.id}`}
+      </Text>
       {pending ? (
         request.workflow?.status === "in_review" ? (
           <PendingActionBanner workflow={request.workflow} />

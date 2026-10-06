@@ -380,7 +380,7 @@ export default function AnnualLeavePaymentCard({
             requests.map((request) => (
               <div key={request.id}>
                 <Space size={8} style={{ marginBottom: 8 }} wrap>
-                  <Typography.Text strong>#{request.id}</Typography.Text>
+                  <Typography.Text strong>{request.public_reference || `#${request.id}`}</Typography.Text>
                   <AnnualLeavePaymentStatusTag status={request.status} />
                 </Space>
                 {/* The latest settlement is the one the dashboard links here. */}

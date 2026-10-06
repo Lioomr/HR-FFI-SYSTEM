@@ -5,6 +5,7 @@ from django.utils import timezone
 from rest_framework import serializers
 
 from core.services import get_workflow_snapshot
+from core.services.request_references import public_reference_for
 from employees.models import EmployeeProfile
 
 from .models import Asset, AssetAssignment, AssetDamageReport, AssetReturnRequest, PrintedLabelJob
@@ -223,6 +224,7 @@ class AssetReturnRequestCreateSerializer(serializers.ModelSerializer):
 
 
 class AssetReturnRequestSerializer(serializers.ModelSerializer):
+    reference_no = serializers.SerializerMethodField()
     employee_name = serializers.CharField(source="employee.full_name", read_only=True)
     employee_email = serializers.EmailField(source="employee.user.email", read_only=True)
     asset_code = serializers.CharField(source="asset.asset_code", read_only=True)
@@ -235,6 +237,7 @@ class AssetReturnRequestSerializer(serializers.ModelSerializer):
         model = AssetReturnRequest
         fields = [
             "id",
+            "reference_no",
             "asset",
             "asset_code",
             "asset_name",
@@ -263,6 +266,9 @@ class AssetReturnRequestSerializer(serializers.ModelSerializer):
     def get_workflow(self, obj):
         actor = self.context.get("request").user if self.context.get("request") else None
         return get_workflow_snapshot(obj, actor=actor)
+
+    def get_reference_no(self, obj):
+        return public_reference_for(obj)
 
 
 class AssetRequestActionSerializer(serializers.Serializer):

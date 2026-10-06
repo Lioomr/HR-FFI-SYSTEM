@@ -6,6 +6,7 @@ therefore no CEO route, queue, or action.
 
 import os
 
+from django.contrib.contenttypes.models import ContentType
 from django.db.models import Q
 from django.http import FileResponse, HttpResponse
 from django.utils.dateparse import parse_date
@@ -15,6 +16,7 @@ from rest_framework.exceptions import ValidationError
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.permissions import IsAuthenticated
 
+from core.models import WorkflowInstance
 from core.pagination import StandardPagination
 from core.responses import error, success
 from employees.services.manager_relationships import manager_scope_q
@@ -109,6 +111,17 @@ class PermissionRequestViewSet(viewsets.GenericViewSet):
     def _apply_filters(self, queryset, *, default_status=None):
         params = self.request.query_params
         errors = {}
+        search = params.get("search", "").strip()
+        if search:
+            content_type = ContentType.objects.get_for_model(PermissionRequest)
+            workflow_ids = WorkflowInstance.objects.filter(
+                content_type=content_type, reference_no__icontains=search
+            ).values("object_id")
+            queryset = queryset.filter(
+                Q(reference_no__icontains=search)
+                | Q(pk__in=workflow_ids)
+                | Q(employee_profile__employee_id__icontains=search)
+            )
         status_param = params.get("status") or default_status
         if status_param and status_param != "all":
             if status_param in Status.values:

@@ -599,6 +599,7 @@ class LeaveBalanceAdjustmentSerializer(serializers.ModelSerializer):
 
 
 class AnnualLeavePaymentRequestSerializer(serializers.ModelSerializer):
+    public_reference = serializers.SerializerMethodField()
     employee_name = serializers.SerializerMethodField()
     employee_id = serializers.IntegerField(source="employee_profile.id", read_only=True)
     fractional_days = serializers.SerializerMethodField()
@@ -608,6 +609,7 @@ class AnnualLeavePaymentRequestSerializer(serializers.ModelSerializer):
         model = AnnualLeavePaymentRequest
         fields = [
             "id",
+            "public_reference",
             "employee_id",
             "employee_name",
             "company",
@@ -639,6 +641,11 @@ class AnnualLeavePaymentRequestSerializer(serializers.ModelSerializer):
             "settled_at",
         ]
         read_only_fields = [field for field in fields if field not in {"employee_note"}]
+
+    def get_public_reference(self, obj):
+        from core.services.request_references import public_reference_for
+
+        return public_reference_for(obj) or f"AED-{obj.pk:05d}"
 
     def get_employee_name(self, obj):
         profile = obj.employee_profile

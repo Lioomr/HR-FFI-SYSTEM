@@ -482,6 +482,7 @@ export interface EmployeeArchiveRequestSnapshot {
 
 export interface EmployeeArchiveRequest {
   id: number;
+  reference_no?: string | null;
   company_id?: number;
   company_name?: string;
   employee_profile_id?: number;
@@ -513,6 +514,7 @@ export interface EmployeeArchiveRequest {
 
 export interface ListEmployeeArchiveRequestsParams {
   status?: EmployeeArchiveStatus;
+  search?: string;
   page?: number;
   page_size?: number;
 }

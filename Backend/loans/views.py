@@ -1,6 +1,9 @@
 import logging
+import re
 
+from django.contrib.contenttypes.models import ContentType
 from django.db import transaction
+from django.db.models import Q
 from django.http import HttpResponse
 from django.utils import timezone
 from django_filters.rest_framework import DjangoFilterBackend
@@ -10,6 +13,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from audit.utils import audit
+from core.models import WorkflowInstance
 from core.pagination import StandardPagination
 from core.permissions import get_role
 from core.responses import error, success
@@ -23,6 +27,7 @@ from core.services import (
     notify_users_for_pending_status,
     send_request_submission_email,
 )
+from core.services.request_references import public_reference_for
 from employees.services.manager_relationships import manager_scope_q
 from organization.services import filter_queryset_by_accessible_companies, filter_queryset_by_company_scope
 
@@ -69,6 +74,24 @@ LOAN_READ_SELECT_RELATED = (
     "ceo_decision_by",
     "disbursed_by",
 )
+
+
+class LoanReferenceFilter(filters.BaseFilterBackend):
+    """Search public and historical loan PDF references inside the already scoped queryset."""
+
+    def filter_queryset(self, request, queryset, view):
+        search = request.query_params.get("search", "").strip()
+        if not search:
+            return queryset
+        content_type = ContentType.objects.get_for_model(LoanRequest)
+        workflow_ids = WorkflowInstance.objects.filter(
+            content_type=content_type, reference_no__icontains=search
+        ).values("object_id")
+        condition = Q(pk__in=workflow_ids) | Q(employee_profile__employee_id__icontains=search)
+        legacy_match = re.fullmatch(r"LN-(\d+)", search, flags=re.IGNORECASE)
+        if legacy_match:
+            condition |= Q(pk=int(legacy_match.group(1)))
+        return queryset.filter(condition)
 
 
 def _log_notification_failure(event_name, *, entity_id, notification_type, actor_id=None, channel=None):
@@ -273,7 +296,7 @@ def _build_loan_request_pdf_fallback(instance: LoanRequest) -> bytes:
     doc = RequestDocument(
         title_en="Loan Request",
         title_ar="طلب سلفة",
-        reference_no=str(instance.id),
+        reference_no=public_reference_for(instance) or f"LN-{instance.id:05d}",
         employee=employee_block,
         details=details,
         approvals=approvals,
@@ -547,7 +570,7 @@ class LoanRequestViewSet(viewsets.ModelViewSet):
     serializer_class = LoanRequestReadSerializer
     permission_classes = [IsAuthenticated]
     pagination_class = StandardPagination
-    filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
+    filter_backends = [DjangoFilterBackend, filters.OrderingFilter, LoanReferenceFilter]
     filterset_fields = ["status", "employee"]
     ordering_fields = ["created_at", "requested_amount"]
     ordering = ["-created_at"]
@@ -829,6 +852,7 @@ class EmployeeLoanRequestViewSet(viewsets.ReadOnlyModelViewSet):
 
     def list(self, request, *args, **kwargs):
         qs = self.get_queryset()
+        qs = LoanReferenceFilter().filter_queryset(request, qs, self)
         status_param = request.query_params.get("status")
         if status_param:
             qs = qs.filter(status=status_param)
@@ -846,7 +870,7 @@ class ManagerLoanRequestViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = LoanRequestReadSerializer
     permission_classes = [IsAuthenticated, IsManagerOrAdmin]
     pagination_class = StandardPagination
-    filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
+    filter_backends = [DjangoFilterBackend, filters.OrderingFilter, LoanReferenceFilter]
     filterset_fields = ["status"]
     ordering_fields = ["created_at", "requested_amount"]
     ordering = ["-created_at"]
@@ -959,7 +983,7 @@ class CFOLoanRequestViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = LoanRequestReadSerializer
     permission_classes = [IsAuthenticated, IsCFOApproverOrAdmin]
     pagination_class = StandardPagination
-    filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
+    filter_backends = [DjangoFilterBackend, filters.OrderingFilter, LoanReferenceFilter]
     filterset_fields = ["status"]
     ordering_fields = ["created_at", "requested_amount"]
     ordering = ["-created_at"]
@@ -1086,7 +1110,7 @@ class CEOLoanRequestViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = LoanRequestReadSerializer
     permission_classes = [IsAuthenticated, IsCEOApproverOrAdmin]
     pagination_class = StandardPagination
-    filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
+    filter_backends = [DjangoFilterBackend, filters.OrderingFilter, LoanReferenceFilter]
     filterset_fields = ["status"]
     ordering_fields = ["created_at", "requested_amount"]
     ordering = ["-created_at"]
@@ -1176,7 +1200,7 @@ class DisbursementLoanRequestViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = LoanRequestReadSerializer
     permission_classes = [IsAuthenticated, IsFinanceApproverOrAdmin]
     pagination_class = StandardPagination
-    filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
+    filter_backends = [DjangoFilterBackend, filters.OrderingFilter, LoanReferenceFilter]
     filterset_fields = ["status"]
     ordering_fields = ["created_at", "requested_amount"]
     ordering = ["-created_at"]

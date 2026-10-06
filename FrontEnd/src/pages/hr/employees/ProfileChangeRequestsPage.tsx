@@ -73,6 +73,8 @@ export default function ProfileChangeRequestsPage() {
   const [messageApi, messageContext] = message.useMessage();
   const { openPreview, previewModal } = useFilePreview();
   const [status, setStatus] = useState<StatusFilter>("PENDING_HR");
+  const [searchInput, setSearchInput] = useState("");
+  const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [items, setItems] = useState<ProfileChangeRequest[]>([]);
   const [total, setTotal] = useState(0);
@@ -89,6 +91,7 @@ export default function ProfileChangeRequestsPage() {
     try {
       const response = await getHrProfileChangeRequests({
         status: status === "ALL" ? undefined : status,
+        search: search || undefined,
         page,
         page_size: PAGE_SIZE,
       });
@@ -105,7 +108,7 @@ export default function ProfileChangeRequestsPage() {
     } finally {
       setLoading(false);
     }
-  }, [messageApi, page, status, t]);
+  }, [messageApi, page, search, status, t]);
 
   useEffect(() => {
     void load();
@@ -292,6 +295,11 @@ export default function ProfileChangeRequestsPage() {
 
   const columns = [
     {
+      title: t("permissionRequests.list.reference"),
+      key: "reference_no",
+      render: (_: unknown, row: ProfileChangeRequest) => row.reference_no || `#${row.id}`,
+    },
+    {
       title: t("common.employee"),
       key: "employee",
       render: (_: unknown, row: ProfileChangeRequest) => (
@@ -381,6 +389,17 @@ export default function ProfileChangeRequestsPage() {
         subtitle={t("profileChange.hr.subtitle")}
         actions={
           <Space wrap>
+            <Input.Search
+              aria-label={t("permissionRequests.list.reference")}
+              placeholder={t("permissionRequests.list.reference")}
+              value={searchInput}
+              onChange={(event) => setSearchInput(event.target.value)}
+              onSearch={(value) => {
+                setSearch(value.trim());
+                setPage(1);
+              }}
+              allowClear
+            />
             <Select<StatusFilter>
               aria-label={t("common.status")}
               value={status}
@@ -439,6 +458,9 @@ export default function ProfileChangeRequestsPage() {
           <Space direction="vertical" size={16} style={{ width: "100%" }}>
             <PendingActionBanner workflow={selected.workflow} />
             <Descriptions column={1} bordered size="small">
+              <Descriptions.Item label={t("permissionRequests.list.reference")}>
+                {selected.reference_no || `#${selected.id}`}
+              </Descriptions.Item>
               <Descriptions.Item label={t("common.status")}>
                 {statusTag(selected.status)}
               </Descriptions.Item>

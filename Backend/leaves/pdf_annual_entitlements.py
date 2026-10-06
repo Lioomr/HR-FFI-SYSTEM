@@ -25,6 +25,7 @@ from core.pdf_forms import (
     request_company_code,
 )
 from core.pdf_signers import display_name, signer_signatures
+from core.services.request_references import public_reference_for
 
 FIELD_MAP_FILENAME = "annual_entitlements_disbursement_blank_field_map.json"
 TEMPLATE_FILENAME = "annual_entitlements_disbursement_blank.pdf"
@@ -96,7 +97,11 @@ def build_annual_entitlements_values(instance: Any) -> dict[str, Any]:
     applicant = display_name(user=employee, profile=profile)
     submitted_at = getattr(instance, "submitted_at", None)
     return {
-        "reference_no": f"AED-{getattr(instance, 'id', 0):05d}" if getattr(instance, "id", None) else "",
+        "reference_no": (
+            (public_reference_for(instance) if hasattr(instance, "_meta") else None) or f"AED-{instance.id:05d}"
+            if getattr(instance, "id", None)
+            else ""
+        ),
         "request_date": _format_date(submitted_at),
         "filed_date": _format_date(submitted_at),
         "purpose": RESOLUTION_LABELS.get(str(getattr(instance, "resolution", "")), "Annual Entitlements"),

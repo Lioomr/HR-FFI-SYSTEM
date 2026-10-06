@@ -15,11 +15,23 @@ from contract_ratings.services import (
 )
 from contract_ratings.tasks import process_contract_ratings
 from core.models import DelegationRule
+from core.services.request_references import public_reference_for
 
 from .conftest import answers
 from .test_final_phase3 import calls_for
 
 pytestmark = pytest.mark.django_db
+
+
+def test_contract_workflows_issue_employee_based_references(world):
+    world.profile.employee_id = "RATING-0001"
+    world.profile.save(update_fields=["employee_id"])
+
+    rating, created = ensure_contract_rating(world.profile)
+
+    assert created is True
+    assert public_reference_for(rating.contract_decision) == "CD-RATING-000101"
+    assert public_reference_for(rating) == "CR-RATING-000101"
 
 
 def test_new_cycle_waits_at_hr_gate_and_notifies_only_hr(world, notifications):

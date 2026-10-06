@@ -60,6 +60,7 @@ export interface ContractDecisionNotification {
 
 export interface ContractDecision {
   id: number;
+  reference_no?: string | null;
   company: number;
   employee: {
     id: number;
