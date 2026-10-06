@@ -317,6 +317,17 @@ def _fallback_latin_name(text: str) -> str:
     return candidate if candidate and re.fullmatch(r"[A-Z][A-Z ]{7,}", candidate) else ""
 
 
+def _printed_name_with_words(text: str, name: str) -> str:
+    wanted = sorted(name.upper().split())
+    if len(wanted) < 2:
+        return ""
+    for line in text.splitlines():
+        line = line.strip()
+        if re.fullmatch(r"[A-Za-z ]+", line) and sorted(line.upper().split()) == wanted:
+            return " ".join(line.upper().split())
+    return ""
+
+
 def _fallback_nationality(text: str) -> str:
     if re.search(r"^\s*مصر\s*$", text, flags=re.MULTILINE):
         return "Egypt"
@@ -336,6 +347,28 @@ def parse_passport(text: str) -> ParseResult:
     printed_number = label_value(text, r"Passport\s*(?:Number|No\.?|#)|رقم\s*الجواز", r"[A-Z0-9< -]{5,20}")
     if printed_number and not fields.get("passport_number"):
         fields["passport_number"] = printed_number.replace(" ", "").replace("<", "")
+    # Some scans print "Date of Issue Date of Expiry" as one header row with both
+    # dates run together on the next line.  Take the issue date only when the
+    # second date matches the check-digit-verified MRZ expiry.
+    joined = re.search(
+        r"Date\s*of\s*Issue[ \t]*Date\s*of\s*Expiry[ \t]*\n[ \t]*(\d{2}/\d{2}/\d{4})[ \t]*(\d{2}/\d{2}/\d{4})",
+        text,
+        flags=re.IGNORECASE,
+    )
+    if (
+        joined
+        and not fields.get("issue_date")
+        and mrz.field_checks_passed
+        and parse_date(joined.group(2)) == parse_date(fields.get("expiry_date", ""))
+    ):
+        fields["issue_date"] = joined.group(1)
+    # OCR can collapse the "<<" between surname and given names, so the MRZ name
+    # comes out in the wrong order.  Prefer a printed name with exactly the same
+    # words; this only reorders them and never adds or drops one.
+    if mrz.found and "<<" not in mrz.lines[0][5:].rstrip("<"):
+        printed_name = _printed_name_with_words(text, fields.get("full_name", ""))
+        if printed_name:
+            fields["full_name"] = printed_name
     if not fields.get("full_name"):
         fallback = _fallback_latin_name(text)
         if fallback:

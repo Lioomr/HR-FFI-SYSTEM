@@ -88,17 +88,36 @@ def parse_mrz_date(value: str, *, future: bool = False) -> str:
         return ""
 
 
+def _restore_dropped_filler(line: str, second: str) -> str:
+    """Repair "PEGY..." to "P<EGY..." when OCR dropped the filler after the P.
+
+    Only accepted when the line still looks like a name field ("<<"), the
+    country that follows the P matches the nationality on the second line, and
+    the second line's passport-number check digit validates.
+    """
+
+    if "<<" not in line or line[1:4] != _repair(second[10:13], numeric=False):
+        return ""
+    if not verify_check_digit(second[0:9], _repair(second[9:10], numeric=True)):
+        return ""
+    return f"P<{line[1:]}"
+
+
 def find_mrz_lines(text: str) -> list[str]:
     """Locate the two TD3 lines in noisy OCR output."""
 
     candidates = [clean_mrz_line(line) for line in (text or "").splitlines()]
     candidates = [line for line in candidates if len(line) >= _MIN_USABLE_LINE]
     for index, line in enumerate(candidates):
-        if not line.startswith("P<") or index + 1 >= len(candidates):
+        if not line.startswith("P") or index + 1 >= len(candidates):
             continue
         second = candidates[index + 1]
         if len(second) < _MIN_USABLE_LINE:
             continue
+        if not line.startswith("P<"):
+            line = _restore_dropped_filler(line, second)
+            if not line:
+                continue
         return [
             line.ljust(MRZ_LINE_LENGTH, _FILLER)[:MRZ_LINE_LENGTH],
             second.ljust(MRZ_LINE_LENGTH, _FILLER)[:MRZ_LINE_LENGTH],

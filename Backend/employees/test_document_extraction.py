@@ -61,6 +61,29 @@ def build_mrz(
     return f"{line1}\n{partial}{mrz.check_digit(composite_source)}"
 
 
+# Real OCR output from a scan where the "<" after the leading "P" was dropped
+# and the issue/expiry dates were run together under one header row.
+DROPPED_FILLER_PASSPORT_TEXT = """EGY
+A30702010
+FulLNa
+OMR ABDELAAL REDA ABDELAAL SOLTAN
+Place Of sirth
+Date of sirth
+05/10/2005SAU
+Sex
+..
+Date of Issue Date of Expiry
+15/06/202214/06/2029
+Issuing office
+12
+LAC
+Profession:STUDENT
+Im
+PEGYSOLTAN<OMR<ABDELAAL<REDA<ABDELAAL<<<<<
+A307020103EGY0510051M2906140<<<<<04
+Scanned with
+csCamScanner\""""
+
 ENGLISH_IQAMA_TEXT = """
 Kingdom of Saudi Arabia
 Full Name: SAMPLE EMPLOYEE TESTCASE
@@ -148,6 +171,45 @@ class PassportMrzTests(TestCase):
 
         self.assertFalse(result.valid)
         self.assertNotIn("expiry_date", result.fields)
+
+    def test_mrz_with_dropped_filler_after_p_is_recovered(self):
+        result = parse_document(EmployeeDocument.DocumentType.PASSPORT, DROPPED_FILLER_PASSPORT_TEXT)
+
+        self.assertTrue(result.checks["document_number"])
+        self.assertTrue(result.checks["date_of_birth"])
+        self.assertTrue(result.checks["expiry_date"])
+        self.assertEqual(result.fields["passport_number"], "A30702010")
+        self.assertEqual(result.fields["nationality"], "EGY")
+        self.assertEqual(result.fields["date_of_birth"], "2005-10-05")
+        self.assertEqual(result.fields["expiry_date"], "2029-06-14")
+        self.assertEqual(result.fields["issue_date"], "15/06/2022")
+        self.assertFalse(any("machine readable zone" in warning for warning in result.warnings))
+
+    def test_name_keeps_printed_order_when_mrz_separator_was_lost(self):
+        result = parse_document(EmployeeDocument.DocumentType.PASSPORT, DROPPED_FILLER_PASSPORT_TEXT)
+
+        self.assertEqual(result.fields["full_name"], "OMR ABDELAAL REDA ABDELAAL SOLTAN")
+
+    def test_name_is_not_replaced_by_a_printed_line_with_different_words(self):
+        text = DROPPED_FILLER_PASSPORT_TEXT.replace("OMR ABDELAAL REDA ABDELAAL SOLTAN", "SOMEONE ELSE ENTIRELY")
+        result = parse_document(EmployeeDocument.DocumentType.PASSPORT, text)
+
+        self.assertEqual(result.fields["full_name"], "SOLTAN OMR ABDELAAL REDA ABDELAAL")
+
+    def test_text_line_starting_with_p_is_not_treated_as_mrz(self):
+        second_line = DROPPED_FILLER_PASSPORT_TEXT.splitlines()[-3]
+        text = f"PROFESSIONAL<<STUDENT<OF<ENGINEERING<<<<<<\n{second_line}"
+
+        self.assertEqual(mrz.find_mrz_lines(text), [])
+
+    def test_dropped_filler_is_not_repaired_when_document_check_fails(self):
+        text = DROPPED_FILLER_PASSPORT_TEXT.replace("A307020103EGY", "A307020104EGY")
+
+        self.assertEqual(mrz.find_mrz_lines(text), [])
+        result = parse_document(EmployeeDocument.DocumentType.PASSPORT, text)
+        self.assertFalse(result.valid)
+        self.assertNotIn("issue_date", result.fields)
+        self.assertTrue(any("machine readable zone" in warning for warning in result.warnings))
 
 
 class IdentityParserTests(TestCase):
