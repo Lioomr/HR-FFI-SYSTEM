@@ -611,10 +611,15 @@ class EmployeeProfileWriteSerializer(serializers.ModelSerializer):
                 is_active=True,
             )
             manager_queryset = EmployeeProfile.objects.filter(company=company)
-            if request and request.query_params.get("scope", "").lower() == "all" and get_role(request.user) in {
-                "HRManager",
-                "SystemAdmin",
-            }:
+            if (
+                request
+                and request.query_params.get("scope", "").lower() == "all"
+                and get_role(request.user)
+                in {
+                    "HRManager",
+                    "SystemAdmin",
+                }
+            ):
                 manager_queryset = EmployeeProfile.objects.filter(
                     company_id__in=get_user_accessible_company_ids(request.user),
                 )

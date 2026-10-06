@@ -505,11 +505,7 @@ class AssetViewSet(viewsets.ModelViewSet):
         employee = serializer.validated_data["employee"]
 
         with transaction.atomic():
-            asset = (
-                filter_queryset_by_company_scope(Asset.objects.select_for_update(), request)
-                .filter(pk=pk)
-                .first()
-            )
+            asset = filter_queryset_by_company_scope(Asset.objects.select_for_update(), request).filter(pk=pk).first()
             if not asset:
                 return error("Not found", status=status.HTTP_404_NOT_FOUND)
             if AssetAssignment.objects.select_for_update().filter(asset=asset, is_active=True).exists():
@@ -572,11 +568,7 @@ class AssetViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
 
         with transaction.atomic():
-            asset = (
-                filter_queryset_by_company_scope(Asset.objects.select_for_update(), request)
-                .filter(pk=pk)
-                .first()
-            )
+            asset = filter_queryset_by_company_scope(Asset.objects.select_for_update(), request).filter(pk=pk).first()
             if not asset:
                 return error("Not found", status=status.HTTP_404_NOT_FOUND)
             assignment = (
