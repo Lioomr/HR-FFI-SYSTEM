@@ -24,7 +24,11 @@ from organization.models import OrganizationNode, UserOrganizationAccess
 from organization.services import get_default_company
 
 from .models import EmployeeDeletionRequest, EmployeeDocument, EmployeeProfile
-from .serializers import EmployeeDeletionRequestReadSerializer, EmployeeProfileReadSerializer
+from .serializers import (
+    EmployeeDeletionRequestReadSerializer,
+    EmployeeProfileReadSerializer,
+    EmployeeProfileWriteSerializer,
+)
 
 User = get_user_model()
 
@@ -69,6 +73,59 @@ class EmployeeProfileTests(TestCase):
             name="Annual Leave",
             code="ANNUAL",
         )
+
+    def test_contract_dates_must_form_a_positive_term(self):
+        profile = EmployeeProfile(
+            company=self.company,
+            employee_id="EMP-CONTRACT-DATES",
+            full_name="Contract Dates",
+            contract_date=date(2026, 4, 10),
+        )
+        profile.clean()
+        for expiry in (date(2026, 4, 9), date(2026, 4, 10)):
+            profile.contract_expiry = expiry
+            with self.assertRaises(ValidationError) as error:
+                profile.clean()
+            self.assertIn("contract_expiry", error.exception.message_dict)
+        profile.contract_expiry = date(2027, 4, 9)
+        profile.clean()
+
+    def test_partial_profile_update_validates_effective_contract_dates(self):
+        profile = EmployeeProfile.objects.create(
+            company=self.company,
+            employee_id="EMP-CONTRACT-UPDATE",
+            full_name="Contract Update",
+            contract_date=date(2026, 4, 10),
+            contract_expiry=date(2027, 4, 9),
+        )
+        for data in ({"contract_date": "2027-04-09"}, {"contract_expiry": "2026-04-09"}):
+            serializer = EmployeeProfileWriteSerializer(profile, data=data, partial=True)
+            self.assertFalse(serializer.is_valid())
+            self.assertIn("contract_expiry", serializer.errors)
+        serializer = EmployeeProfileWriteSerializer(profile, data={"contract_expiry": "2027-04-10"}, partial=True)
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+
+    def test_excel_import_rejects_invalid_contract_date_ranges_with_row_numbers(self):
+        self.client.force_authenticate(user=self.hr_user)
+        workbook = Workbook()
+        sheet = workbook.active
+        sheet.append(["Full Name", "Department", "Position", "Contract date", "Contract expiry"])
+        sheet.append(["Reversed Dates", "Engineering", "Developer", "2026-04-10", "2026-04-09"])
+        sheet.append(["Same Day Dates", "Engineering", "Developer", "2026-04-10", "2026-04-10"])
+        buffer = BytesIO()
+        workbook.save(buffer)
+        upload = SimpleUploadedFile(
+            "invalid-contract-dates.xlsx",
+            buffer.getvalue(),
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+
+        response = self.client.post("/api/employees/import/excel/", {"file": upload}, format="multipart")
+
+        self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
+        self.assertIn("row 2: contract_expiry: Contract expiry must be after contract date.", response.data["errors"])
+        self.assertIn("row 3: contract_expiry: Contract expiry must be after contract date.", response.data["errors"])
+        self.assertFalse(EmployeeProfile.objects.filter(full_name__in=["Reversed Dates", "Same Day Dates"]).exists())
 
     def test_admin_create_profile(self):
         self.client.force_authenticate(user=self.admin_user)

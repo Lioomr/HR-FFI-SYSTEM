@@ -10,6 +10,12 @@ from organization.models import OrganizationNode
 
 from .storage import PrivateUploadStorage
 
+CONTRACT_DATE_RANGE_ERROR = _("Contract expiry must be after contract date.")
+
+
+def invalid_contract_date_range(contract_date, contract_expiry):
+    return bool(contract_date and contract_expiry and contract_expiry <= contract_date)
+
 
 class EmployeeProfile(models.Model):
     class EmploymentStatus(models.TextChoices):
@@ -198,6 +204,8 @@ class EmployeeProfile(models.Model):
     def clean(self, validate_manager=True):
         super().clean()
         errors = {}
+        if invalid_contract_date_range(self.contract_date, self.contract_expiry):
+            errors["contract_expiry"] = CONTRACT_DATE_RANGE_ERROR
         if not self.is_archived and self.company_id is None:
             errors["company"] = _("A non-archived employee profile must belong to a company.")
         if self.company_id and self.company.node_type != OrganizationNode.NodeType.COMPANY:

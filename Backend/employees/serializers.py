@@ -15,6 +15,7 @@ from in_app_notifications.models import Notification
 from organization.services import get_user_accessible_company_ids
 
 from .models import (
+    CONTRACT_DATE_RANGE_ERROR,
     ContractDecision,
     EmployeeDeletionRequest,
     EmployeeDocument,
@@ -22,6 +23,7 @@ from .models import (
     EmployeeProfile,
     ProfileChangeAttachment,
     ProfileChangeRequest,
+    invalid_contract_date_range,
 )
 from .ocr.parsers import sanitize_extracted_fields
 from .services.manager_relationships import validate_manager_assignment
@@ -647,6 +649,12 @@ class EmployeeProfileWriteSerializer(serializers.ModelSerializer):
         full_name_en = attrs.get("full_name_en")
         if full_name is None and full_name_en:
             attrs["full_name"] = full_name_en
+
+        if "contract_date" in attrs or "contract_expiry" in attrs:
+            contract_date = attrs.get("contract_date", getattr(self.instance, "contract_date", None))
+            contract_expiry = attrs.get("contract_expiry", getattr(self.instance, "contract_expiry", None))
+            if invalid_contract_date_range(contract_date, contract_expiry):
+                raise serializers.ValidationError({"contract_expiry": CONTRACT_DATE_RANGE_ERROR})
 
         if "manager_profile" in attrs:
             employee = self.instance or EmployeeProfile()

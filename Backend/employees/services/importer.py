@@ -15,7 +15,12 @@ from django.core.files.base import ContentFile
 from django.db import transaction
 from django.utils import timezone
 
-from employees.models import EmployeeImport, EmployeeProfile
+from employees.models import (
+    CONTRACT_DATE_RANGE_ERROR,
+    EmployeeImport,
+    EmployeeProfile,
+    invalid_contract_date_range,
+)
 from employees.services.employee_ids import SEQUENTIAL_COMPANY_PREFIXES, allocate_employee_id
 from employees.services.manager_relationships import (
     log_manager_assignment_change,
@@ -529,6 +534,11 @@ class EmployeeImporter:
             if err:
                 errors.append(f"row {row_index}: {err}")
                 errors_detail.append({"row": row_index, "column": "contract_expiry", "message": err})
+                row_has_error = True
+            if invalid_contract_date_range(contract_date, contract_expiry):
+                message = str(CONTRACT_DATE_RANGE_ERROR)
+                errors.append(f"row {row_index}: contract_expiry: {message}")
+                errors_detail.append({"row": row_index, "column": "contract_expiry", "message": message})
                 row_has_error = True
 
             health_card_expiry, health_card_expiry_raw, err = self._parse_date_flexible(
