@@ -197,3 +197,5 @@ Backend/static/pdf_templates/company_logos/*
 # Local-only files kept out of the repo
 /.mcp.json
 /internship_completion_certificate_omar_reda_landscape.png
+/Backend/static/pdf_templates/generate_leave_request_canva_style.py
+/Backend/static/pdf_templates/generate_starting_work_acknowledgment_final.py
