@@ -217,7 +217,6 @@ class ManagerWorkflowTests(APITestCase):
             manager_profile=cross_manager_profile,
             scope=scope,
             start_at=timezone.now() - timedelta(minutes=1),
-            end_at=timezone.now() + timedelta(days=30),
             capabilities=["leaves.approve"],
             created_by=self.hr_user,
         )

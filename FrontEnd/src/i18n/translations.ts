@@ -1889,33 +1889,28 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "employees.form.taskGroupPlaceholder": "Select task group",
     "employees.form.sponsor": "Sponsor",
     "employees.form.sponsorPlaceholder": "Select sponsor",
-    "employees.form.directManager": "Direct Manager",
-    "employees.form.managerPlaceholder": "Select manager (optional)",
+    "employees.form.manager": "Manager",
+    "employees.form.managerPlaceholder":
+      "Search by name or employee number (optional)",
+    "employees.form.managerNoResults": "No matching employees",
     "employees.form.managerTooltip":
-      "The direct manager approves this employee's leave, loan, attendance and asset requests",
+      "The manager approves this employee's leave, loan, attendance and asset requests",
     "employees.form.managerHelp":
-      "Assigning a direct manager gives that person manager access for this employee's requests, even if their role is Employee. Leave it empty to route requests straight to HR.",
+      "Assigning a manager gives that person manager access for this employee's requests, even if their role is Employee. Leave it empty to route requests straight to HR.",
     "employees.form.managerAssignmentRejected":
       "This manager cannot be assigned",
     "employees.form.managerErrors.self":
       "An employee cannot be their own manager.",
-    "employees.form.managerErrors.company":
-      "The selected manager must belong to the employee's company.",
     "employees.form.managerErrors.archived":
       "The selected manager is archived.",
+    "employees.form.managerErrors.employeeArchived":
+      "An archived employee cannot be assigned a manager.",
     "employees.form.managerErrors.inactive":
       "The selected manager must be an active employee with an active user account.",
+    "employees.form.managerErrors.noLogin":
+      "The selected manager must have an active user account.",
     "employees.form.managerErrors.cycle":
       "Manager assignment cannot create a reporting cycle.",
-    "employees.form.managerErrors.duplicate":
-      "This manager is already assigned to this employee for this approved scope. Nothing was changed.",
-    "employees.view.crossCompanyManagers": "Cross-company managers",
-    "employees.view.crossCompanyManagerUntil": "until {{date}}",
-    "employees.form.managerScope": "Approved organization scope",
-    "employees.form.managerScopePlaceholder": "Select an approved scope",
-    "employees.form.managerAssignmentEnd": "Assignment expiry",
-    "employees.form.managerScopeEmpty":
-      "No approved scope covers both companies.",
     "employees.form.joiningDate": "Joining Date",
     "employees.form.jobOffer": "Job Offer",
     "employees.form.jobOfferPlaceholder": "Job offer details",
@@ -3107,10 +3102,6 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "hr.employees.updateSuccess": "Employee updated successfully",
     "hr.employees.validationFailed":
       "The employee could not be saved. Review validation errors across all tabs and try again.",
-    "hr.employees.crossCompanyAssignmentSaved":
-      "Employee updated and the cross-company manager was assigned. It appears under Cross-company managers on the employee page; the direct manager field is unchanged.",
-    "hr.employees.crossCompanyAssignmentFailed":
-      "The employee profile was saved, but the cross-company manager assignment failed. Confirm the employee has an active linked user account, and check the manager, approved scope, and expiry before retrying.",
     "hr.employees.noIdError": "No employee ID provided",
     "hr.employees.fixValidationErrors":
       "Please fix the validation errors in the form.",
@@ -7261,29 +7252,25 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "employees.form.taskGroupPlaceholder": "اختر مجموعة المهام",
     "employees.form.sponsor": "الشركاء",
     "employees.form.sponsorPlaceholder": "اختر الشركاء",
-    "employees.form.directManager": "المدير المباشر",
-    "employees.form.managerPlaceholder": "اختر المدير المباشر (اختياري)",
+    "employees.form.manager": "المدير",
+    "employees.form.managerPlaceholder":
+      "ابحث بالاسم أو الرقم الوظيفي (اختياري)",
+    "employees.form.managerNoResults": "لا يوجد موظفون مطابقون",
     "employees.form.managerTooltip":
-      "يعتمد المدير المباشر طلبات الإجازة والسلف والحضور والعهد لهذا الموظف",
+      "يعتمد المدير طلبات الإجازة والسلف والحضور والعهد لهذا الموظف",
     "employees.form.managerHelp":
-      "تعيين مدير مباشر يمنح ذلك الشخص صلاحية اعتماد طلبات هذا الموظف، حتى لو كانت وظيفته موظفاً. اتركه فارغاً لتوجيه الطلبات مباشرة إلى الموارد البشرية.",
+      "تعيين مدير يمنح ذلك الشخص صلاحية اعتماد طلبات هذا الموظف، حتى لو كانت وظيفته موظفاً. اتركه فارغاً لتوجيه الطلبات مباشرة إلى الموارد البشرية.",
     "employees.form.managerAssignmentRejected": "لا يمكن تعيين هذا المدير",
     "employees.form.managerErrors.self": "لا يمكن أن يكون الموظف مديراً لنفسه.",
-    "employees.form.managerErrors.company":
-      "يجب أن ينتمي المدير المختار إلى شركة الموظف.",
     "employees.form.managerErrors.archived": "المدير المختار مؤرشف.",
+    "employees.form.managerErrors.employeeArchived":
+      "لا يمكن تعيين مدير لموظف مؤرشف.",
     "employees.form.managerErrors.inactive":
       "يجب أن يكون المدير المختار موظفاً نشطاً بحساب مستخدم نشط.",
+    "employees.form.managerErrors.noLogin":
+      "يجب أن يكون للمدير المختار حساب مستخدم نشط.",
     "employees.form.managerErrors.cycle":
       "لا يمكن أن ينشئ تعيين المدير حلقة في التسلسل الإداري.",
-    "employees.form.managerErrors.duplicate":
-      "هذا المدير معيَّن بالفعل لهذا الموظف ضمن النطاق المعتمد نفسه. لم يتم تغيير أي شيء.",
-    "employees.view.crossCompanyManagers": "المديرون من شركات أخرى",
-    "employees.view.crossCompanyManagerUntil": "حتى {{date}}",
-    "employees.form.managerScope": "النطاق التنظيمي المعتمد",
-    "employees.form.managerScopePlaceholder": "اختر نطاقاً معتمداً",
-    "employees.form.managerAssignmentEnd": "تاريخ انتهاء التعيين",
-    "employees.form.managerScopeEmpty": "لا يوجد نطاق معتمد يغطي الشركتين.",
     "employees.form.joiningDate": "تاريخ الانضمام",
     "employees.form.jobOffer": "عرض العمل",
     "employees.form.jobOfferPlaceholder": "تفاصيل عرض العمل",
@@ -8438,10 +8425,6 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "hr.employees.updateSuccess": "تم تحديث الموظف بنجاح",
     "hr.employees.validationFailed":
       "تعذّر حفظ بيانات الموظف. راجع أخطاء التحقق في جميع علامات التبويب ثم حاول مرة أخرى.",
-    "hr.employees.crossCompanyAssignmentSaved":
-      "تم تحديث الموظف وتعيين المدير من شركة أخرى. يظهر ضمن «المديرون من شركات أخرى» في صفحة الموظف، بينما يبقى حقل المدير المباشر دون تغيير.",
-    "hr.employees.crossCompanyAssignmentFailed":
-      "تم حفظ ملف الموظف، لكن تعذّر إكمال تعيين المدير بين الشركات. تأكد من ربط حساب مستخدم نشط بالموظف، وراجع المدير والنطاق المعتمد وتاريخ الانتهاء قبل إعادة المحاولة.",
     "hr.employees.noIdError": "لم يتم تقديم معرف الموظف",
     "hr.employees.fixValidationErrors": "يرجى تصحيح أخطاء التحقق في النموذج.",
     "hr.employees.noData": "لا توجد بيانات متاحة",

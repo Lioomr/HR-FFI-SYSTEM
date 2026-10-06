@@ -51,21 +51,12 @@ export interface Employee {
   position_id?: number;
   task_group_id?: number;
   sponsor_id?: number;
-  // Legacy manager (FK to User)
-  manager_id?: number;
-  manager_name?: string;
-  // New manager profile (FK to EmployeeProfile)
-  manager_profile_id?: number;
-  manager_profile_name?: string;
-  // Active cross-company manager assignments (detail responses only)
-  cross_company_managers?: Array<{
-    id: number;
-    manager_profile_id: number;
-    manager_name: string;
-    manager_company_name: string;
-    scope_name: string;
-    end_at: string;
-  }>;
+  // The employee's single effective manager. `manager_id` is the manager's
+  // user id; the manager's company is never exposed.
+  manager_id?: number | null;
+  manager_name?: string | null;
+  manager_profile_id?: number | null;
+  manager_profile_name?: string | null;
   nationality?: string;
   employee_number?: string;
   passport_no?: string;
@@ -163,6 +154,45 @@ export async function listDelegationCandidates(params?: {
     {
       params,
     },
+  );
+  return data;
+}
+
+/** One choice in the employee Manager picker (no company is returned). */
+export interface ManagerOption {
+  id: number;
+  employee_id: string;
+  full_name: string;
+  full_name_en?: string;
+  full_name_ar?: string;
+}
+
+export interface ListManagerOptionsParams {
+  search?: string;
+  /** Employee being edited: excludes them and anyone reporting to them. */
+  employee_profile_id?: number | string;
+  page?: number;
+  page_size?: number;
+}
+
+export interface ManagerOptionsResponse {
+  items: ManagerOption[];
+  page: number;
+  page_size: number;
+  count: number;
+  total_pages: number;
+}
+
+/**
+ * Choices for an employee's single Manager (HRManager/SystemAdmin only).
+ * Endpoint: GET /api/employees/manager-options/
+ */
+export async function listManagerOptions(
+  params?: ListManagerOptionsParams,
+): Promise<ApiResponse<ManagerOptionsResponse>> {
+  const { data } = await api.get<ApiResponse<ManagerOptionsResponse>>(
+    "/api/employees/manager-options/",
+    { params },
   );
   return data;
 }

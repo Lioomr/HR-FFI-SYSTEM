@@ -9,10 +9,11 @@ from core.services.bird_email_service import (
     send_leave_request_submitted_email,
 )
 from core.services.whatsapp_service import WhatsAppService
-from employees.services.manager_relationships import get_valid_direct_manager_user
+from employees.services.manager_relationships import get_valid_manager_user
 from in_app_notifications.dispatcher import dispatch_notification_channels
 from in_app_notifications.i18n import notification_text, pair, user_name
 from in_app_notifications.models import Notification
+from in_app_notifications.services import notification_company_for_recipient
 from leaves.models import LeaveRequest
 from leaves.utils import get_leave_days
 
@@ -95,7 +96,7 @@ def notify_leave_submitted(leave_request: LeaveRequest) -> None:
         return
 
     profile = getattr(employee, "employee_profile", None)
-    manager = get_valid_direct_manager_user(profile)
+    manager = get_valid_manager_user(profile, cross_company_capability="leaves.approve")
 
     days = get_leave_days(leave_request.start_date, leave_request.end_date)
     base_url = _frontend_url()
@@ -110,6 +111,8 @@ def notify_leave_submitted(leave_request: LeaveRequest) -> None:
             "category": Notification.Category.LEAVE,
             "action_url": f"/manager/leave/requests/{leave_request.id}",
             "related_object": leave_request,
+            # A manager from another company opens the request from their own company.
+            "company": notification_company_for_recipient(manager, leave_request.company),
             "deduplication_key": f"leave.submitted.manager:{leave_request.id}",
         }
 

@@ -3,6 +3,10 @@
 **Prepared:** 2026-08-24 (Asia/Riyadh)
 **Release state:** **NO-GO — frontend implementation must not begin.** Local/staging work only. The local database correctly refuses `employees.0015` until the four known manager-field discrepancies are approved and resolved through a separate data-fix plan; the requested complete PostgreSQL suite also remains blocked until the unrelated annual-payment work is split out.
 
+> **Superseded in part (2026-10-06):** an employee now has exactly one manager, possibly from another company. `CrossCompanyManagerAssignment` has no `end_at` (it never expires), at most one active row per employee is enforced by a partial unique index (`core.0012`/`core.0013`), every row carries all capabilities, and setting one clears the direct `manager_profile` (the cross-company manager wins). Writes go through `set_employee_manager`; the assignment POST takes `{employee_id, manager_profile_id, scope_id?, reason?}`. Linking or disabling the managed employee's login no longer revokes the assignment; archiving or moving the employee, or the manager becoming invalid, still does. See "One manager per employee" in `plans/API Route Status Matrix.md`. Statements below about time windows, `end_at`, per-assignment capability choice, and assignments never touching `manager_profile` are historical.
+>
+> **Also 2026-10-06:** two capabilities were added, `permission_requests.approve` and `contract_ratings.rate` (`core.0014` widens the capability guard trigger and grants both to every active row). A manager no longer needs `X-Organization-Scope-Id` for their own reports: `GET /api/employees/manager/team/`, `GET /api/employees/{id}/`, the permission-request manager queue/detail/decisions, and contract-rating list/detail/manager response include another company's report through the manager's current assignment (with the workflow's capability) whatever the active company, while same-company reports still match only inside the manager's own company. The scope-header path is unchanged for delegated `employees.read` grants. Statements below that a cross-company manager must supply the scope selector are historical.
+
 ## Final data model
 
 - `EmployeeProfile.company_id` remains the sole owner for every active employee. It always references one active `COMPANY`; organization scopes never change it.
@@ -23,7 +27,7 @@ PostgreSQL triggers protect scope membership, scope activation state, cross-comp
 6. `employees.read` returns employees only in the scope’s currently active companies. A selected member company narrows the result to that company.
 7. Exceptional manager team access returns only the specifically assigned reports, inside the selected approved scope. It does not create a general cross-company employee list permission or any approval authority.
 8. Delegated employee list/detail and manager-team responses use the restricted scoped serializer. Its allow-list excludes contact data, passport/national ID, health card, compensation, documents, leave balances/history, payroll, archival/audit metadata, and timestamps. Scoped document routes are explicitly forbidden.
-9. Cross-company manager approval is separately capability-gated: `leaves.approve`, `attendance.approve`, `loans.approve`, `assets.approve`, and `announcements.manage`. `employees.view` is visibility only.
+9. Cross-company manager approval is separately capability-gated: `leaves.approve`, `attendance.approve`, `loans.approve`, `assets.approve`, `announcements.manage`, `permission_requests.approve` (2026-10-06), and `contract_ratings.rate` (2026-10-06). `employees.view` is visibility only.
 10. A cross-company path is never enabled by an unspecified capability. Calls to `manager_scope_q` and `has_manager_access` without one preserve direct/delegated same-company behavior only.
 
 ## API contract
@@ -37,10 +41,10 @@ All responses use the existing `{status, data}` envelope.
 | `GET/PATCH /api/core/organization-scopes/{id}/` | As above / HRManager/SystemAdmin for patch | PATCH can alter a name. It cannot alter membership or `is_active` while active grants/assignments reference the scope; revoke them and submit an explicit re-approval first. |
 | `GET/POST /api/core/workflow/delegations/` | Participants see only their grants; cross-company POST is HRManager/SystemAdmin only | Cross-company request requires `scope_id`, finite `end_at`, and explicit `capabilities`, including `employees.read` for employee visibility. |
 | `PATCH/DELETE /api/core/workflow/delegations/{id}/` | Creator/authorized admin | DELETE is a revocation: it sets `is_active=false`, `revoked_at`, and `revoked_by`; it does not erase audit evidence. |
-| `GET/POST /api/core/cross-company-manager-assignments/` | HRManager/SystemAdmin to create; HR is limited to authorized scopes; manager sees only current usable assignments, never historical rows | POST requires `employee_id` (employee-profile ID), `manager_profile_id`, `scope_id`, `start_at`, `end_at`, explicit `capabilities`, and optional reason. |
-| `PATCH/DELETE /api/core/cross-company-manager-assignments/{id}/` | HRManager/SystemAdmin | DELETE revokes; neither route changes employee company or direct-manager fields. |
+| `GET/POST /api/core/cross-company-manager-assignments/` | HRManager/SystemAdmin to create; HR is limited to authorized scopes; manager sees only current usable assignments, never historical rows | POST takes `employee_id` (employee-profile ID), `manager_profile_id`, optional `scope_id` and `reason` (2026-10-06: no `end_at`; capabilities are always all). |
+| `PATCH/DELETE /api/core/cross-company-manager-assignments/{id}/` | HRManager/SystemAdmin | DELETE revokes. Since 2026-10-06 creating/changing an assignment clears the employee's direct manager (one manager per employee). |
 | `GET /api/employees/` and `GET /api/employees/{id}/` | Existing roles plus a current scoped grant | With `X-Organization-Scope-Id`, only approved grant/assignment data is visible. Export and unrelated module endpoints remain active-company-only. |
-| `GET /api/employees/manager/team/` | Existing manager checks | A cross-company manager must supply the approved scope selector and receives assigned reports only. |
+| `GET /api/employees/manager/team/` | Existing manager checks | Since 2026-10-06 no scope selector is needed: the team is every same-company report plus every report the manager holds through a current assignment with `employees.view`, in a company-free least-privilege shape. With a scope selector the assigned reports inside that scope are returned as before. |
 
 Capability flags on delegation responses use a map such as:
 
@@ -48,7 +52,7 @@ Capability flags on delegation responses use a map such as:
 {"workflow.approve": true, "employees.read": true}
 ```
 
-Cross-company manager assignment capabilities are one or more of `employees.view`, `leaves.approve`, `attendance.approve`, `loans.approve`, `assets.approve`, and `announcements.manage`. No capability implies another.
+Cross-company manager assignment capabilities are one or more of `employees.view`, `leaves.approve`, `attendance.approve`, `loans.approve`, `assets.approve`, `announcements.manage`, `permission_requests.approve`, and `contract_ratings.rate`. No capability implies another (since 2026-10-06 every assignment is created with all of them).
 
 ## Frontend integration
 

@@ -17,10 +17,11 @@ from employees.contract_expiry import (
 )
 from employees.models import ContractDecision, EmployeeProfile
 from employees.services.archiving import retire_biotime_mapping_and_archive_profile
-from employees.services.manager_relationships import get_valid_direct_manager_user
+from employees.services.manager_relationships import CONTRACT_RATING_CAPABILITY, get_valid_manager_user
 from in_app_notifications.dispatcher import dispatch_notification_channels
 from in_app_notifications.i18n import contract_rating_event_label, contract_rating_message, notification_text
 from in_app_notifications.models import Notification
+from in_app_notifications.services import notification_company_for_recipient
 
 from .models import ContractRating
 
@@ -31,7 +32,8 @@ def _dispatch(rating, recipient, audience, key, event, message):
     route_audience = "ceo" if audience == "requesting_ceo" else audience
     return dispatch_notification_channels(
         recipient=recipient,
-        company=rating.company,
+        # A manager from another company opens the rating from their own company.
+        company=notification_company_for_recipient(recipient, rating.company),
         event_key="contract.rating",
         **notification_text(
             "contract.rating",
@@ -59,7 +61,11 @@ def _deliver(rating, key, entry):
         elif audience == "requesting_ceo":
             recipients = [rating.hr_comment_requested_by] if rating.hr_comment_requested_by_id else []
         else:
-            recipient = get_valid_direct_manager_user(profile) if audience == "manager" else profile.user
+            recipient = (
+                get_valid_manager_user(profile, cross_company_capability=CONTRACT_RATING_CAPABILITY)
+                if audience == "manager"
+                else profile.user
+            )
             recipients = [recipient] if recipient else []
         eligible = [r for r in recipients if r and r.is_active and (audience == "employee" or r.id != profile.user_id)]
         if not eligible:

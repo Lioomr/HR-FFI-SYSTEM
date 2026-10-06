@@ -309,11 +309,16 @@ def _get_subject_user(instance):
 
 def _get_manager_user_for_instance(instance, subject_user):
     """Resolve the manager stage using the domain's explicit cross-company rules."""
-    if instance.__class__.__name__ == "LeaveRequest":
-        from employees.services.manager_relationships import get_valid_manager_user
+    from employees.services.manager_relationships import get_valid_manager_user, manager_capability_for
 
-        profile = getattr(instance, "employee_profile", None) or getattr(subject_user, "employee_profile", None)
-        return get_valid_manager_user(profile, cross_company_capability="leaves.approve")
+    capability = manager_capability_for(instance)
+    if capability:
+        profile = (
+            getattr(instance, "employee_profile", None)
+            or (getattr(instance, "employee", None) if instance.__class__.__name__ == "AssetReturnRequest" else None)
+            or getattr(subject_user, "employee_profile", None)
+        )
+        return get_valid_manager_user(profile, cross_company_capability=capability)
     return get_direct_manager_user(subject_user)
 
 

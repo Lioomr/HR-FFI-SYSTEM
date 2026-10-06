@@ -23,8 +23,10 @@ from employees.models import (
 )
 from employees.services.employee_ids import SEQUENTIAL_COMPANY_PREFIXES, allocate_employee_id
 from employees.services.manager_relationships import (
+    get_effective_manager_profile,
     log_manager_assignment_change,
     reroute_pending_manager_requests,
+    revoke_cross_company_manager_assignments,
     validate_manager_assignment,
 )
 from employees.storage import PrivateUploadStorage
@@ -772,7 +774,9 @@ class EmployeeImporter:
                 manager_error_details = []
                 changed_manager_profiles = []
                 for profile, manager_ref, row_index in manager_links:
-                    previous_manager = profile.manager_profile
+                    # The file is authoritative: its manager (or none) replaces a
+                    # cross-company manager too, keeping one manager per employee.
+                    previous_manager = get_effective_manager_profile(profile)
                     if not manager_ref:
                         profile.manager_profile = None
                         # EmployeeProfile.save() keeps the legacy `manager` (User FK) field in
@@ -782,6 +786,9 @@ class EmployeeImporter:
                         profile.manager_id = None
                         profile.updated_at = timezone.now()
                         changed_manager_profiles.append(profile)
+                        revoke_cross_company_manager_assignments(
+                            [profile.pk], actor=uploader, source="employee_import"
+                        )
                         log_manager_assignment_change(
                             employee=profile,
                             previous_manager=previous_manager,
@@ -822,6 +829,7 @@ class EmployeeImporter:
                     profile.manager_id = manager_profile.user_id
                     profile.updated_at = timezone.now()
                     changed_manager_profiles.append(profile)
+                    revoke_cross_company_manager_assignments([profile.pk], actor=uploader, source="employee_import")
                     log_manager_assignment_change(
                         employee=profile,
                         previous_manager=previous_manager,
@@ -835,6 +843,12 @@ class EmployeeImporter:
                 if changed_manager_profiles:
                     EmployeeProfile.objects.bulk_update(
                         changed_manager_profiles, ["manager_profile", "manager", "updated_at"]
+                    )
+                    # Open contract ratings follow the new manager.
+                    from contract_ratings.services import reassign_open_ratings_to_current_manager
+
+                    reassign_open_ratings_to_current_manager(
+                        changed_manager_profiles, actor=uploader, source="employee_import"
                     )
 
                 if manager_errors:

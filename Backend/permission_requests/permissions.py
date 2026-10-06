@@ -2,7 +2,7 @@ from rest_framework.permissions import BasePermission
 
 from core.delegation import is_user_delegated_for_role
 from employees.models import EmployeeProfile
-from employees.services.manager_relationships import has_manager_access
+from employees.services.manager_relationships import PERMISSION_REQUEST_APPROVAL_CAPABILITY, has_manager_access
 
 HR_APPROVER_GROUPS = ("HRManager", "SystemAdmin")
 
@@ -54,10 +54,14 @@ class HasActiveEmployeeProfile(BasePermission):
 
 
 class IsPermissionRequestManager(BasePermission):
-    message = "Only direct or delegated managers can use the manager permission request queue."
+    message = "Only managers can use the manager permission request queue."
 
     def has_permission(self, request, view):
-        return bool(request.user and request.user.is_authenticated and has_manager_access(request.user))
+        return bool(
+            request.user
+            and request.user.is_authenticated
+            and has_manager_access(request.user, cross_company_capability=PERMISSION_REQUEST_APPROVAL_CAPABILITY)
+        )
 
 
 class IsPermissionRequestHRApprover(BasePermission):

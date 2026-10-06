@@ -337,8 +337,6 @@ def _scope_and_delegation_issues():
         members = set(assignment.scope.memberships.values_list("company_id", flat=True))
         if assignment.employee_id == assignment.manager_profile_id:
             assignment_issues.append("self_management")
-        if assignment.end_at <= assignment.start_at:
-            assignment_issues.append("invalid_time_window")
         if assignment.revoked_at and assignment.is_active:
             assignment_issues.append("revoked_but_active")
         if not assignment.scope.is_active or {employee.company_id, manager.company_id} - members:

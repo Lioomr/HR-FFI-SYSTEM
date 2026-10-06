@@ -86,15 +86,21 @@ def _decided_actor(instance: Any, actor_attr: str, at_attr: str) -> Any:
 
 
 def _direct_manager_name(instance: Any) -> str:
-    """The manager who decided; before a decision, the currently valid direct manager."""
+    """The manager who decided; before a decision, the employee's current manager."""
 
     decided_by = _decided_actor(instance, "manager_decision_by", "manager_decision_at")
     if decided_by is not None:
         return display_name(user=decided_by)
     try:
-        from employees.services.manager_relationships import get_valid_direct_manager_profile
+        from employees.services.manager_relationships import (
+            PERMISSION_REQUEST_APPROVAL_CAPABILITY,
+            get_valid_manager_profile,
+        )
 
-        manager_profile = get_valid_direct_manager_profile(getattr(instance, "employee_profile", None))
+        manager_profile = get_valid_manager_profile(
+            getattr(instance, "employee_profile", None),
+            cross_company_capability=PERMISSION_REQUEST_APPROVAL_CAPABILITY,
+        )
     except Exception:
         # A detached instance simply has no resolvable manager.
         manager_profile = None

@@ -35,11 +35,10 @@ import type { Department } from "../../../services/api/departmentsApi";
 import type { Position } from "../../../services/api/positionsApi";
 import type { TaskGroup } from "../../../services/api/taskGroupsApi";
 import type { Sponsor } from "../../../services/api/sponsorsApi";
-import type { Employee } from "../../../services/api/employeesApi";
 import { useEffect, useState } from "react";
 import { useI18n } from "../../../i18n/useI18n";
-import type { OrganizationScope } from "../../../services/api/managerAssignmentsApi";
 import { localizeManagerAssignmentError } from "./managerAssignmentError";
+import ManagerSelect from "./ManagerSelect";
 
 interface EmployeeFormProps {
   form: FormInstance;
@@ -49,17 +48,19 @@ interface EmployeeFormProps {
     positions: Position[];
     taskGroups: TaskGroup[];
     sponsors: Sponsor[];
-    employees?: Employee[]; // For manager selection
-    organizationScopes?: OrganizationScope[];
   };
-  /** Profile being edited, so it can never be offered as its own manager. */
-  currentEmployeeId?: number | string | null;
   /**
-   * Backend rejection of the direct-manager assignment (self-manager,
-   * cross-company, archived/inactive manager, reporting cycle).
+   * Profile being edited: the manager picker never offers it, or anyone who
+   * reports to it, as its manager.
+   */
+  currentEmployeeId?: number | string | null;
+  /** Saved manager's name, shown in the picker before any search runs. */
+  managerLabel?: string | null;
+  /**
+   * Backend rejection of the manager (self-manager, archived/inactive manager,
+   * manager without an active login, reporting cycle).
    */
   managerAssignmentError?: string | null;
-  employeeCompanyId?: number | null;
 }
 
 /**
@@ -71,27 +72,15 @@ export default function EmployeeForm({
   loadingRefs,
   refOptions,
   currentEmployeeId = null,
+  managerLabel = null,
   managerAssignmentError = null,
-  employeeCompanyId = null,
 }: EmployeeFormProps) {
   const { t } = useI18n();
   const localizedManagerAssignmentError = localizeManagerAssignmentError(
     managerAssignmentError,
     t,
   );
-  const {
-    departments,
-    positions,
-    taskGroups,
-    sponsors,
-    employees = [],
-    organizationScopes = [],
-  } = refOptions;
-  const selectedManagerId = Form.useWatch("manager_profile_id", form);
-  const selectedManager = employees.find((employee) => employee.id === selectedManagerId);
-  const isCrossCompanyManager = Boolean(
-    employeeCompanyId && selectedManager?.company_id && employeeCompanyId !== selectedManager.company_id,
-  );
+  const { departments, positions, taskGroups, sponsors } = refOptions;
   const [isSaudi, setIsSaudi] = useState<boolean>(false);
   const [activeTab, setActiveTab] = useState("1");
 
@@ -102,17 +91,6 @@ export default function EmployeeForm({
       setActiveTab("2");
     }
   }, [managerAssignmentError]);
-
-  const managerOptions = employees
-    .filter(
-      (emp) =>
-        currentEmployeeId == null ||
-        String(emp.id) !== String(currentEmployeeId),
-    )
-    .map((emp) => ({
-      label: emp.full_name_en || emp.full_name || emp.employee_id,
-      value: emp.id,
-    }));
 
   // Sync isSaudi with form value on initial render (for Edit page)
   useEffect(() => {
@@ -212,14 +190,18 @@ export default function EmployeeForm({
                                     passport_expiry: undefined,
                                     nationality: "",
                                   });
-                                  form.setFieldValue("mobile_country_code", "+966");
+                                  form.setFieldValue(
+                                    "mobile_country_code",
+                                    "+966",
+                                  );
                                 } else {
                                   const nationalityValue =
                                     form.getFieldValue("nationality");
                                   form.setFieldValue(
                                     "mobile_country_code",
-                                    getDialCodeByNationality(nationalityValue) ||
-                                      "+966",
+                                    getDialCodeByNationality(
+                                      nationalityValue,
+                                    ) || "+966",
                                   );
                                 }
                               }}
@@ -515,7 +497,7 @@ export default function EmployeeForm({
                             label={
                               <Space>
                                 <TeamOutlined />
-                                {t("employees.form.directManager")}
+                                {t("employees.form.manager")}
                               </Space>
                             }
                             name="manager_profile_id"
@@ -524,18 +506,11 @@ export default function EmployeeForm({
                             validateStatus={
                               managerAssignmentError ? "error" : undefined
                             }
-                              help={localizedManagerAssignmentError || undefined}
+                            help={localizedManagerAssignmentError || undefined}
                           >
-                            <Select
-                              size="large"
-                              placeholder={t(
-                                "employees.form.managerPlaceholder",
-                              )}
-                              showSearch
-                              allowClear
-                              optionFilterProp="label"
-                              loading={loadingRefs}
-                              options={managerOptions}
+                            <ManagerSelect
+                              employeeProfileId={currentEmployeeId}
+                              selectedLabel={managerLabel}
                             />
                           </Form.Item>
                           {managerAssignmentError && (
@@ -549,35 +524,6 @@ export default function EmployeeForm({
                               )}
                               description={localizedManagerAssignmentError}
                             />
-                          )}
-                          {isCrossCompanyManager && (
-                            <Row gutter={16} style={{ marginTop: 8 }}>
-                              <Col xs={24} md={12}>
-                                <Form.Item
-                                  label={t("employees.form.managerScope", "Approved organization scope")}
-                                  name="cross_company_scope_id"
-                                  rules={[{ required: true, message: t("common.required", "This field is required") }]}
-                                >
-                                  <Select
-                                    size="large"
-                                    placeholder={t("employees.form.managerScopePlaceholder")}
-                                    notFoundContent={t("employees.form.managerScopeEmpty")}
-                                    options={organizationScopes
-                                      .filter((scope) => scope.companies.some((company) => company.id === employeeCompanyId) && scope.companies.some((company) => company.id === selectedManager?.company_id))
-                                      .map((scope) => ({ label: `${scope.code} - ${scope.name}`, value: scope.id }))}
-                                  />
-                                </Form.Item>
-                              </Col>
-                              <Col xs={24} md={12}>
-                                <Form.Item
-                                  label={t("employees.form.managerAssignmentEnd")}
-                                  name="cross_company_end_at"
-                                  rules={[{ required: true, message: t("common.required", "This field is required") }]}
-                                >
-                                  <DatePicker showTime style={{ width: "100%" }} size="large" />
-                                </Form.Item>
-                              </Col>
-                            </Row>
                           )}
                         </Col>
 

@@ -136,7 +136,6 @@ class TenantScopeContractTests(APITestCase):
             scope=self.scope,
             capabilities=[CrossCompanyManagerAssignment.Capability.EMPLOYEE_VIEW],
             start_at=timezone.now() - timedelta(minutes=1),
-            end_at=timezone.now() + timedelta(hours=1),
             created_by=self.hr,
         )
         for capability in (
@@ -205,7 +204,6 @@ class TenantScopeContractTests(APITestCase):
             manager_profile=self.employee_b.employee_profile,
             scope=self.scope,
             start_at=timezone.now() - timedelta(minutes=1),
-            end_at=timezone.now() + timedelta(hours=1),
             created_by=self.hr,
         )
         # Database-trigger coverage: ordinary lifecycle changes revoke only the
@@ -398,14 +396,13 @@ class TenantScopeContractTests(APITestCase):
                 created_by=self.hr,
             )
 
-    def test_view_only_or_expired_assignment_cannot_use_employee_or_workflow_endpoints(self):
+    def test_view_only_or_revoked_assignment_cannot_use_employee_or_workflow_endpoints(self):
         assignment = CrossCompanyManagerAssignment.objects.create(
             employee=self.employee_a.employee_profile,
             manager_profile=self.employee_b.employee_profile,
             scope=self.scope,
             capabilities=[CrossCompanyManagerAssignment.Capability.EMPLOYEE_VIEW],
             start_at=timezone.now() - timedelta(minutes=1),
-            end_at=timezone.now() + timedelta(hours=1),
             created_by=self.hr,
         )
         leave_type = LeaveType.objects.create(
@@ -424,19 +421,19 @@ class TenantScopeContractTests(APITestCase):
         denied_approval = self.client.post(f"/api/leaves/manager/leave-requests/{leave.id}/approve/", {}, format="json")
         self.assertEqual(denied_approval.status_code, status.HTTP_404_NOT_FOUND)
 
-        assignment.end_at = timezone.now() - timedelta(seconds=1)
-        assignment.start_at = timezone.now() - timedelta(hours=1)
+        assignment.is_active = False
+        assignment.revoked_at = timezone.now()
         assignment.save()
         list_response = self.client.get("/api/employees/?page_size=100", **self._scope_headers())
         detail_response = self.client.get(
             f"/api/employees/{self.employee_a.employee_profile.id}/", **self._scope_headers()
         )
-        expired_approval = self.client.post(
+        revoked_approval = self.client.post(
             f"/api/leaves/manager/leave-requests/{leave.id}/approve/", {}, format="json"
         )
         self.assertEqual(list_response.status_code, status.HTTP_403_FORBIDDEN)
         self.assertEqual(detail_response.status_code, status.HTTP_403_FORBIDDEN)
-        self.assertEqual(expired_approval.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(revoked_approval.status_code, status.HTTP_404_NOT_FOUND)
 
     def test_hr_cannot_assign_a_manager_from_a_company_outside_their_access(self):
         self.client.force_authenticate(user=self.hr)
@@ -446,8 +443,6 @@ class TenantScopeContractTests(APITestCase):
                 "employee_id": self.employee_a.employee_profile.id,
                 "manager_profile_id": self.employee_b.employee_profile.id,
                 "scope_id": self.scope.id,
-                "start_at": (timezone.now() - timedelta(minutes=1)).isoformat(),
-                "end_at": (timezone.now() + timedelta(hours=1)).isoformat(),
             },
             format="json",
             HTTP_X_ACTIVE_COMPANY_ID=str(self.company_a.id),
@@ -466,8 +461,6 @@ class TenantScopeContractTests(APITestCase):
                 "employee_id": self.employee_a.employee_profile.id,
                 "manager_profile_id": self.employee_b.employee_profile.id,
                 "scope_id": self.scope.id,
-                "start_at": (timezone.now() - timedelta(minutes=1)).isoformat(),
-                "end_at": (timezone.now() + timedelta(hours=1)).isoformat(),
                 "reason": "Temporary approved coverage",
             },
             format="json",
@@ -485,36 +478,36 @@ class TenantScopeContractTests(APITestCase):
         team_items = team.data["data"].get("items", team.data["data"].get("results", []))
         self.assertEqual({item["id"] for item in team_items}, {self.employee_a.employee_profile.id})
 
-    def test_duplicate_active_cross_company_manager_assignment_is_rejected_and_listed_on_detail(self):
+    def test_reposting_the_same_cross_company_manager_reuses_the_one_assignment(self):
         UserOrganizationAccess.objects.create(user=self.hr, organization=self.company_b)
         self.client.force_authenticate(user=self.hr)
         payload = {
             "employee_id": self.employee_a.employee_profile.id,
             "manager_profile_id": self.employee_b.employee_profile.id,
             "scope_id": self.scope.id,
-            "start_at": (timezone.now() - timedelta(minutes=1)).isoformat(),
-            "end_at": (timezone.now() + timedelta(hours=1)).isoformat(),
         }
         headers = {"HTTP_X_ACTIVE_COMPANY_ID": str(self.company_a.id)}
         first = self.client.post(
             "/api/core/cross-company-manager-assignments/", payload, format="json", **headers
         )
         self.assertEqual(first.status_code, status.HTTP_201_CREATED, first.data)
+        self.assertNotIn("end_at", first.data["data"])
+        self.assertEqual(
+            sorted(first.data["data"]["capabilities"]), sorted(CrossCompanyManagerAssignment.Capability.values)
+        )
 
         second = self.client.post(
             "/api/core/cross-company-manager-assignments/", payload, format="json", **headers
         )
-        self.assertEqual(second.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY, second.data)
-        self.assertIn("already assigned", str(second.data))
+        self.assertEqual(second.status_code, status.HTTP_200_OK, second.data)
+        self.assertEqual(second.data["data"]["id"], first.data["data"]["id"])
         self.assertEqual(CrossCompanyManagerAssignment.objects.count(), 1)
 
         from employees.serializers import EmployeeProfileReadSerializer
 
         data = EmployeeProfileReadSerializer(self.employee_a.employee_profile).data
-        self.assertEqual(
-            [item["manager_profile_id"] for item in data["cross_company_managers"]],
-            [self.employee_b.employee_profile.id],
-        )
+        self.assertEqual(data["manager_profile_id"], self.employee_b.employee_profile.id)
+        self.assertNotIn("cross_company_managers", data)
 
     def test_cross_company_manager_assignment_prevents_reporting_cycle(self):
         CrossCompanyManagerAssignment.objects.create(
@@ -522,7 +515,6 @@ class TenantScopeContractTests(APITestCase):
             manager_profile=self.employee_b.employee_profile,
             scope=self.scope,
             start_at=timezone.now() - timedelta(minutes=1),
-            end_at=timezone.now() + timedelta(hours=1),
             created_by=self.hr,
         )
         self.client.force_authenticate(user=self.hr)
@@ -533,8 +525,6 @@ class TenantScopeContractTests(APITestCase):
                 "employee_id": self.employee_b.employee_profile.id,
                 "manager_profile_id": self.employee_a.employee_profile.id,
                 "scope_id": self.scope.id,
-                "start_at": timezone.now().isoformat(),
-                "end_at": (timezone.now() + timedelta(hours=1)).isoformat(),
             },
             format="json",
             HTTP_X_ACTIVE_COMPANY_ID=str(self.company_a.id),

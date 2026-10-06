@@ -15,11 +15,11 @@ Base path: `/api/permission-requests/` (trailing slash optional on every route).
 |---|---|---|---|---|---|
 | `POST` | `/api/permission-requests/` | Any user with an **active, non-archived employee profile** whose company is the active company (Employee, Manager, HRManager, CFO, CEO, SystemAdmin-with-profile) | Create payload (§2.1) | `201` detail object | `401`; `403` no active profile, active company ≠ profile company, or company not accessible; `422` validation |
 | `GET` | `/api/permission-requests/` | Any authenticated user — returns **only the caller's own** requests in the active company | `status` (a status value or `all`, default all), `date_from`, `date_to` (`YYYY-MM-DD`), `page`, `page_size` | `200` paginated list | `403` company; `422` bad filter |
-| `GET` | `/api/permission-requests/{id}/` | Owner; the requester's direct or delegated manager, or the manager who decided it; HR approvers | — | `200` detail object | `404` (also for anything outside the caller's visibility or company) |
+| `GET` | `/api/permission-requests/{id}/` | Owner; the requester's manager (direct, delegated, or from another company with `permission_requests.approve`), or the manager who decided it; HR approvers | — | `200` detail object | `404` (also for anything outside the caller's visibility or company) |
 | `POST` | `/api/permission-requests/{id}/cancel/` | Owner only, while `pending_manager` or `pending_hr` | none | `200` detail object | `403` visible but not the owner; `404`; `422` not pending |
 | `GET` | `/api/permission-requests/{id}/pdf/` | Same visibility as detail (owner, direct/delegated/deciding manager, HR approvers incl. SystemAdmin). An unrelated CEO gets `404`. | — | `200` `application/pdf` attachment (§5) | `404` |
 | `GET` | `/api/permission-requests/manager/` | Users with manager access (active direct reports, or an active manager delegation) | `status` (default `pending_manager`; `all` for history), `date_from`, `date_to`, `page`, `page_size` | `200` paginated list | `403` no manager access; `422` bad filter |
-| `POST` | `/api/permission-requests/{id}/manager-approve/` | The requester's valid direct manager or their active delegate. Never the requester. | Decision payload (§2.4) | `200` detail object | `403` no manager access / not this requester's manager / self; `404`; `422` stale state or comment too long |
+| `POST` | `/api/permission-requests/{id}/manager-approve/` | The requester's manager (same-company, or from another company when their assignment carries `permission_requests.approve`) or their active delegate. Never the requester. | Decision payload (§2.4) | `200` detail object | `403` no manager access / not this requester's manager / self; `404`; `422` stale state or comment too long |
 | `POST` | `/api/permission-requests/{id}/manager-reject/` | Same as manager-approve | Decision payload | `200` detail object | Same |
 | `GET` | `/api/permission-requests/hr/` | HR approvers. The caller's own requests are excluded. | `status` (default `pending_hr`; `all`), `date_from`, `date_to`, `page`, `page_size` | `200` paginated list | `403` not an HR approver; `422` bad filter |
 | `POST` | `/api/permission-requests/{id}/hr-approve/` | HR approvers except the requester | Decision payload | `200` detail object | `403` not HR approver / self; `404`; `422` stale state |
@@ -92,7 +92,8 @@ Paginated envelope:
 ### 2.3 Detail object
 
 This is a list item plus `direct_manager`: `{id, employee_profile_id, full_name}` \| `null`. That is the requester's
-**currently valid** direct manager. Every create, retrieve, cancel, and decision response returns the detail object in
+**currently valid** manager (since 2026-10-06 possibly from another company when their assignment carries
+`permission_requests.approve`; only the name is shown, never a company). Every create, retrieve, cancel, and decision response returns the detail object in
 `{"status": "success", "message": "...", "data": { ... }}`.
 
 `workflow` object:
@@ -168,7 +169,7 @@ Messages the UI will meet:
 | `to_time` | `A permission request cannot exceed 120 minutes.` |
 | `from_time` / `to_time` | `Times must be given in hours and minutes only.` |
 | `duration_minutes` | `duration_minutes is calculated by the server and does not match the times.` |
-| `non_field_errors` | `No eligible approver is available for this permission request. Ask HR to assign your direct manager.` |
+| `non_field_errors` | `No eligible approver is available for this permission request. Ask HR to assign your manager.` |
 | `non_field_errors` | `This permission request is no longer pending manager approval.` / `... pending HR approval.` |
 | `non_field_errors` | `Only pending permission requests can be cancelled.` |
 | (403) | `Select your employee company to submit a permission request.` |

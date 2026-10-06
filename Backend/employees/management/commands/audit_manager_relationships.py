@@ -3,8 +3,13 @@ import json
 from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand
 
+from core.models import CrossCompanyManagerAssignment
 from employees.models import EmployeeProfile
-from employees.services.manager_relationships import active_direct_reports_queryset, find_reporting_cycles
+from employees.services.manager_relationships import (
+    active_direct_reports_queryset,
+    find_reporting_cycles,
+    full_manager_capabilities,
+)
 
 
 def _profile_row(profile):
@@ -41,7 +46,32 @@ def build_manager_audit_report():
         "reporting_cycles": find_reporting_cycles(profiles),
         "active_employees_without_manager_profile": [],
         "manager_group_users_without_direct_reports": [],
+        "multiple_active_cross_company_manager_assignments": [],
+        "direct_and_cross_company_manager": [],
+        "cross_company_assignments_missing_capabilities": [],
     }
+
+    active_assignments: dict[int, list] = {}
+    for assignment in CrossCompanyManagerAssignment.objects.filter(is_active=True, revoked_at__isnull=True).order_by(
+        "employee_id", "-id"
+    ):
+        active_assignments.setdefault(assignment.employee_id, []).append(assignment)
+    full_capabilities = set(full_manager_capabilities())
+    for employee_id, assignments in active_assignments.items():
+        if len(assignments) > 1:
+            report["multiple_active_cross_company_manager_assignments"].append(
+                {
+                    "employee_profile_id": employee_id,
+                    "assignment_ids": [assignment.id for assignment in assignments],
+                    "manager_profile_ids": [assignment.manager_profile_id for assignment in assignments],
+                }
+            )
+        for assignment in assignments:
+            missing = sorted(full_capabilities - set(assignment.capabilities or []))
+            if missing:
+                report["cross_company_assignments_missing_capabilities"].append(
+                    {"assignment_id": assignment.id, "employee_profile_id": employee_id, "missing": missing}
+                )
 
     for profile in profiles:
         row = _profile_row(profile)
@@ -79,10 +109,17 @@ def build_manager_audit_report():
         ):
             report["archived_or_inactive_managers"].append(row)
 
+        cross_assignments = active_assignments.get(profile.id, [])
+        if cross_assignments and (profile.manager_profile_id or profile.manager_id):
+            report["direct_and_cross_company_manager"].append(
+                {**row, "cross_company_manager_profile_id": cross_assignments[0].manager_profile_id}
+            )
+
         if (
             not profile.is_archived
             and profile.employment_status == EmployeeProfile.EmploymentStatus.ACTIVE
             and not profile.manager_profile_id
+            and not cross_assignments
         ):
             report["active_employees_without_manager_profile"].append(row)
 
@@ -96,7 +133,10 @@ def build_manager_audit_report():
 
 
 class Command(BaseCommand):
-    help = "Audit EmployeeProfile manager relationships without changing data."
+    help = (
+        "Audit EmployeeProfile manager relationships without changing data. "
+        "Fix one-manager violations with consolidate_manager_relationships."
+    )
 
     def add_arguments(self, parser):
         parser.add_argument("--format", choices=["human", "json"], default="human")

@@ -26,7 +26,7 @@ from .models import (
     invalid_contract_date_range,
 )
 from .ocr.parsers import sanitize_extracted_fields
-from .services.manager_relationships import validate_manager_assignment
+from .services.manager_relationships import get_effective_manager_profile, validate_any_manager_assignment
 from .services.signature_image import SignatureImageError, normalize_signature
 
 EMPLOYEE_DOCUMENT_ALLOWED_EXTENSIONS = {".pdf", ".jpg", ".jpeg", ".png"}
@@ -49,6 +49,12 @@ EMPLOYEE_SIGNATURE_MAGIC_BYTES = {
 EMPLOYEE_SIGNATURE_MAX_SIZE = int(getattr(settings, "MAX_EMPLOYEE_SIGNATURE_SIZE_BYTES", 2 * 1024 * 1024))
 
 User = get_user_model()
+
+
+def manager_display_name(manager):
+    if manager is None:
+        return None
+    return manager.full_name_en or manager.full_name or manager.employee_id
 
 
 class UserMinimalSerializer(serializers.ModelSerializer):
@@ -206,7 +212,6 @@ class EmployeeProfileReadSerializer(serializers.ModelSerializer):
     manager_name = serializers.SerializerMethodField()
     manager_profile_id = serializers.SerializerMethodField()
     manager_profile_name = serializers.SerializerMethodField()
-    cross_company_managers = serializers.SerializerMethodField()
     department = serializers.SerializerMethodField()
     position = serializers.SerializerMethodField()
     task_group = serializers.SerializerMethodField()
@@ -298,7 +303,6 @@ class EmployeeProfileReadSerializer(serializers.ModelSerializer):
             "manager_name",
             "manager_profile_id",
             "manager_profile_name",
-            "cross_company_managers",
             "created_at",
             "updated_at",
         ]
@@ -314,51 +318,29 @@ class EmployeeProfileReadSerializer(serializers.ModelSerializer):
             return None
         return (obj.archived_by.full_name or "").strip() or obj.archived_by.email
 
+    # Every manager field describes the employee's one effective manager (a
+    # cross-company manager wins over a leftover direct link). The manager's
+    # company is deliberately never exposed.
     def get_manager_id(self, obj):
-        if obj.manager_profile and obj.manager_profile.user:
-            return obj.manager_profile.user.id
+        manager = get_effective_manager_profile(obj)
+        if manager is not None:
+            return manager.user_id
         return obj.manager.id if obj.manager else None
 
     def get_manager_name(self, obj):
-        if obj.manager_profile:
-            return obj.manager_profile.full_name_en or obj.manager_profile.full_name or obj.manager_profile.employee_id
+        manager = get_effective_manager_profile(obj)
+        if manager is not None:
+            return manager_display_name(manager)
         if obj.manager:
             return obj.manager.full_name or obj.manager.email
         return None
 
     def get_manager_profile_id(self, obj):
-        return obj.manager_profile.id if obj.manager_profile else None
+        manager = get_effective_manager_profile(obj)
+        return manager.id if manager else None
 
     def get_manager_profile_name(self, obj):
-        if obj.manager_profile:
-            return obj.manager_profile.full_name_en or obj.manager_profile.full_name or obj.manager_profile.employee_id
-        return None
-
-    def get_cross_company_managers(self, obj):
-        # Detail responses only: list serializers have a ListSerializer parent, and this runs one query per profile.
-        if self.parent is not None:
-            return []
-        from django.utils import timezone
-
-        from core.models import CrossCompanyManagerAssignment
-
-        now = timezone.now()
-        assignments = CrossCompanyManagerAssignment.objects.filter(
-            employee=obj, is_active=True, revoked_at__isnull=True, start_at__lte=now, end_at__gte=now
-        ).select_related("manager_profile__company", "scope")
-        return [
-            {
-                "id": assignment.id,
-                "manager_profile_id": assignment.manager_profile_id,
-                "manager_name": assignment.manager_profile.full_name_en
-                or assignment.manager_profile.full_name
-                or assignment.manager_profile.employee_id,
-                "manager_company_name": assignment.manager_profile.company.name,
-                "scope_name": assignment.scope.name,
-                "end_at": assignment.end_at,
-            }
-            for assignment in assignments.order_by("end_at", "id")
-        ]
+        return manager_display_name(get_effective_manager_profile(obj))
 
     def _display_name(self, ref_obj, fallback):
         if ref_obj:
@@ -428,7 +410,7 @@ class ScopedEmployeeReadSerializer(serializers.ModelSerializer):
     task_group_id = serializers.PrimaryKeyRelatedField(source="task_group_ref", read_only=True)
     company_id = serializers.PrimaryKeyRelatedField(source="company", read_only=True)
     company_name = serializers.CharField(source="company.name", read_only=True)
-    manager_profile_id = serializers.PrimaryKeyRelatedField(source="manager_profile", read_only=True)
+    manager_profile_id = serializers.SerializerMethodField()
     manager_profile_name = serializers.SerializerMethodField()
 
     class Meta:
@@ -467,9 +449,27 @@ class ScopedEmployeeReadSerializer(serializers.ModelSerializer):
     def get_task_group(self, obj):
         return self._display_name(obj.task_group_ref)
 
+    def get_manager_profile_id(self, obj):
+        manager = get_effective_manager_profile(obj)
+        return manager.id if manager else None
+
     def get_manager_profile_name(self, obj):
-        manager = obj.manager_profile
-        return (manager.full_name_en or manager.full_name or manager.employee_id) if manager else None
+        return manager_display_name(get_effective_manager_profile(obj))
+
+
+class ManagerTeamMemberSerializer(ScopedEmployeeReadSerializer):
+    """The scoped shape a manager sees for a report: no company identifiers.
+
+    A report may belong to another company than its manager; nothing here says so.
+    """
+
+    company_id = None
+    company_name = None
+
+    class Meta(ScopedEmployeeReadSerializer.Meta):
+        fields = [
+            field for field in ScopedEmployeeReadSerializer.Meta.fields if field not in {"company_id", "company_name"}
+        ]
 
 
 class DelegationCandidateSerializer(serializers.ModelSerializer):
@@ -612,20 +612,14 @@ class EmployeeProfileWriteSerializer(serializers.ModelSerializer):
                 company=company,
                 is_active=True,
             )
-            manager_queryset = EmployeeProfile.objects.filter(company=company)
-            if (
-                request
-                and request.query_params.get("scope", "").lower() == "all"
-                and get_role(request.user)
-                in {
-                    "HRManager",
-                    "SystemAdmin",
-                }
-            ):
-                manager_queryset = EmployeeProfile.objects.filter(
-                    company_id__in=get_user_accessible_company_ids(request.user),
-                )
-            self.fields["manager_profile_id"].queryset = manager_queryset
+            # A manager may come from any company the acting user can access;
+            # anything else is an unknown id (no cross-company data is leaked).
+            manager_company_ids = {company.pk}
+            if request is not None and get_role(request.user) in {"HRManager", "SystemAdmin"}:
+                manager_company_ids |= get_user_accessible_company_ids(request.user)
+            self.fields["manager_profile_id"].queryset = EmployeeProfile.objects.filter(
+                company_id__in=manager_company_ids
+            )
 
     def validate_full_name(self, value):
         if not value.strip():
@@ -657,11 +651,12 @@ class EmployeeProfileWriteSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError({"contract_expiry": CONTRACT_DATE_RANGE_ERROR})
 
         if "manager_profile" in attrs:
-            employee = self.instance or EmployeeProfile()
+            # Saved by the view through set_employee_manager, never by save().
             request = self.context.get("request")
+            employee = self.instance or EmployeeProfile(user=attrs.get("user"))
             company = employee.company if self.instance else getattr(request, "_active_company", None)
             try:
-                validate_manager_assignment(employee, attrs.get("manager_profile"), company=company)
+                validate_any_manager_assignment(employee, attrs.get("manager_profile"), company=company)
             except DjangoValidationError as exc:
                 raise serializers.ValidationError({"manager_profile_id": exc.messages}) from exc
         return super().validate(attrs)

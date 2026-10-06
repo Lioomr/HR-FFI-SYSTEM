@@ -1,7 +1,7 @@
 from rest_framework.exceptions import PermissionDenied
 
 from core.permissions import is_department_ceo_approver_user, is_hr_workflow_approver_user
-from employees.services.manager_relationships import manager_approval_actor_source
+from employees.services.manager_relationships import CONTRACT_RATING_CAPABILITY, manager_approval_actor_source
 from organization.services import get_user_accessible_company_ids
 
 
@@ -15,7 +15,9 @@ def viewer_role(actor, rating):
         return None
     if rating.rating_mode == rating.RatingMode.RATE and rating.employee_profile.user_id == actor.id:
         return "employee"
-    if rating.rating_mode == rating.RatingMode.RATE and manager_approval_actor_source(actor, rating.employee_profile):
+    if rating.rating_mode == rating.RatingMode.RATE and manager_approval_actor_source(
+        actor, rating.employee_profile, capability=CONTRACT_RATING_CAPABILITY
+    ):
         return "manager"
     if is_hr_workflow_approver_user(actor):
         return "hr"

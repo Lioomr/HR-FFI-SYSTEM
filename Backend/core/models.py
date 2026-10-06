@@ -217,7 +217,12 @@ class DelegationRule(models.Model):
 
 
 class CrossCompanyManagerAssignment(models.Model):
-    """Exceptional manager/report link that never mutates EmployeeProfile.manager_profile."""
+    """An employee's manager when that manager belongs to another company.
+
+    An employee has exactly one manager: either ``EmployeeProfile.manager_profile``
+    (same company) or one active row here. Rows never expire; they end only when
+    revoked. Write through ``employees.services.manager_relationships.set_employee_manager``.
+    """
 
     class Capability(models.TextChoices):
         EMPLOYEE_VIEW = "employees.view", "View the assigned employee"
@@ -226,6 +231,8 @@ class CrossCompanyManagerAssignment(models.Model):
         LOAN_APPROVE = "loans.approve", "Approve assigned employee loans"
         ASSET_APPROVE = "assets.approve", "Approve assigned employee asset returns"
         ANNOUNCEMENT_MANAGE = "announcements.manage", "Target announcements to assigned employees"
+        PERMISSION_REQUEST_APPROVE = "permission_requests.approve", "Approve assigned employee permission requests"
+        CONTRACT_RATING_RATE = "contract_ratings.rate", "Rate assigned employee contracts"
 
     employee = models.ForeignKey(
         "employees.EmployeeProfile",
@@ -243,7 +250,6 @@ class CrossCompanyManagerAssignment(models.Model):
         related_name="cross_company_manager_assignments",
     )
     start_at = models.DateTimeField()
-    end_at = models.DateTimeField()
     capabilities = models.JSONField(default=default_cross_company_manager_capabilities, blank=True)
     reason = models.TextField(blank=True)
     is_active = models.BooleanField(default=True)
@@ -272,6 +278,13 @@ class CrossCompanyManagerAssignment(models.Model):
             models.Index(fields=["employee", "is_active"], name="core_cross_emp_active_idx"),
             models.Index(fields=["scope", "is_active"], name="core_cross_scope_active_idx"),
         ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["employee"],
+                condition=models.Q(is_active=True, revoked_at__isnull=True),
+                name="core_cross_mgr_one_active_per_employee",
+            ),
+        ]
 
     def clean(self):
         from django.core.exceptions import ValidationError
@@ -279,8 +292,6 @@ class CrossCompanyManagerAssignment(models.Model):
         super().clean()
         if self.employee_id and self.manager_profile_id and self.employee_id == self.manager_profile_id:
             raise ValidationError("An employee cannot manage themselves.")
-        if self.end_at and self.start_at and self.end_at <= self.start_at:
-            raise ValidationError({"end_at": "End time must be after start time."})
         capabilities = self.capabilities or []
         valid_capabilities = set(self.Capability.values)
         invalid_capabilities = set(capabilities) - valid_capabilities

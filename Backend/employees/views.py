@@ -49,6 +49,7 @@ from organization.services import (
     filter_queryset_by_accessible_companies,
     filter_queryset_by_company_scope,
     get_active_company_for_request,
+    get_active_organization_for_request,
     get_requested_company_id,
     get_requested_organization_scope,
     get_scope_company_ids,
@@ -96,6 +97,7 @@ from .serializers import (
     EmployeeProfileWriteSerializer,
     EmployeeSignatureStateSerializer,
     EmployeeSignatureUploadSerializer,
+    ManagerTeamMemberSerializer,
     ProfileChangeAttachmentSerializer,
     ProfileChangeAttachmentUploadSerializer,
     ProfileChangeRequestReadSerializer,
@@ -118,8 +120,11 @@ from .services.document_jobs import (
 from .services.employee_ids import SEQUENTIAL_COMPANY_PREFIXES, allocate_employee_id
 from .services.manager_relationships import (
     active_cross_company_manager_assignments,
-    log_manager_assignment_change,
+    get_effective_manager_profile,
+    manager_option_exclusion_ids,
     reroute_pending_manager_requests,
+    set_employee_manager,
+    with_current_cross_company_manager,
 )
 from .services.signature import clear_signature, store_signature
 from .services.visa_expiry import VISA_EXPIRY_FIELD, annotate_visa_expiry
@@ -204,6 +209,13 @@ def _cross_company_employee_scope_for_request(request):
     if selected_company_id is not None:
         company_ids &= {selected_company_id}
     return scope, company_ids if scope.id in read_scope_ids else set(), manager_assignment_ids
+
+
+def _export_manager_name(profile: EmployeeProfile) -> str:
+    manager = get_effective_manager_profile(profile)
+    if manager is not None:
+        return manager.full_name or manager.full_name_en or ""
+    return profile.manager.full_name if profile.manager_id else ""
 
 
 def _queue_document_extraction(document: EmployeeDocument) -> list[str]:
@@ -499,7 +511,7 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
             "task_group_ref",
             "sponsor_ref",
         )
-        base_qs = _with_effective_status(base_qs)
+        base_qs = with_current_cross_company_manager(_with_effective_status(base_qs))
 
         archive_state = self.request.query_params.get("archive_state", "active").lower()
         if self.action == "restore":
@@ -528,11 +540,16 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
             ).distinct()
 
         if self.action == "retrieve":
-            return (
-                filter_queryset_by_company_scope(base_qs, self.request)
-                .filter(Q(user=user) | manager_scope_q(user))
-                .distinct()
+            # Own profile in the active company; a report in any company. Same-company
+            # reports match only inside the manager's own company, another company's
+            # report only through the manager's current assignment carrying employees.view.
+            from core.models import CrossCompanyManagerAssignment
+
+            own = filter_queryset_by_company_scope(base_qs, self.request).filter(user=user)
+            managed = base_qs.filter(
+                manager_scope_q(user, cross_company_capability=CrossCompanyManagerAssignment.Capability.EMPLOYEE_VIEW)
             )
+            return (own | managed).distinct()
 
         return filter_queryset_by_company_scope(base_qs, self.request).filter(user=user)
 
@@ -765,11 +782,7 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
                 profile.user.email if profile.user_id else "",
                 profile.department_ref.name if profile.department_ref_id else profile.department,
                 profile.position_ref.name if profile.position_ref_id else profile.job_title,
-                (
-                    profile.manager_profile.full_name
-                    if profile.manager_profile_id
-                    else (profile.manager.full_name if profile.manager_id else "")
-                ),
+                _export_manager_name(profile),
                 profile.nationality or profile.nationality_en or profile.nationality_ar or "",
                 profile.hire_date.isoformat() if profile.hire_date else "",
                 getattr(profile, "effective_employment_status", profile.employment_status),
@@ -790,8 +803,27 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
         )
 
     def retrieve(self, request, *args, **kwargs):
-        response = super().retrieve(request, *args, **kwargs)
-        return success(response.data)
+        instance = self.get_object()
+        serializer_class = self._retrieve_serializer_class(instance)
+        return success(serializer_class(instance, context=self.get_serializer_context()).data)
+
+    def _retrieve_serializer_class(self, instance):
+        """A manager reading a report gets the company-free scoped shape.
+
+        Same-company reports read without an organization scope keep the existing
+        profile shape; a report reached through a manager assignment (another
+        company) never shows its company or any salary/contact data.
+        """
+        serializer_class = self.get_serializer_class()
+        user = self.request.user
+        if get_role(user) in ["SystemAdmin", "HRManager"] or instance.user_id == user.id:
+            return serializer_class
+        if serializer_class is ScopedEmployeeReadSerializer:
+            _, delegated_company_ids, _ = _cross_company_employee_scope_for_request(self.request)
+            return serializer_class if instance.company_id in delegated_company_ids else ManagerTeamMemberSerializer
+        if EmployeeProfile.objects.filter(pk=instance.pk).filter(manager_scope_q(user)).exists():
+            return serializer_class
+        return ManagerTeamMemberSerializer
 
     def _document_profile_for_request(self, request, pk):
         profiles = filter_queryset_by_company_scope(
@@ -1467,6 +1499,66 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(qs, many=True)
         return success(serializer.data)
 
+    @action(detail=False, methods=["get"], url_path="manager-options")
+    def manager_options(self, request):
+        """Choices for an employee's single Manager picker (HR/Admin only).
+
+        Active employees with an active login from every company the caller can
+        access. ``employee_profile_id`` (the employee being edited) removes that
+        employee and everyone who reports to them, since picking any of them
+        would create a reporting cycle. The company is deliberately not returned.
+        """
+        company_ids = get_user_accessible_company_ids(request.user)
+        qs = EmployeeProfile.objects.filter(
+            company_id__in=company_ids,
+            company__is_active=True,
+            is_archived=False,
+            employment_status=EmployeeProfile.EmploymentStatus.ACTIVE,
+            user__isnull=False,
+            user__is_active=True,
+        )
+
+        raw_employee_id = (request.query_params.get("employee_profile_id") or "").strip()
+        if raw_employee_id:
+            if not raw_employee_id.isdigit():
+                return error(
+                    "Validation error",
+                    errors=[{"field": "employee_profile_id", "message": "Must be a numeric employee profile id."}],
+                    status=422,
+                )
+            employee = EmployeeProfile.objects.filter(pk=int(raw_employee_id), company_id__in=company_ids).first()
+            if employee is None:
+                return error("Employee not found.", status=status.HTTP_404_NOT_FOUND)
+            qs = qs.exclude(pk__in=manager_option_exclusion_ids(employee))
+            if employee.user_id:
+                qs = qs.exclude(user_id=employee.user_id)
+
+        search = (request.query_params.get("search") or "").strip()
+        if search:
+            qs = qs.filter(
+                Q(full_name__icontains=search)
+                | Q(full_name_en__icontains=search)
+                | Q(full_name_ar__icontains=search)
+                | Q(employee_id__icontains=search)
+            )
+
+        qs = qs.order_by("full_name_en", "full_name", "employee_id", "id").only(
+            "id", "employee_id", "full_name", "full_name_en", "full_name_ar"
+        )
+        paginator = StandardPagination()
+        page = paginator.paginate_queryset(qs, request, view=self)
+        items = [
+            {
+                "id": profile.id,
+                "employee_id": profile.employee_id,
+                "full_name": profile.full_name_en or profile.full_name or profile.employee_id,
+                "full_name_en": profile.full_name_en or "",
+                "full_name_ar": profile.full_name_ar or "",
+            }
+            for profile in page
+        ]
+        return paginator.get_paginated_response(items)
+
     @action(
         detail=False,
         methods=["get"],
@@ -1483,7 +1575,13 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
         )
         managed_employee_count = reports.count()
         if managed_employee_count:
-            direct_report_count = reports.filter(manager_profile__user=request.user).count()
+            # A report in another company is the user's own report too (one manager per employee).
+            own_report_ids = active_cross_company_manager_assignments(
+                request.user, capability=CrossCompanyManagerAssignment.Capability.EMPLOYEE_VIEW
+            ).values("employee_id")
+            direct_report_count = reports.filter(
+                Q(manager_profile__user=request.user) | Q(pk__in=own_report_ids)
+            ).count()
             source = "direct_reports" if direct_report_count else "delegation"
             has_access = True
         elif role == "SystemAdmin":
@@ -1529,7 +1627,7 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
             "task_group_ref",
             "sponsor_ref",
         )
-        base_qs = _with_effective_status(base_qs).filter(is_archived=False)
+        base_qs = with_current_cross_company_manager(_with_effective_status(base_qs)).filter(is_archived=False)
         if role == "SystemAdmin":
             qs = filter_queryset_by_company_scope(base_qs, request)
         else:
@@ -1550,8 +1648,17 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
                     pk__in=manager_assignment_ids,
                 ).distinct()
             else:
-                base_qs = filter_queryset_by_company_scope(base_qs, request)
-                qs = base_qs.filter(manager_scope_q(request.user)).distinct()
+                # No scope selector: every report, whatever the active company. The
+                # selector is still validated. Same-company reports match only inside
+                # the manager's own company; another company's report only through the
+                # manager's current assignment carrying employees.view.
+                get_active_organization_for_request(request)
+                qs = base_qs.filter(
+                    manager_scope_q(
+                        request.user,
+                        cross_company_capability=CrossCompanyManagerAssignment.Capability.EMPLOYEE_VIEW,
+                    )
+                ).distinct()
 
         search = request.query_params.get("search")
         if search:
@@ -1569,7 +1676,7 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
             )
 
         page = self.paginate_queryset(qs)
-        serializer = ScopedEmployeeReadSerializer(page if page is not None else qs, many=True)
+        serializer = ManagerTeamMemberSerializer(page if page is not None else qs, many=True)
         if page is not None:
             return self.get_paginated_response(serializer.data)
         return success({"results": serializer.data, "count": qs.count()})
@@ -1614,6 +1721,7 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
         company = get_active_company_for_request(self.request)
         if company is None:
             raise IntegrityError("Active company is required.")
+        manager_profile = serializer.validated_data.pop("manager_profile", None)
         max_retries = 5
         for _ in range(max_retries):
             try:
@@ -1629,14 +1737,14 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
                         company=company,
                     )
                     _sync_legacy_fields(instance)
-                    log_manager_assignment_change(
-                        employee=instance,
-                        previous_manager=None,
-                        new_manager=instance.manager_profile,
-                        changed_by=self.request.user,
-                        request=self.request,
-                        source="hr_create",
-                    )
+                    if manager_profile is not None:
+                        set_employee_manager(
+                            instance,
+                            manager_profile,
+                            actor=self.request.user,
+                            request=self.request,
+                            source="hr_create",
+                        )
                     audit(
                         self.request,
                         "employee_profile_created",
@@ -1669,7 +1777,8 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
     def perform_update(self, serializer):
         ensure_company_write_allowed(self.request)
         before = _audit_snapshot(serializer.instance)
-        previous_manager = serializer.instance.manager_profile
+        manager_requested = "manager_profile" in serializer.validated_data
+        manager_profile = serializer.validated_data.pop("manager_profile", None)
         instance = serializer.instance
         unlinked_user = instance.user if serializer.validated_data == {"user": None} else None
         unlinked_company = instance.company if unlinked_user else None
@@ -1682,27 +1791,27 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
         stale_manager = bool(
             instance.manager_profile_id and instance.manager_profile and not instance.manager_profile.user_id
         )
-        if unlinking_only and stale_manager:
-            EmployeeProfile.objects.filter(pk=instance.pk).update(
-                user=None,
-                updated_at=timezone.now(),
-            )
-            instance.refresh_from_db()
-        else:
-            instance = serializer.save()
-            _sync_legacy_fields(instance)
-        if unlinked_user and unlinked_company:
-            UserOrganizationAccess.objects.get_or_create(user=unlinked_user, organization=unlinked_company)
-        log_manager_assignment_change(
-            employee=instance,
-            previous_manager=previous_manager,
-            new_manager=instance.manager_profile,
-            changed_by=self.request.user,
-            request=self.request,
-            source="hr_update",
-        )
-        if previous_manager and instance.manager_profile_id is None:
-            reroute_pending_manager_requests(instance, actor=self.request.user)
+        with transaction.atomic():
+            if manager_requested:
+                # Before the full save: a replaced stale manager must not block it.
+                set_employee_manager(
+                    instance,
+                    manager_profile,
+                    actor=self.request.user,
+                    request=self.request,
+                    source="hr_update",
+                )
+            if unlinking_only and stale_manager:
+                EmployeeProfile.objects.filter(pk=instance.pk).update(
+                    user=None,
+                    updated_at=timezone.now(),
+                )
+                instance.refresh_from_db()
+            else:
+                instance = serializer.save()
+                _sync_legacy_fields(instance)
+            if unlinked_user and unlinked_company:
+                UserOrganizationAccess.objects.get_or_create(user=unlinked_user, organization=unlinked_company)
         audit(
             self.request,
             "employee_profile_updated",

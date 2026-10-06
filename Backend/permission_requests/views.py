@@ -19,11 +19,12 @@ from rest_framework.permissions import IsAuthenticated
 from core.models import WorkflowInstance
 from core.pagination import StandardPagination
 from core.responses import error, success
-from employees.services.manager_relationships import manager_scope_q
+from employees.services.manager_relationships import PERMISSION_REQUEST_APPROVAL_CAPABILITY, manager_scope_q
 from organization.services import (
     filter_queryset_by_accessible_companies,
     filter_queryset_by_company_scope,
     get_active_company_for_request,
+    get_active_organization_for_request,
 )
 
 from . import services
@@ -91,6 +92,22 @@ class PermissionRequestViewSet(viewsets.GenericViewSet):
     def _base_queryset(self):
         return PermissionRequest.objects.select_related(*READ_SELECT_RELATED).prefetch_related("attachments")
 
+    def _managed_queryset(self):
+        """Requests of the caller's reports, in any company.
+
+        Same-company reports are matched only inside the manager's own company;
+        a report in another company only through the manager's current
+        assignment carrying ``permission_requests.approve``.
+        """
+
+        return self._base_queryset().filter(
+            manager_scope_q(
+                self.request.user,
+                employee_prefix="employee_profile__",
+                cross_company_capability=PERMISSION_REQUEST_APPROVAL_CAPABILITY,
+            )
+        )
+
     def _visible_queryset(self):
         """Requests the caller may open: their own, their team's, or all for HR approvers.
 
@@ -99,11 +116,9 @@ class PermissionRequestViewSet(viewsets.GenericViewSet):
 
         user = self.request.user
         queryset = filter_queryset_by_accessible_companies(self._base_queryset(), self.request)
-        if is_hr_approver_user(user):
-            return queryset
-        return queryset.filter(
-            Q(employee=user) | Q(manager_decision_by=user) | manager_scope_q(user, employee_prefix="employee_profile__")
-        ).distinct()
+        if not is_hr_approver_user(user):
+            queryset = queryset.filter(Q(employee=user) | Q(manager_decision_by=user))
+        return (queryset | self._managed_queryset()).distinct()
 
     def _get_visible(self, pk):
         return self._visible_queryset().filter(pk=pk).first()
@@ -295,11 +310,9 @@ class PermissionRequestViewSet(viewsets.GenericViewSet):
 
     @action(detail=False, methods=["get"], url_path="manager")
     def manager_queue(self, request):
-        queryset = (
-            filter_queryset_by_company_scope(self._base_queryset(), request)
-            .filter(manager_scope_q(request.user, employee_prefix="employee_profile__"))
-            .distinct()
-        )
+        # The selector is still validated; the team itself is not limited to the active company.
+        get_active_organization_for_request(request)
+        queryset = self._managed_queryset().distinct()
         return self._paginated(self._apply_filters(queryset, default_status=Status.PENDING_MANAGER))
 
     @action(detail=True, methods=["post"], url_path="manager-approve")
