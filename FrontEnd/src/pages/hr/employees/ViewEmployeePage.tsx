@@ -43,7 +43,7 @@ import {
   WalletOutlined,
 } from "@ant-design/icons";
 import "./ViewEmployeePage.css";
-import { getCountryFlag, isSaudiEmployee } from "../../../utils/countries";
+import { getCountryCode, isSaudiEmployee } from "../../../utils/countries";
 import EmployeeLeaveBalances from "./components/EmployeeLeaveBalances";
 import EmployeeDocumentArchive from "../../../components/employees/EmployeeDocumentArchive";
 import PageHeader from "../../../components/ui/PageHeader";
@@ -162,6 +162,29 @@ function getServiceLength(dateStr: string | undefined) {
   if (now.getDate() < start.getDate()) months -= 1;
   if (months < 0) return null;
   return { years: Math.floor(months / 12), months: months % 12 };
+}
+
+/** Windows browsers draw flag emoji as plain letters ("IN"), so use the same flag-icons images as the employee list. */
+function NationalityFlag({ nationality }: { nationality?: string }) {
+  const code = getCountryCode(nationality);
+  if (!code) return <GlobalOutlined aria-hidden="true" />;
+  return (
+    <span
+      className={`fi fi-${code.toLowerCase()}`}
+      aria-label={`${code} flag`}
+      title={code}
+      style={{
+        width: 20,
+        height: 15,
+        borderRadius: 2,
+        display: "inline-flex",
+        verticalAlign: "middle",
+        backgroundSize: "cover",
+        backgroundPosition: "center",
+        boxShadow: "inset 0 0 0 1px rgba(0,0,0,0.08)",
+      }}
+    />
+  );
 }
 
 function InfoField({
@@ -804,18 +827,22 @@ export default function ViewEmployeePage() {
                         label={t("employees.form.nationality")}
                       >
                         <Space size={6}>
-                          <span>
-                            {getCountryFlag((employee as any).nationality)}
-                          </span>
+                          <NationalityFlag
+                            nationality={(employee as any).nationality}
+                          />
                           {formatValue((employee as any).nationality)}
                         </Space>
                       </InfoField>
-                      <InfoField
-                        icon={<IdcardOutlined />}
-                        label={t("employees.form.empNumber")}
-                      >
-                        {formatValue((employee as any).employee_number)}
-                      </InfoField>
+                      {String(
+                        (employee as any).employee_number ?? "",
+                      ).trim() && (
+                        <InfoField
+                          icon={<IdcardOutlined />}
+                          label={t("employees.form.empNumber")}
+                        >
+                          {formatValue((employee as any).employee_number)}
+                        </InfoField>
+                      )}
                       <InfoField
                         icon={<PhoneOutlined />}
                         label={t("employees.form.mobile")}
@@ -827,7 +854,10 @@ export default function ViewEmployeePage() {
                         label={t("hr.employees.linkedAccount")}
                       >
                         {employee.user_id ? (
-                          <a href={`mailto:${employee.email}`}>
+                          <a
+                            className="emp-field__link"
+                            href={`mailto:${employee.email}`}
+                          >
                             {employee.email}
                           </a>
                         ) : (

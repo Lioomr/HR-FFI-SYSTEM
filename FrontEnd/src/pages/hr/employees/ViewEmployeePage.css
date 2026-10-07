@@ -266,6 +266,14 @@ a.emp-contact-pill:hover {
   overflow-wrap: anywhere;
 }
 
+.emp-field__value a.emp-field__link {
+  color: var(--brand-primary-dark);
+}
+
+.emp-field__value a.emp-field__link:hover {
+  color: var(--brand-primary);
+}
+
 .emp-section-title {
   display: flex;
   align-items: center;
