@@ -29,7 +29,8 @@ import {
   ScheduleOutlined,
   InboxOutlined,
 } from "@ant-design/icons";
-import { getCountryFlag, isSaudiEmployee } from "../../utils/countries";
+import { isSaudiEmployee } from "../../utils/countries";
+import NationalityFlag from "../../components/ui/NationalityFlag";
 import LoadingState from "../../components/ui/LoadingState";
 import ErrorState from "../../components/ui/ErrorState";
 import { getEmployee } from "../../services/api/employeesApi";
@@ -333,9 +334,9 @@ export default function UserProfilePage() {
                         </Descriptions.Item>
                         <Descriptions.Item label={t("profile.nationality")}>
                           <Space>
-                            <span>
-                              {getCountryFlag((employee as any).nationality)}
-                            </span>
+                            <NationalityFlag
+                              nationality={(employee as any).nationality}
+                            />
                             {formatValue((employee as any).nationality)}
                           </Space>
                         </Descriptions.Item>

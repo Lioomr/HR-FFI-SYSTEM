@@ -31,7 +31,7 @@ import ApprovalStatusTag from "../../components/ceo/ApprovalStatusTag";
 import { approvalStatusLabel } from "../../components/ceo/approvalStatusLabel";
 import TeamMemberCell from "../../components/manager/TeamMemberCell";
 import EmployeeLeaveBalances from "../hr/employees/components/EmployeeLeaveBalances";
-import { getCountryFlag } from "../../utils/countries";
+import NationalityFlag from "../../components/ui/NationalityFlag";
 import { getEmployee, type Employee } from "../../services/api/employeesApi";
 import {
   getManagerWorkSummary,
@@ -347,9 +347,9 @@ export default function ManagerEmployeeProfilePage() {
                   </Field>
                   <Field label={t("employees.form.nationality")}>
                     <Space size={6}>
-                      <span aria-hidden>
-                        {getCountryFlag(emp.nationality as string)}
-                      </span>
+                      <NationalityFlag
+                        nationality={emp.nationality as string}
+                      />
                       {formatValue(emp.nationality)}
                     </Space>
                   </Field>

@@ -43,7 +43,8 @@ import {
   WalletOutlined,
 } from "@ant-design/icons";
 import "./ViewEmployeePage.css";
-import { getCountryCode, isSaudiEmployee } from "../../../utils/countries";
+import { isSaudiEmployee } from "../../../utils/countries";
+import NationalityFlag from "../../../components/ui/NationalityFlag";
 import EmployeeLeaveBalances from "./components/EmployeeLeaveBalances";
 import EmployeeDocumentArchive from "../../../components/employees/EmployeeDocumentArchive";
 import PageHeader from "../../../components/ui/PageHeader";
@@ -162,29 +163,6 @@ function getServiceLength(dateStr: string | undefined) {
   if (now.getDate() < start.getDate()) months -= 1;
   if (months < 0) return null;
   return { years: Math.floor(months / 12), months: months % 12 };
-}
-
-/** Windows browsers draw flag emoji as plain letters ("IN"), so use the same flag-icons images as the employee list. */
-function NationalityFlag({ nationality }: { nationality?: string }) {
-  const code = getCountryCode(nationality);
-  if (!code) return <GlobalOutlined aria-hidden="true" />;
-  return (
-    <span
-      className={`fi fi-${code.toLowerCase()}`}
-      aria-label={`${code} flag`}
-      title={code}
-      style={{
-        width: 20,
-        height: 15,
-        borderRadius: 2,
-        display: "inline-flex",
-        verticalAlign: "middle",
-        backgroundSize: "cover",
-        backgroundPosition: "center",
-        boxShadow: "inset 0 0 0 1px rgba(0,0,0,0.08)",
-      }}
-    />
-  );
 }
 
 function InfoField({
