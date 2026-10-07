@@ -89,6 +89,11 @@ The stack in `docker-compose.dev.yml` (project `hr-ffi-system`, containers `ffi_
 - If a shipped change seems missing, first check the container's creation time and `com.ffi.build.*` labels; another session may have rebuilt from a different checkout.
 - Commit finished work promptly, because uncommitted changes exist in one folder only.
 
+### Docker MCP Toolkit (optional local AI tools)
+Docker Desktop MCP Toolkit is configured on the current development machine with the `ffi_hr_local_dev` profile, connected to Codex. It currently provides Context7 for current framework/library documentation and Sequential Thinking for multi-step planning. These tools are optional: check that MCP tools are available in the current agent session before relying on them, and use the repository, official docs, and normal development workflow as usual when they are not.
+
+This profile does not provide Docker container control, database access, or AWS/production access. Do not infer that an agent can inspect or change containers just because the MCP profile is connected. Any future addition of Docker, database, or production-facing MCP servers should be explicitly scoped and reviewed; keep HR data and production credentials out of general-purpose AI tool access. MCP availability is machine/user configuration and is not guaranteed for other developers or CI.
+
 ## Engineering References
 For API schemas, frontend/backend type alignment, company-scoping safety, production migrations, Celery dispatch, or feature-level regression tests, read `.agents/context/engineering_references.md`. Apply the relevant PostHog and Vinta patterns incrementally within the existing FFI architecture; they do not replace FFI's plans, API rules, workflow engine, or security policy.
 
