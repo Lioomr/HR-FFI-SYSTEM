@@ -34,6 +34,7 @@ function renderAt(path: string) {
       <Routes>
         <Route element={<RequireAuth />}>
           <Route path="/hr/leave/requests/:id" element={<Page />} />
+          <Route path="/hr/penalties/:id" element={<Page />} />
         </Route>
       </Routes>
     </MemoryRouter>,
@@ -79,5 +80,15 @@ describe("RequireAuth company links", () => {
     ).toBeInTheDocument();
     expect(useAuthStore.getState().user?.active_organization_id).toBe(2);
     expect(replace).not.toHaveBeenCalled();
+  });
+
+  it("switches to the penalty's accessible company before loading its detail page", async () => {
+    renderAt("/hr/penalties/42?company=3");
+
+    await waitFor(() =>
+      expect(replace).toHaveBeenCalledWith("/hr/penalties/42"),
+    );
+    expect(useAuthStore.getState().user?.active_organization_id).toBe(3);
+    expect(screen.queryByText(/^page/)).toBeNull();
   });
 });

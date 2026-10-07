@@ -386,7 +386,7 @@ class AutomaticWarningTests(TestCase):
         item.refresh_from_db()
         self.assertEqual(item.total_deductions, Decimal("0.00"))
 
-    @patch("penalties.views.notify_penalty")
+    @patch("penalties.notifications.notify_penalty")
     @patch("penalties.warning_notices.dispatch_notification_channels")
     def test_dispute_shows_hr_and_waiver_sends_one_withdrawn_notice(self, dispatch, notify):
         record = self._late(date(2026, 10, 1))
@@ -414,8 +414,8 @@ class AutomaticWarningTests(TestCase):
             payload["message"], "The late attendance warning dated 2026-10-01 has been withdrawn. No action is needed."
         )
         self.assertNotIn(record.pk, self._hr_list_ids())
-        # Only the HR dispute notification was sent; the generic "resolved" message is replaced.
-        self.assertEqual([call.args[1] for call in notify.call_args_list], ["disputed"])
+        # The waiver reaches HR, while the employee receives the withdrawn notice once.
+        self.assertEqual([call.args[1] for call in notify.call_args_list], ["disputed", "waived"])
 
     @patch("penalties.warning_notices.dispatch_notification_channels")
     def test_disappeared_evidence_waives_and_sends_withdrawn_notice_once(self, dispatch):

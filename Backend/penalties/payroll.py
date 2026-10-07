@@ -11,6 +11,7 @@ from employees.models import EmployeeProfile
 from payroll.models import AttendancePayrollDeduction, PayrollRun, PayrollRunItem, Payslip
 
 from .models import PenaltyDeduction, PenaltyRecord
+from .notifications import queue_penalty_notification
 
 ZERO = Decimal("0.00")
 Status = PenaltyDeduction.Status
@@ -166,6 +167,7 @@ def finalize_penalty_deductions(run, *, request=None):
         penalty = claim.penalty
         penalty.status = PenaltyRecord.Status.APPLIED
         penalty.save(update_fields=["status", "updated_at"])
+        queue_penalty_notification(penalty, "payroll_applied", hr=True)
         audit(
             request,
             "penalty_applied_to_payroll",

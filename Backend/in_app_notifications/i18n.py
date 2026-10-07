@@ -239,7 +239,9 @@ def profile_name(profile: Any, fallback: Any = "") -> Localized:
 
 def user_name(user: Any, fallback: str = "") -> Localized:
     profile = getattr(user, "employee_profile", None) if user is not None else None
-    en = _first_text(getattr(user, "full_name", ""), getattr(profile, "full_name", ""), getattr(user, "email", ""), fallback)
+    en = _first_text(
+        getattr(user, "full_name", ""), getattr(profile, "full_name", ""), getattr(user, "email", ""), fallback
+    )
     return pair(en, _first_text(getattr(profile, "full_name_ar", ""), en))
 
 
@@ -254,25 +256,110 @@ _CONTRACT_CEO_MESSAGE = (
 
 #: key -> {"title": (en, ar), "message": (en, ar)}
 MESSAGES: dict[str, dict[str, tuple[str, str]]] = {
+    "penalty.candidate_ready": {
+        "title": ("Penalty needs HR attendance decision", "جزاء بانتظار قرار الموارد البشرية بشأن الحضور"),
+        "message": (
+            "Review penalty record #{record_id} in the secure app.",
+            "يرجى مراجعة سجل الجزاء رقم {record_id} في التطبيق الآمن.",
+        ),
+    },
+    "penalty.candidate_updated": {
+        "title": ("Penalty awaiting HR decision was updated", "تم تحديث الجزاء الذي ينتظر قرار الموارد البشرية"),
+        "message": (
+            "Review updated penalty record #{record_id} in the secure app.",
+            "يرجى مراجعة سجل الجزاء المحدّث رقم {record_id} في التطبيق الآمن.",
+        ),
+    },
+    "penalty.acknowledged": {
+        "title": ("Penalty acknowledged", "تم الإقرار بالجزاء"),
+        "message": (
+            "The employee acknowledged penalty record #{record_id}. View it in the secure app.",
+            "أقر الموظف بسجل الجزاء رقم {record_id}. يمكن الاطلاع عليه في التطبيق الآمن.",
+        ),
+    },
+    "penalty.reopened": {
+        "title": ("Penalty reopened for HR review", "أعيد فتح الجزاء لمراجعة الموارد البشرية"),
+        "message": (
+            "Review reopened penalty record #{record_id} in the secure app.",
+            "يرجى مراجعة سجل الجزاء المعاد فتحه رقم {record_id} في التطبيق الآمن.",
+        ),
+    },
+    "penalty.corrected": {
+        "title": ("Penalty correction completed", "اكتمل تصحيح الجزاء"),
+        "message": (
+            "Penalty record #{record_id} was corrected. View it in the secure app.",
+            "تم تصحيح سجل الجزاء رقم {record_id}. يمكن الاطلاع عليه في التطبيق الآمن.",
+        ),
+    },
+    "penalty.payroll_approved": {
+        "title": ("Penalty payroll review approved", "تمت الموافقة على مراجعة الجزاء للرواتب"),
+        "message": (
+            "Payroll review for penalty record #{record_id} was approved. View it in the secure app.",
+            "تمت الموافقة على مراجعة الرواتب لسجل الجزاء رقم {record_id}. يمكن الاطلاع عليه في التطبيق الآمن.",
+        ),
+    },
+    "penalty.payroll_held": {
+        "title": ("Penalty payroll review held", "تم تعليق مراجعة الجزاء للرواتب"),
+        "message": (
+            "Payroll review for penalty record #{record_id} was held. View it in the secure app.",
+            "تم تعليق مراجعة الرواتب لسجل الجزاء رقم {record_id}. يمكن الاطلاع عليه في التطبيق الآمن.",
+        ),
+    },
+    "penalty.payroll_applied": {
+        "title": ("Penalty applied to payroll", "تم تطبيق الجزاء على الرواتب"),
+        "message": (
+            "Penalty record #{record_id} was applied to payroll. View it in the secure app.",
+            "تم تطبيق سجل الجزاء رقم {record_id} على الرواتب. يمكن الاطلاع عليه في التطبيق الآمن.",
+        ),
+    },
+    "penalty.auto_warning_issued": {
+        "title": ("Automatic penalty warning issued", "تم إصدار إنذار جزاء تلقائي"),
+        "message": (
+            "Automatic warning record #{record_id} was issued. View it in the secure app.",
+            "تم إصدار سجل الإنذار التلقائي رقم {record_id}. يمكن الاطلاع عليه في التطبيق الآمن.",
+        ),
+    },
+    "penalty.issued_hr_review": {
+        "title": ("Issued penalty needs HR payroll review", "جزاء صادر بانتظار مراجعة الموارد البشرية للرواتب"),
+        "message": (
+            "Review payroll for penalty record #{record_id} in the secure app.",
+            "يرجى مراجعة الرواتب لسجل الجزاء رقم {record_id} في التطبيق الآمن.",
+        ),
+    },
     "penalty.issued": {
-        "title": ("Penalty record available", "سجل جزاء متاح"),
-        "message": ("Review penalty record #{record_id} in the secure app.", "يرجى مراجعة سجل الجزاء رقم {record_id} في التطبيق الآمن."),
+        "title": ("Penalty issued", "تم إصدار جزاء"),
+        "message": (
+            "Review penalty record #{record_id} in the secure app.",
+            "يرجى مراجعة سجل الجزاء رقم {record_id} في التطبيق الآمن.",
+        ),
     },
     "penalty.waived": {
-        "title": ("Penalty record updated", "تم تحديث سجل الجزاء"),
-        "message": ("Review penalty record #{record_id} in the secure app.", "يرجى مراجعة سجل الجزاء رقم {record_id} في التطبيق الآمن."),
+        "title": ("Penalty waived", "تم إلغاء الجزاء"),
+        "message": (
+            "Review penalty record #{record_id} in the secure app.",
+            "يرجى مراجعة سجل الجزاء رقم {record_id} في التطبيق الآمن.",
+        ),
     },
     "penalty.disputed": {
         "title": ("Penalty dispute needs review", "اعتراض على جزاء بانتظار المراجعة"),
-        "message": ("Review penalty dispute #{record_id} in the secure app.", "يرجى مراجعة الاعتراض على الجزاء رقم {record_id} في التطبيق الآمن."),
+        "message": (
+            "Review penalty dispute #{record_id} in the secure app.",
+            "يرجى مراجعة الاعتراض على الجزاء رقم {record_id} في التطبيق الآمن.",
+        ),
     },
     "penalty.resolved": {
-        "title": ("Penalty dispute updated", "تم تحديث اعتراض الجزاء"),
-        "message": ("Review penalty record #{record_id} in the secure app.", "يرجى مراجعة سجل الجزاء رقم {record_id} في التطبيق الآمن."),
+        "title": ("Penalty dispute resolved", "تم حل اعتراض الجزاء"),
+        "message": (
+            "Review penalty record #{record_id} in the secure app.",
+            "يرجى مراجعة سجل الجزاء رقم {record_id} في التطبيق الآمن.",
+        ),
     },
     "penalty.manual_review": {
         "title": ("Penalty requires HR review", "جزاء يتطلب مراجعة الموارد البشرية"),
-        "message": ("Review penalty record #{record_id} in the secure app.", "يرجى مراجعة سجل الجزاء رقم {record_id} في التطبيق الآمن."),
+        "message": (
+            "Review penalty record #{record_id} in the secure app.",
+            "يرجى مراجعة سجل الجزاء رقم {record_id} في التطبيق الآمن.",
+        ),
     },
     # Automatic late warnings never state how many warnings preceded them.
     "penalty.auto_warning": {
@@ -554,7 +641,10 @@ MESSAGES: dict[str, dict[str, tuple[str, str]]] = {
     },
     "delegation.assigned": {
         "title": ("Workflow delegation updated", "تم تحديث تفويض سير العمل"),
-        "message": ("Delegation from {from_user} to {to_user} is active.", "التفويض من {from_user} إلى {to_user} مفعّل."),
+        "message": (
+            "Delegation from {from_user} to {to_user} is active.",
+            "التفويض من {from_user} إلى {to_user} مفعّل.",
+        ),
     },
 }
 
@@ -651,7 +741,12 @@ LEGACY_EVENT_KEYS: dict[str, tuple[str, ...]] = {
 
 #: Keys whose request type and status were also stored in metadata, which removes
 #: the ambiguity of titles such as "{request_type} {status}".
-_METADATA_SEEDED_KEYS = {"approval.pending", "request.status_changed", "request.status_changed_reason", "request.submitted"}
+_METADATA_SEEDED_KEYS = {
+    "approval.pending",
+    "request.status_changed",
+    "request.status_changed_reason",
+    "request.submitted",
+}
 
 #: Fixed English fallbacks the old code inserted as parameter values.
 _LEGACY_LITERALS: dict[str, tuple[str, str]] = {

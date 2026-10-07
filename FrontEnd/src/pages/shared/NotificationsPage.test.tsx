@@ -75,6 +75,34 @@ describe("NotificationsPage", () => {
     expect(await screen.findByText("Inbox item")).toBeInTheDocument();
   });
 
+  it("opens a company-scoped HR penalty from the full inbox", async () => {
+    const markRead = vi.fn();
+    useNotificationStore.setState({ markRead });
+    listNotifications.mockResolvedValue(
+      page([
+        makeNotification({
+          id: 38,
+          title: "Penalty disputed",
+          message: "Review the employee dispute.",
+          event_key: "penalty.disputed",
+          category: "penalty",
+          action_url: "/hr/penalties/42?company=3",
+          related_object_type: "penalty",
+          related_object_id: "42",
+        }),
+      ]),
+    );
+    render(<NotificationsPage />);
+
+    expect(
+      await screen.findByText("Review the employee dispute."),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Penalty disputed/i }));
+
+    expect(markRead).toHaveBeenCalledWith(38);
+    expect(navigateMock).toHaveBeenCalledWith("/hr/penalties/42?company=3");
+  });
+
   it("sections notifications by day", async () => {
     const yesterday = new Date();
     yesterday.setDate(yesterday.getDate() - 1);

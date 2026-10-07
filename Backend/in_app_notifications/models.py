@@ -17,6 +17,7 @@ class Notification(models.Model):
         DOCUMENT = "document", "Document"
         INVITE = "invite", "Invite"
         PAYROLL = "payroll", "Payroll"
+        PENALTY = "penalty", "Penalty"
         SYSTEM = "system", "System"
 
     recipient = models.ForeignKey(

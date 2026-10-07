@@ -405,9 +405,9 @@ def _manual_review(record, reason, evidence=None):
         record.pk,
         {"reason": reason, "previous_resolution": prior, "proposed_evidence": evidence or {}},
     )
-    from .notifications import notify_penalty
+    from .notifications import queue_penalty_notification
 
-    transaction.on_commit(lambda: notify_penalty(record, "manual_review", hr=True))
+    queue_penalty_notification(record, "manual_review", hr=True)
 
 
 def _clear_review(record, event, *, request=None, resolution=None, details=None):
@@ -516,6 +516,10 @@ def waive(record, *, reason, request=None, decision="waive"):
         from .warning_notices import notify_warning_withdrawn
 
         transaction.on_commit(lambda: notify_warning_withdrawn(record))
+    if previous != PenaltyRecord.Status.WAIVED:
+        from .notifications import queue_penalty_notification
+
+        queue_penalty_notification(record, "waived", hr=True)
     return record
 
 
@@ -603,6 +607,10 @@ def _candidate(
             updates.append("note")
         if updates:
             record.save(update_fields=[*updates, "updated_at"])
+            if not reopened and record.automation == PenaltyRecord.Automation.NONE:
+                from .notifications import queue_penalty_notification
+
+                queue_penalty_notification(record, "candidate_updated", hr=True)
     elif not created and record.status in {
         PenaltyRecord.Status.ISSUED,
         PenaltyRecord.Status.DISPUTED,
@@ -624,11 +632,15 @@ def _candidate(
             )
         elif (record.resolution or {}).get("reason") == "Attendance evidence changed after issuance.":
             # Evidence returned to the issued snapshot; payroll-applied rows stay flagged.
-            _clear_review(
+            cleared = _clear_review(
                 record,
                 "penalty_evidence_review_cleared",
                 details={"reason": "Attendance evidence returned to the issued snapshot."},
             )
+            if cleared:
+                from .notifications import queue_penalty_notification
+
+                queue_penalty_notification(record, "corrected", hr=True)
     if created:
         audit(
             None,
@@ -641,6 +653,10 @@ def _candidate(
                 "source_kind": source_kind,
             },
         )
+    if (created or reopened) and record.automation == PenaltyRecord.Automation.NONE:
+        from .notifications import queue_penalty_notification
+
+        queue_penalty_notification(record, "reopened" if reopened else "candidate_ready", hr=True)
     return record
 
 
@@ -655,9 +671,9 @@ def _invalidate_record(record, reason="Attendance evidence no longer supports th
             }
             record.save(update_fields=["resolution", "updated_at"])
             audit(None, "penalty_post_payroll_correction_review", "PenaltyRecord", record.pk, {"reason": reason})
-            from .notifications import notify_penalty
+            from .notifications import queue_penalty_notification
 
-            transaction.on_commit(lambda record=record: notify_penalty(record, "manual_review", hr=True))
+            queue_penalty_notification(record, "manual_review", hr=True)
     elif record.status != PenaltyRecord.Status.WAIVED:
         waive(record, reason=reason)
 

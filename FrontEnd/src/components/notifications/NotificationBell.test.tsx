@@ -120,6 +120,64 @@ describe("NotificationBell", () => {
     expect(navigateMock).toHaveBeenCalledWith("/employee/leave/requests");
   });
 
+  it("shows an HR penalty alert and follows its company-scoped detail link", () => {
+    const markRead = vi.fn();
+    useNotificationStore.setState({
+      unreadCount: 1,
+      recent: [
+        makeNotification({
+          id: 37,
+          title: "Penalty awaiting HR decision",
+          message: "Review the penalty for Ahmed Kinawy.",
+          event_key: "penalty.pending_hr_mark",
+          category: "penalty",
+          action_url: "/hr/penalties/42?company=3",
+          related_object_type: "penalty",
+          related_object_id: "42",
+          deliveries: [{ channel: "whatsapp", status: "pending" }],
+        }),
+      ],
+      markRead,
+    });
+    render(<NotificationBell />);
+    openPanel();
+
+    const dialog = screen.getByRole("dialog");
+    expect(
+      within(dialog).getByText("Review the penalty for Ahmed Kinawy."),
+    ).toBeInTheDocument();
+    expect(within(dialog).getByText("Penalty")).toBeInTheDocument();
+    expect(within(dialog).getByText("WhatsApp pending")).toBeInTheDocument();
+    fireEvent.click(
+      within(dialog).getByRole("button", {
+        name: /Penalty awaiting HR decision/i,
+      }),
+    );
+
+    expect(markRead).toHaveBeenCalledWith(37);
+    expect(navigateMock).toHaveBeenCalledWith("/hr/penalties/42?company=3");
+  });
+
+  it("labels the penalty category in Arabic", () => {
+    useI18nStore.getState().setLanguage("ar");
+    useNotificationStore.setState({
+      recent: [
+        makeNotification({
+          id: 39,
+          title: "مخالفة قيد مراجعة الموارد البشرية",
+          category: "penalty",
+          action_url: "/hr/penalties/42?company=3",
+        }),
+      ],
+    });
+    render(<NotificationBell />);
+    openPanel();
+
+    expect(
+      within(screen.getByRole("dialog")).getByText("الجزاء"),
+    ).toBeInTheDocument();
+  });
+
   it("follows a job-offer approval link to the CEO review screen", () => {
     // The backend points job-offer notifications at real screens, so the link
     // reaches the router unchanged.

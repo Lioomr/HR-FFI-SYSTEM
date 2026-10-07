@@ -642,6 +642,114 @@ class PenaltyScheduleTests(TestCase):
         self.assertNotIn(record.catalog.title_en, str(payload))
         self.assertNotIn(record.note, str(payload))
 
+    @patch("penalties.notifications.dispatch_notification_channels")
+    def test_hr_penalty_alerts_are_company_scoped_and_use_matching_whatsapp_copy(self, dispatch):
+        other = OrganizationNode.objects.create(
+            code="PENALTY_OTHER", name="Another company", node_type=OrganizationNode.NodeType.COMPANY
+        )
+        allowed = get_user_model().objects.create_user(email="other-hr@ffi.test", password="test")
+        allowed.groups.add(Group.objects.get(name="HRManager"))
+        UserOrganizationAccess.objects.create(user=allowed, organization=self.company)
+        UserOrganizationAccess.objects.create(user=allowed, organization=other)
+        inactive = get_user_model().objects.create_user(email="inactive-hr@ffi.test", password="test", is_active=False)
+        inactive.groups.add(Group.objects.get(name="HRManager"))
+        UserOrganizationAccess.objects.create(user=inactive, organization=self.company)
+        foreign = get_user_model().objects.create_user(email="foreign-hr@ffi.test", password="test")
+        foreign.groups.add(Group.objects.get(name="HRManager"))
+        UserOrganizationAccess.objects.create(user=foreign, organization=other)
+        admin = get_user_model().objects.create_user(email="admin-only@ffi.test", password="test")
+        admin.groups.add(Group.objects.get_or_create(name="SystemAdmin")[0])
+        UserOrganizationAccess.objects.create(user=admin, organization=self.company)
+        record = PenaltyRecord.objects.create(
+            company=self.company,
+            employee_profile=self.profile,
+            catalog=PenaltyCatalog.objects.get(code="W09"),
+            occurred_on=date(2026, 10, 7),
+            occurrence_number=0,
+            action="pending_hr_mark",
+            status=PenaltyRecord.Status.PENDING_HR_MARK,
+            source=PenaltyRecord.Source.AUTOMATIC,
+        )
+        notify_penalty(record, "candidate_ready", hr=True)
+        self.assertEqual({call.kwargs["recipient"].pk for call in dispatch.call_args_list}, {self.hr.pk, allowed.pk})
+        for call in dispatch.call_args_list:
+            payload = call.kwargs
+            self.assertEqual(payload["event_key"], "penalty.candidate_ready")
+            self.assertEqual(payload["category"], "penalty")
+            self.assertEqual(payload["company"], self.company)
+            self.assertEqual(payload["action_url"], f"/hr/penalties/{record.pk}")
+            self.assertEqual(payload["whatsapp_template"], "pending_approval")
+            self.assertEqual(payload["whatsapp_variables"]["request_type_ar"], "سجل جزاء")
+            self.assertTrue(payload["whatsapp_variables"]["status_label_ar"])
+            self.assertNotIn("whatsapp_enabled", payload)
+            self.assertNotIn("email_enabled", payload)
+        dispatch.reset_mock()
+        notify_penalty(record, "acknowledged", hr=True)
+        self.assertEqual(dispatch.call_count, 2)
+        self.assertTrue(all(call.kwargs["whatsapp_template"] is None for call in dispatch.call_args_list))
+        self.assertTrue(all(call.kwargs["whatsapp_variables"] is None for call in dispatch.call_args_list))
+
+    @patch("penalties.notifications.notify_penalty")
+    def test_actionable_candidate_notifies_once_and_replay_is_silent(self, notify):
+        from .services import _candidate
+
+        day = date(2026, 10, 7)
+        result = self._result(day, 70)
+        with self.captureOnCommitCallbacks(execute=True):
+            record = _candidate(self.profile, "W09", day, "late_arrival", result=result)
+        self.assertEqual([call.args[1] for call in notify.call_args_list], ["candidate_ready"])
+        self.assertTrue(notify.call_args.kwargs["hr"])
+        with self.captureOnCommitCallbacks(execute=True):
+            replay = _candidate(self.profile, "W09", day, "late_arrival", result=result)
+        self.assertEqual(replay.pk, record.pk)
+        self.assertEqual(notify.call_count, 1)
+        with self.captureOnCommitCallbacks(execute=True):
+            _candidate(
+                self.profile,
+                "W09",
+                day,
+                "late_arrival",
+                result=result,
+                note="Attendance evidence refined.",
+                evidence={"minutes": 70},
+            )
+        self.assertEqual([call.args[1] for call in notify.call_args_list], ["candidate_ready", "candidate_updated"])
+
+    @patch("penalties.payroll.sync_penalty_deductions", return_value={"claimed": 0, "released": 0})
+    @patch("penalties.notifications.notify_penalty")
+    def test_payroll_application_notifies_once_after_commit(self, notify, _sync):
+        record = PenaltyRecord.objects.create(
+            company=self.company,
+            employee_profile=self.profile,
+            catalog=PenaltyCatalog.objects.get(code="O01"),
+            occurred_on=date(2026, 10, 7),
+            occurrence_number=1,
+            action="deduction",
+            amount=Decimal("100.00"),
+            total_deduction_amount=Decimal("100.00"),
+            status=PenaltyRecord.Status.ISSUED,
+            source=PenaltyRecord.Source.HR,
+        )
+        run = PayrollRun.objects.create(company=self.company, year=2026, month=10)
+        PenaltyDeduction.objects.create(
+            penalty=record,
+            company=self.company,
+            employee_profile=self.profile,
+            intended_year=2026,
+            intended_month=10,
+            amount=Decimal("100.00"),
+            status=PenaltyDeduction.Status.CLAIMED,
+            payroll_run=run,
+            claimed_amount=Decimal("100.00"),
+        )
+        with self.captureOnCommitCallbacks(execute=True):
+            self.assertEqual(finalize_penalty_deductions(run)["applied"], 1)
+        self.assertEqual([call.args[1] for call in notify.call_args_list], ["payroll_applied"])
+        self.assertTrue(notify.call_args.kwargs["hr"])
+        with self.captureOnCommitCallbacks(execute=True):
+            self.assertEqual(finalize_penalty_deductions(run)["applied"], 0)
+        self.assertEqual(notify.call_count, 1)
+
     def test_absence_spell_advances_one_candidate_and_reclassifies_after_correction(self):
         days = []
         current = date(2026, 9, 29)

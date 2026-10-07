@@ -24,7 +24,7 @@ from organization.services import (
 )
 
 from .models import PenaltyCatalog, PenaltyDeduction, PenaltyRecord
-from .notifications import notify_penalty
+from .notifications import queue_penalty_notification
 from .serializers import PenaltyCatalogSerializer, PenaltyRecordSerializer
 from .services import _review_recurrence, current_replacement, effective_from, issue, rerate_recurrence, waive
 from .warning_notices import notice_filename
@@ -197,7 +197,8 @@ class PenaltyViewSet(
             except ValueError as exc:
                 transaction.set_rollback(True)
                 return error(str(exc), {"catalog_code": [str(exc)]}, 422)
-            transaction.on_commit(lambda: notify_penalty(record, "issued"))
+            queue_penalty_notification(record, "issued")
+            queue_penalty_notification(record, "issued", hr=True)
         return success(self._fresh_data(record.pk), status=status.HTTP_201_CREATED)
 
     @action(detail=True, methods=["post"], url_path="mark-disruption")
@@ -250,7 +251,10 @@ class PenaltyViewSet(
                 except ValueError as exc:
                     transaction.set_rollback(True)
                     return error(str(exc), status=422)
-            transaction.on_commit(lambda: notify_penalty(record, "issued" if choice != "excused" else "waived"))
+            event = "issued" if choice != "excused" else "waived"
+            queue_penalty_notification(record, event)
+            if choice != "excused":
+                queue_penalty_notification(record, event, hr=True)
         return success(self._fresh_data(record.pk))
 
     @action(detail=True, methods=["post"])
@@ -285,6 +289,7 @@ class PenaltyViewSet(
             }
             record.save(update_fields=["employee_response", "updated_at"])
             audit(request, "penalty_acknowledged", "PenaltyRecord", record.pk)
+            queue_penalty_notification(record, "acknowledged", hr=True)
         return success(self._fresh_data(record.pk))
 
     @action(detail=True, methods=["post"])
@@ -339,7 +344,7 @@ class PenaltyViewSet(
                     "payroll_status": deduction.status if deduction else None,
                 },
             )
-            transaction.on_commit(lambda: notify_penalty(record, "disputed", hr=True))
+            queue_penalty_notification(record, "disputed", hr=True)
         return success(self._fresh_data(record.pk))
 
     @action(detail=True, methods=["post"])
@@ -377,7 +382,8 @@ class PenaltyViewSet(
                 except ValueError as exc:
                     transaction.set_rollback(True)
                     return error(str(exc), status=422)
-                transaction.on_commit(lambda: notify_penalty(record, "resolved"))
+                queue_penalty_notification(record, "resolved")
+                queue_penalty_notification(record, "corrected", hr=True)
                 return success(self._fresh_data(record.pk))
             if decision == "reopen":
                 deduction = PenaltyDeduction.objects.select_for_update().filter(penalty=record).first()
@@ -423,6 +429,7 @@ class PenaltyViewSet(
                 record.amount = record.extra_wage_amount = record.total_deduction_amount = 0
                 record.resolution = {"decision": "reopened", "note": note, "reopened_at": timezone.now().isoformat()}
                 record.save()
+                queue_penalty_notification(record, "reopened", hr=True)
                 if deduction:
                     deduction.status = PenaltyDeduction.Status.VOID
                     deduction.save(update_fields=["status", "updated_at"])
@@ -447,7 +454,9 @@ class PenaltyViewSet(
                     deduction.status = PenaltyDeduction.Status.PENDING_REVIEW
                     deduction.save(update_fields=["status", "updated_at"])
                 audit(request, "penalty_dispute_upheld", "PenaltyRecord", record.pk, {"note": note})
-            transaction.on_commit(lambda: notify_penalty(record, "resolved"))
+            queue_penalty_notification(record, "resolved")
+            if decision != "waive":
+                queue_penalty_notification(record, "resolved", hr=True)
         return success(self._fresh_data(record.pk))
 
     @action(detail=True, methods=["post"], url_path="payroll-review")
@@ -472,6 +481,7 @@ class PenaltyViewSet(
             deduction = PenaltyDeduction.objects.select_for_update().filter(penalty=record).first()
             if not deduction or deduction.status in {PenaltyDeduction.Status.APPLIED, PenaltyDeduction.Status.VOID}:
                 return error("This deduction is locked or unavailable.", status=409)
+            previous_status = deduction.status
             deduction.status = (
                 PenaltyDeduction.Status.APPROVED if decision == "approve" else PenaltyDeduction.Status.HELD
             )
@@ -480,6 +490,13 @@ class PenaltyViewSet(
             deduction.reviewed_at = timezone.now()
             deduction.save(update_fields=["status", "review_note", "reviewed_by", "reviewed_at", "updated_at"])
             audit(request, "penalty_payroll_reviewed", "PenaltyRecord", record.pk, {"decision": decision, "note": note})
+            if deduction.status != previous_status:
+                queue_penalty_notification(
+                    record,
+                    "payroll_approved" if decision == "approve" else "payroll_held",
+                    hr=True,
+                    transition=deduction.updated_at.isoformat(),
+                )
         return success(self._fresh_data(record.pk))
 
     @action(detail=True, methods=["get"], url_path="warning-notice")

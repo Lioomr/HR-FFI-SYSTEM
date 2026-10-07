@@ -12,6 +12,7 @@ import {
   HomeOutlined,
   UserSwitchOutlined,
   SettingOutlined,
+  WarningOutlined,
 } from "@ant-design/icons";
 
 /**
@@ -30,6 +31,7 @@ const CATEGORY_META: Record<string, CategoryMeta> = {
   assets: { icon: <AppstoreOutlined />, color: "#8b5cf6" },
   asset: { icon: <AppstoreOutlined />, color: "#8b5cf6" },
   attendance: { icon: <ClockCircleOutlined />, color: "#0ea5e9" },
+  penalty: { icon: <WarningOutlined />, color: "#f97316" },
   payroll: { icon: <DollarOutlined />, color: "#f59e0b" },
   payslip: { icon: <FileTextOutlined />, color: "#f59e0b" },
   announcement: { icon: <SoundOutlined />, color: "#ec4899" },

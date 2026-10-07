@@ -12,6 +12,7 @@ from audit.utils import audit
 from employees.models import EmployeeProfile
 
 from .models import PenaltyRecord
+from .notifications import queue_penalty_notification
 from .services import (
     EXTRA_AUTO_WARNINGS,
     _next_occurrence,
@@ -48,6 +49,8 @@ def _record_failure(record_id, exc):
         update_fields.append("automation")
     record.resolution = resolution
     record.save(update_fields=update_fields)
+    if released:
+        queue_penalty_notification(record, "candidate_ready", hr=True)
     details = {"failures": failures, "error_type": type(exc).__name__, "released_to_hr": released}
     audit(None, "penalty_auto_warning_failed", "PenaltyRecord", record.pk, details)
     logger.warning("penalty_auto_warning_failed", extra={"penalty_id": record.pk, **details})
@@ -82,6 +85,7 @@ def _issue_for_profile(profile_id, cutoff):
                 audit(
                     None, "penalty_auto_warning_released_to_hr", "PenaltyRecord", record.pk, {"occurrence": occurrence}
                 )
+                queue_penalty_notification(record, "candidate_ready", hr=True)
                 counts["released"] += 1
                 continue
             try:
@@ -89,6 +93,7 @@ def _issue_for_profile(profile_id, cutoff):
                     issue(record, marker={"decision": "auto_warning", "resolved_at": timezone.now().isoformat()})
                     record.automation = Automation.WARNING_ISSUED
                     record.save(update_fields=["automation", "updated_at"])
+                    queue_penalty_notification(record, "auto_warning_issued", hr=True)
                     deliver(create_notice(record))
             except Exception as exc:
                 _record_failure(record.pk, exc)
