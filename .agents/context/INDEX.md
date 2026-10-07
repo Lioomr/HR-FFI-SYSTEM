@@ -31,7 +31,7 @@ For architecture, feature planning, or work crossing modules, read [`system_map.
 | File | Size | Load when task mentions |
 |---|---:|---|
 | `frontend_architecture.md` | ~6.4K | folder layout, request pages and linked approval-trail UI, `apiClient.ts`, Zustand, routes |
-| `frontend_design_system.md` | ~0.7K | Ant Design patterns, spacing, icons |
+| `frontend_design_system.md` | ~1K | Ant Design patterns, spacing, icons, names/hyperlinks (orange), link color, flags, any new page or table showing people |
 | `admin_dashboard_design.md` | ~0.6K | admin UX language, density |
 
 ## Planning-Only

@@ -19,6 +19,10 @@ export default function Providers({ children }: { children: ReactNode }) {
       token: {
         colorPrimary: "#f97316",
         colorInfo: "#94a3b8",
+        // Links default to colorInfo (slate); every link and name link is brand orange.
+        colorLink: "#f97316",
+        colorLinkHover: "#fb923c",
+        colorLinkActive: "#ea580c",
         colorSuccess: "#10b981",
         colorWarning: "#f59e0b",
         colorError: "#ef4444",

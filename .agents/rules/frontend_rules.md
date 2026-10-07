@@ -24,6 +24,17 @@ Frontend lives in `FrontEnd/`. React 19 + TypeScript + Vite + Ant Design + React
 - Wrap new role-specific pages with the correct `RequireRole` in `routes.tsx`.
 - **Never probe role eligibility by calling a protected list endpoint** — it causes expected `403` responses to appear as browser errors for normal users. Add/use a lightweight access endpoint such as `manager/access` that returns `{ has_access: boolean }`, then call the protected list only after access is confirmed.
 
+## Names, Links and Flags (Required — build it in from the first version)
+
+Do this while building the page, not in a later refactor pass. It is part of the definition of done.
+
+- **Every person's name is an orange hyperlink** (employee, manager, approver, requester, rater, user — in tables, cards, headers, timelines and detail rows) whenever a profile destination exists for the viewer's role. Use `TeamMemberCell` with `profilePath` for table cells, or `<Link>` / `<Button type="link">` elsewhere.
+- **Color comes from the theme, never hardcoded.** `Providers.tsx` sets `colorLink` to brand orange (`#f97316`, hover `#fb923c`, active `#ea580c`), so plain links, `mailto:`/`tel:` links and link buttons are already orange. Do not restyle a name gray, blue or black, and do not add a second orange.
+- **No profile destination → plain text** in the primary text color (`#0f172a`). Do not render a name in orange unless it is clickable, and do not render it gray.
+- **Destinations are role-aware.** HR/admin views link to the employee page (`/hr/employees/:id`), manager views to `/manager/team/:id`. Copy the `profilePath` pattern in `ManagerTeamRequestsPage.tsx` and `LoanRequestsTablePage.tsx`. If the API payload has no employee/profile id, add it to the backend serializer instead of leaving the name unlinked, and never expose an id the viewer cannot open.
+- **Flags use `components/ui/NationalityFlag`, never a flag emoji.** Windows browsers draw flag emoji as plain letters ("IN").
+- Never show a manager's company or any "cross-company" wording to employees; a manager is just "Manager".
+
 ## i18n (Required)
 
 - Use `const { t, language } = useI18n()` in every component with text.
