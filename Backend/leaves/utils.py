@@ -284,6 +284,18 @@ def get_contract_start_date(profile: EmployeeProfile | None):
     return profile.contract_date or profile.hire_date
 
 
+def get_service_start_date(profile: EmployeeProfile | None):
+    """Return the date the employee's service began, independent of contract renewals.
+
+    A renewal overwrites ``contract_date`` with the new term's start, so it cannot be used to
+    measure length of service; the earliest of ``hire_date``/``contract_date`` is used instead.
+    """
+    if not profile:
+        return None
+    dates = [value for value in (profile.hire_date, profile.contract_date) if value]
+    return min(dates) if dates else None
+
+
 def _anniversary_for_year(start_date: date, year: int) -> date:
     try:
         return start_date.replace(year=year)
@@ -1578,9 +1590,12 @@ def validate_leave_request_policy(
     if _is_annual(code):
         today = timezone.localdate()
         contract_start = get_contract_start_date(profile)
+        # Length of service runs from the start of employment, not from the latest contract
+        # renewal (a renewal moves ``contract_date`` to the new term's start).
+        service_start = get_service_start_date(profile)
         if (
-            contract_start
-            and get_completed_calendar_months(contract_start, today, contract_start=contract_start)
+            service_start
+            and get_completed_calendar_months(service_start, today, contract_start=service_start)
             < ANNUAL_MINIMUM_PERIODS
         ):
             return "Annual leave can be used only after completing 6 months of service."

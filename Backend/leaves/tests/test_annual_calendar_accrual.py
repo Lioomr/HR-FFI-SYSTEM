@@ -348,6 +348,18 @@ class AnnualAccrualIntegrationTests(TestCase):
             # Should not be the 6-month error (may still be balance, but not service)
             self.assertTrue(err is None or "completing 6 months" not in err)
 
+    def test_six_month_gate_counts_service_not_renewed_contract(self):
+        # Hired in 2023, contract renewed today: the new term's start must not reset service length.
+        self.profile.hire_date = date(2023, 5, 1)
+        self.profile.contract_date = date(2026, 10, 11)
+        self.profile.contract_expiry = date(2027, 10, 9)
+        self.profile.save(update_fields=["hire_date", "contract_date", "contract_expiry"])
+        with patch("leaves.utils.timezone.localdate", return_value=date(2026, 10, 11)):
+            from leaves.utils import validate_leave_request_policy
+
+            err = validate_leave_request_policy(self.emp, self.annual, date(2026, 10, 12), date(2026, 10, 12))
+            self.assertTrue(err is None or "completing 6 months" not in err)
+
     def test_hire_date_fallback(self):
         # Legacy profile without contract_date uses hire_date
         self.profile.contract_date = None
