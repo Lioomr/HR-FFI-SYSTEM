@@ -196,6 +196,10 @@ NOTIFICATION_DELIVERY_TIMEOUT_SECONDS = int(
 )
 NOTIFICATION_WHATSAPP_DELIVERY_ENABLED = _env_bool("NOTIFICATION_WHATSAPP_DELIVERY_ENABLED", True)
 NOTIFICATION_EMAIL_FALLBACK_ENABLED = _env_bool("NOTIFICATION_EMAIL_FALLBACK_ENABLED", True)
+# CEO / General Manager only: hold reminders and quiet-hours WhatsApp for one daily digest.
+EXECUTIVE_NOTIFICATION_POLICY_ENABLED = _env_bool("EXECUTIVE_NOTIFICATION_POLICY_ENABLED", True)
+EXECUTIVE_QUIET_HOURS_START = int(os.environ.get("EXECUTIVE_QUIET_HOURS_START", "22"))
+EXECUTIVE_QUIET_HOURS_END = int(os.environ.get("EXECUTIVE_QUIET_HOURS_END", "7"))
 LATE_POLICY_EFFECTIVE_FROM = os.environ.get("LATE_POLICY_EFFECTIVE_FROM", "").strip()
 PASSWORD_RESET_TOKEN_TTL_SECONDS = int(os.environ.get("PASSWORD_RESET_TOKEN_TTL_SECONDS", "3600"))
 MAX_LEAVE_DOCUMENT_SIZE_BYTES = int(os.environ.get("MAX_LEAVE_DOCUMENT_SIZE_BYTES", str(5 * 1024 * 1024)))
@@ -431,6 +435,49 @@ MAX_JOB_OFFER_CV_SIZE_BYTES = _env_int("MAX_JOB_OFFER_CV_SIZE_BYTES", 5 * 1024 *
 # A signature is a small transparent PNG or a phone photo; 2 MB is generous and
 # matches the cap the PDF renderer is willing to decode.
 MAX_EMPLOYEE_SIGNATURE_SIZE_BYTES = _env_int("MAX_EMPLOYEE_SIGNATURE_SIZE_BYTES", 2 * 1024 * 1024)
+
+# Tamper-evident approved documents (core/document_integrity). See
+# "plans/Document Signing API Handoff.md".
+#   off      - render on every download (legacy behaviour)
+#   freeze   - store + SHA-256 the final PDF once, serve that copy (default)
+#   seal     - freeze, then apply one organization seal (PAdES-B-T)
+#   personal - seal plus one signature per approver from the internal CA
+DOCUMENT_SIGNING_MODE = os.environ.get("DOCUMENT_SIGNING_MODE", "freeze").strip().lower()
+# "local" (PKCS#12/PEM files, dev CA auto-generated) or "aws_kms" (seal key in KMS, needs boto3).
+DOCUMENT_SIGNING_BACKEND = os.environ.get("DOCUMENT_SIGNING_BACKEND", "local").strip().lower()
+# Key material lives outside the repository; the default sits on the private uploads volume.
+DOCUMENT_SIGNING_KEY_DIR = os.environ.get("DOCUMENT_SIGNING_KEY_DIR", str(PRIVATE_UPLOAD_ROOT / "signing"))
+# Generate a dev CA + seal certificate on first use when no key files are configured.
+DOCUMENT_SIGNING_DEV_AUTOGENERATE = _env_bool("DOCUMENT_SIGNING_DEV_AUTOGENERATE", DEBUG)
+# Fernet key encrypting per-person private keys and the local CA key at rest. When empty,
+# DEBUG derives one from SECRET_KEY; production must set it explicitly.
+DOCUMENT_SIGNING_KEY_ENCRYPTION_KEY = os.environ.get("DOCUMENT_SIGNING_KEY_ENCRYPTION_KEY", "")
+# Optional organization seal supplied as PKCS#12 (or PEM key + cert chain).
+DOCUMENT_SIGNING_SEAL_PKCS12_PATH = os.environ.get("DOCUMENT_SIGNING_SEAL_PKCS12_PATH", "")
+DOCUMENT_SIGNING_SEAL_PKCS12_PASSWORD = os.environ.get("DOCUMENT_SIGNING_SEAL_PKCS12_PASSWORD", "")
+DOCUMENT_SIGNING_SEAL_KEY_PATH = os.environ.get("DOCUMENT_SIGNING_SEAL_KEY_PATH", "")
+DOCUMENT_SIGNING_SEAL_CERT_PATH = os.environ.get("DOCUMENT_SIGNING_SEAL_CERT_PATH", "")
+DOCUMENT_SIGNING_SEAL_CHAIN_PATH = os.environ.get("DOCUMENT_SIGNING_SEAL_CHAIN_PATH", "")
+# Optional internal CA used to issue per-person certificates (personal mode).
+DOCUMENT_SIGNING_CA_CERT_PATH = os.environ.get("DOCUMENT_SIGNING_CA_CERT_PATH", "")
+DOCUMENT_SIGNING_CA_KEY_PATH = os.environ.get("DOCUMENT_SIGNING_CA_KEY_PATH", "")
+DOCUMENT_SIGNING_CA_KEY_PASSWORD = os.environ.get("DOCUMENT_SIGNING_CA_KEY_PASSWORD", "")
+DOCUMENT_SIGNING_SEAL_NAME =os.environ.get("DOCUMENT_SIGNING_SEAL_NAME", "FFI HR Document Seal")
+DOCUMENT_SIGNING_ORGANIZATION = os.environ.get("DOCUMENT_SIGNING_ORGANIZATION", "FFI")
+# AWS KMS seal (DOCUMENT_SIGNING_BACKEND=aws_kms): asymmetric RSA_2048+ SIGN_VERIFY key and its certificate.
+DOCUMENT_SIGNING_KMS_KEY_ID = os.environ.get("DOCUMENT_SIGNING_KMS_KEY_ID", "")
+DOCUMENT_SIGNING_KMS_REGION = os.environ.get("DOCUMENT_SIGNING_KMS_REGION", "")
+# RFC 3161 timestamp authority. Empty disables timestamps (seal becomes PAdES-B-B).
+DOCUMENT_SIGNING_TSA_URL = os.environ.get("DOCUMENT_SIGNING_TSA_URL", "http://timestamp.digicert.com")
+DOCUMENT_SIGNING_TSA_TIMEOUT_SECONDS = _env_int("DOCUMENT_SIGNING_TSA_TIMEOUT_SECONDS", 10)
+# Seal in the Celery worker after commit instead of in the approving request (falls back to
+# inline sealing if dispatch fails). Off by default: the worker runs as the unprivileged
+# "app" user and cannot write the root-owned upload directories or read 0600 key files.
+DOCUMENT_SIGNING_SEAL_ASYNC = _env_bool("DOCUMENT_SIGNING_SEAL_ASYNC", False)
+# Extra trust anchors (PEM bundle) whose signatures are reported as "trusted".
+DOCUMENT_SIGNING_TRUSTED_ROOTS_PATH = os.environ.get("DOCUMENT_SIGNING_TRUSTED_ROOTS_PATH", "")
+DOCUMENT_SIGNING_PERSONAL_CERT_DAYS = _env_int("DOCUMENT_SIGNING_PERSONAL_CERT_DAYS", 730)
+MAX_DOCUMENT_VERIFY_UPLOAD_BYTES = _env_int("MAX_DOCUMENT_VERIFY_UPLOAD_BYTES", 20 * 1024 * 1024)
 
 SESSION_COOKIE_HTTPONLY = True
 CSRF_COOKIE_HTTPONLY = True

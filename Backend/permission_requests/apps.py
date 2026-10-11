@@ -5,3 +5,8 @@ class PermissionRequestsConfig(AppConfig):
     default_auto_field = "django.db.models.BigAutoField"
     name = "permission_requests"
     verbose_name = "Permission Requests"
+
+    def ready(self):
+        from .document_integrity import register
+
+        register()

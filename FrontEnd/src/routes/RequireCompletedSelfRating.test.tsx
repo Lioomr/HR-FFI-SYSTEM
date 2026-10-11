@@ -3,13 +3,13 @@ import { render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 
 vi.mock("../services/api/contractRatingsApi", () => ({
-  listContractRatings: vi.fn(),
+  getPendingContractRatingActions: vi.fn(),
 }));
 
 import RequireCompletedSelfRating from "./RequireCompletedSelfRating";
-import { listContractRatings } from "../services/api/contractRatingsApi";
+import { getPendingContractRatingActions } from "../services/api/contractRatingsApi";
 
-const listRatings = vi.mocked(listContractRatings);
+const getPendingActions = vi.mocked(getPendingContractRatingActions);
 
 function CurrentPath() {
   const location = useLocation();
@@ -18,22 +18,12 @@ function CurrentPath() {
 
 describe("RequireCompletedSelfRating", () => {
   it("redirects to an outstanding employee self-evaluation regardless of list order", async () => {
-    listRatings.mockResolvedValueOnce({
+    getPendingActions.mockResolvedValueOnce({
       status: "success",
       data: {
-        items: [
-          {
-            id: 15,
-            status: "PENDING_RESPONSES",
-            viewer: "employee",
-            employee_response: null,
-          } as never,
-        ],
+        employee: { id: 15, status: "PENDING_RESPONSES" },
+        manager: null,
       },
-    });
-    listRatings.mockResolvedValueOnce({
-      status: "success",
-      data: { items: [] },
     });
 
     render(
@@ -53,13 +43,6 @@ describe("RequireCompletedSelfRating", () => {
     await waitFor(() => {
       expect(screen.getByText("/employee/contract-ratings/15")).toBeTruthy();
     });
-    expect(listRatings).toHaveBeenCalledWith({
-      status: "PENDING_RESPONSES",
-      page_size: 100,
-    });
-    expect(listRatings).toHaveBeenCalledWith({
-      status: "WAITING_EMPLOYEE",
-      page_size: 100,
-    });
+    expect(getPendingActions).toHaveBeenCalledTimes(1);
   });
 });

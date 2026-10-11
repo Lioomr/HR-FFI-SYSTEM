@@ -18,6 +18,7 @@ from core.services.workflow_engine import begin_recorded_transition, record_work
 from in_app_notifications.dispatcher import dispatch_notification_channels
 from in_app_notifications.models import Notification
 
+from .annual_document_integrity import on_annual_payment_stage_approved
 from .models import AnnualLeavePaymentRequest
 from .services import COMMENT_REQUIRED_MESSAGE, LeaveTransitionError, leave_employee_name
 from .utils import annual_leave_payment_amount, annual_settlement_payable_days, get_annual_salary_at_year_end
@@ -53,6 +54,12 @@ def record_annual_payment_submission(instance: AnnualLeavePaymentRequest, *, act
     record_workflow_transition(
         instance, start, action=Action.SUBMIT, actor=actor, note=instance.employee_note or "", approver_role=""
     )
+    # Personal-mode attestations (never final here): the filer, and HR's decision when
+    # HR opened the settlement with its resolution already chosen.
+    filer_role = "employee" if actor is not None and actor.pk == instance.employee_id else "hr_manual"
+    on_annual_payment_stage_approved(instance, role=filer_role, actor=actor, at=instance.submitted_at)
+    if instance.hr_reviewed_by_id and instance.hr_reviewed_at:
+        on_annual_payment_stage_approved(instance, role="hr", actor=instance.hr_reviewed_by, at=instance.hr_reviewed_at)
 
 
 def ensure_pending_hr_review(instance: AnnualLeavePaymentRequest) -> None:
@@ -128,6 +135,7 @@ def apply_annual_payment_hr_review(
                 "include_locked_days_in_termination_payout": locked.include_locked_days_in_termination_payout,
             },
         )
+        on_annual_payment_stage_approved(locked, role="hr", actor=actor, at=locked.hr_reviewed_at)
     return locked
 
 
@@ -186,6 +194,9 @@ def apply_annual_payment_ceo_approval(
                 **({"salary_refresh": salary_refresh} if salary_refresh else {}),
             },
         )
+        # Final (approved or carried_forward): the PDF is frozen after commit; a
+        # freeze failure never undoes the approval.
+        on_annual_payment_stage_approved(locked, role="ceo", actor=actor, at=locked.ceo_decided_at)
     return locked
 
 

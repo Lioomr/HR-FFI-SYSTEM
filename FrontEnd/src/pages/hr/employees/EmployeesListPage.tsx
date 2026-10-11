@@ -19,7 +19,12 @@ import {
   message,
 } from "antd";
 import type { MenuProps } from "antd";
-import type { ColumnsType, SorterResult } from "antd/es/table/interface";
+import type {
+  ColumnsType,
+  FilterDropdownProps,
+  FilterValue,
+  SorterResult,
+} from "antd/es/table/interface";
 import {
   PlusOutlined,
   SearchOutlined,
@@ -154,6 +159,24 @@ function getAvatarColor(name?: string) {
   return AVATAR_BG_COLORS[index];
 }
 
+function uniqueSortedValues(values: Array<string | null | undefined>) {
+  const byKey = new Map<string, string>();
+  values.forEach((value) => {
+    const label = value?.trim();
+    if (!label) return;
+    const key = label.toLocaleLowerCase();
+    if (!byKey.has(key)) byKey.set(key, label);
+  });
+  return Array.from(byKey.values()).sort((a, b) => a.localeCompare(b));
+}
+
+function firstFilterValue(value?: FilterValue | null) {
+  const selected = value?.[0];
+  return selected === undefined || selected === null
+    ? undefined
+    : String(selected);
+}
+
 function FlagBadge({ nationality }: { nationality?: string }) {
   const code = getCountryCode(nationality);
 
@@ -281,6 +304,8 @@ export default function EmployeesListPage() {
     { code: string; name: string }[]
   >([]);
   const [nationalities, setNationalities] = useState<string[]>([]);
+  const [positions, setPositions] = useState<string[]>([]);
+  const [managers, setManagers] = useState<string[]>([]);
   const [expiringCounts, setExpiringCounts] = useState<
     Partial<Record<ExpiringKind, number>>
   >({});
@@ -371,6 +396,21 @@ export default function EmployeesListPage() {
           a.localeCompare(b),
         );
         setNationalities(uniqueNationalities);
+        setPositions(
+          uniqueSortedValues(
+            employeeRes.data.results.map(
+              (employee) => employee.position || employee.job_title,
+            ),
+          ),
+        );
+        setManagers(
+          uniqueSortedValues(
+            employeeRes.data.results.map(
+              (employee) =>
+                employee.manager_profile_name || employee.manager_name,
+            ),
+          ),
+        );
       }
     } catch (err) {
       console.error("Failed to load filter options:", err);
@@ -394,6 +434,7 @@ export default function EmployeesListPage() {
         position: filters.position || undefined,
         status: filters.status || undefined,
         nationality: filters.nationality || undefined,
+        manager: filters.manager || undefined,
         join_date_order: filters.joinDateOrder || undefined,
         archive_state: archiveState,
         expiring,
@@ -817,6 +858,8 @@ export default function EmployeesListPage() {
     filters.department ||
     filters.status ||
     filters.nationality ||
+    filters.position ||
+    filters.manager ||
     filters.joinDateOrder ||
     expiring,
   );
@@ -828,6 +871,8 @@ export default function EmployeesListPage() {
       department: undefined,
       status: undefined,
       nationality: undefined,
+      position: undefined,
+      manager: undefined,
       joinDateOrder: undefined,
       expiring: undefined,
     });
@@ -873,6 +918,51 @@ export default function EmployeesListPage() {
       title: t("employees.list.colName"),
       key: "full_name",
       width: 250,
+      filteredValue: search ? [search] : null,
+      filterIcon: (filtered) => (
+        <SearchOutlined
+          aria-label={t("employees.list.searchPlaceholder")}
+          style={{ color: filtered ? "var(--brand-primary)" : undefined }}
+        />
+      ),
+      filterDropdown: ({ confirm }: FilterDropdownProps) => (
+        <div className="employees-column-search">
+          <Input
+            autoFocus
+            allowClear
+            value={searchInput}
+            placeholder={t("employees.list.searchPlaceholder")}
+            prefix={<SearchOutlined className="employees-muted-icon" />}
+            onChange={(event) => setSearchInput(event.target.value)}
+            onPressEnter={() => {
+              setSearch(searchInput.trim());
+              confirm({ closeDropdown: true });
+            }}
+          />
+          <div className="employees-column-search__actions">
+            <Button
+              type="primary"
+              size="small"
+              onClick={() => {
+                setSearch(searchInput.trim());
+                confirm({ closeDropdown: true });
+              }}
+            >
+              {t("common.search")}
+            </Button>
+            <Button
+              size="small"
+              onClick={() => {
+                setSearchInput("");
+                setSearch("");
+                confirm({ closeDropdown: true });
+              }}
+            >
+              {t("common.reset")}
+            </Button>
+          </div>
+        </div>
+      ),
       render: (_, record) => (
         <div className="employees-person">
           <span
@@ -909,6 +999,13 @@ export default function EmployeesListPage() {
       title: t("employees.list.colNationality"),
       key: "nationality",
       width: 150,
+      filters: nationalities.map((nationality) => ({
+        text: nationality,
+        value: nationality,
+      })),
+      filteredValue: filters.nationality ? [filters.nationality] : null,
+      filterMultiple: false,
+      filterSearch: true,
       render: (_, record) => (
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <FlagBadge nationality={record.nationality} />
@@ -928,6 +1025,13 @@ export default function EmployeesListPage() {
       dataIndex: "position",
       key: "position",
       width: 180,
+      filters: positions.map((position) => ({
+        text: position,
+        value: position,
+      })),
+      filteredValue: filters.position ? [filters.position] : null,
+      filterMultiple: false,
+      filterSearch: true,
       render: (text) => <Text strong>{text || "-"}</Text>,
     },
     {
@@ -935,12 +1039,23 @@ export default function EmployeesListPage() {
       dataIndex: "department",
       key: "department",
       width: 160,
+      filters: departments.map((department) => ({
+        text: department.name,
+        value: department.code,
+      })),
+      filteredValue: filters.department ? [filters.department] : null,
+      filterMultiple: false,
+      filterSearch: true,
       render: (text) => <Text>{text || "-"}</Text>,
     },
     {
       title: t("employees.list.colManager"),
       key: "manager",
       width: 220,
+      filters: managers.map((manager) => ({ text: manager, value: manager })),
+      filteredValue: filters.manager ? [filters.manager] : null,
+      filterMultiple: false,
+      filterSearch: true,
       render: (_, record) => (
         <Text>{record.manager_profile_name || record.manager_name || "-"}</Text>
       ),
@@ -980,6 +1095,12 @@ export default function EmployeesListPage() {
       dataIndex: "employment_status",
       key: "employment_status",
       width: 120,
+      filters: Object.keys(STATUS_LABEL_KEY).map((status) => ({
+        text: t(STATUS_LABEL_KEY[status]),
+        value: status,
+      })),
+      filteredValue: filters.status ? [filters.status] : null,
+      filterMultiple: false,
       render: (status) => <StatusBadge status={status} t={t} />,
     },
     {
@@ -1079,6 +1200,7 @@ export default function EmployeesListPage() {
         position: filters.position || undefined,
         status: filters.status || undefined,
         nationality: filters.nationality || undefined,
+        manager: filters.manager || undefined,
         join_date_order: filters.joinDateOrder || undefined,
         archive_state: archiveState,
         expiring,
@@ -1127,9 +1249,9 @@ export default function EmployeesListPage() {
     <div className="employees-page">
       <header className="employees-header">
         <div>
-          <h1 className="employees-header__title">
+          <h2 className="employees-header__title">
             {t("employees.list.title")}
-          </h1>
+          </h2>
           <Text type="secondary">{t("employees.list.subtitle")}</Text>
         </div>
         <Button
@@ -1381,6 +1503,16 @@ export default function EmployeesListPage() {
                   `${t("common.showing")} ${range[0]} ${t("common.to")} ${range[1]} ${t("common.of")} ${total} ${t("common.entries")}`,
               }}
               onChange={(_pagination, _filters, sorter, extra) => {
+                if (extra?.action === "filter") {
+                  setFilters({
+                    department: firstFilterValue(_filters.department),
+                    position: firstFilterValue(_filters.position),
+                    manager: firstFilterValue(_filters.manager),
+                    nationality: firstFilterValue(_filters.nationality),
+                    status: firstFilterValue(_filters.employment_status),
+                  });
+                  return;
+                }
                 if (extra?.action !== "sort") return;
                 const { columnKey, order } = sorter as SorterResult<Employee>;
                 if (columnKey !== "hire_date") return;

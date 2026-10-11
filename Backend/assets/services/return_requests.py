@@ -13,10 +13,12 @@ from django.utils import timezone
 
 from core.models import WorkflowAction
 from core.responses import error
+from core.services.stage_coverage import manager_covers_hr, record_covered_stage
 from core.services.workflow_engine import begin_recorded_transition, record_workflow_transition
 from employees.services.manager_relationships import get_valid_manager_user, manager_approval_actor_source
 from loans.permissions import get_active_workflow_config
 
+from ..document_integrity import on_asset_return_stage_approved
 from ..models import AssetReturnRequest
 
 Status = AssetReturnRequest.RequestStatus
@@ -91,6 +93,7 @@ def record_return_request_submission(instance: AssetReturnRequest, *, actor) -> 
     record_workflow_transition(
         instance, start, action=Action.SUBMIT, actor=actor, note=instance.note or "", approver_role=""
     )
+    on_asset_return_stage_approved(instance, role="employee", actor=actor, at=instance.requested_at)
 
 
 def apply_manager_decision(
@@ -115,11 +118,18 @@ def apply_manager_decision(
             raise AssetReturnTransitionError(NOT_PENDING_MANAGER_MESSAGE)
 
         start = begin_recorded_transition(locked, actor=actor)
-        locked.status = Status.PENDING if approve else Status.REJECTED
         locked.manager_decision_by = actor
         locked.manager_decision_at = timezone.now()
         locked.manager_decision_note = comment
-        locked.save(update_fields=["status", "manager_decision_by", "manager_decision_at", "manager_decision_note"])
+        update_fields = ["status", "manager_decision_by", "manager_decision_at", "manager_decision_note"]
+        # A manager who is also an HR manager has done the HR review too, so the request is approved.
+        hr_covered = approve and manager_covers_hr(actor, actor_source)
+        locked.status = Status.APPROVED if hr_covered else Status.PENDING if approve else Status.REJECTED
+        if hr_covered:
+            locked.hr_decision_by = actor
+            locked.hr_decision_at = locked.manager_decision_at
+            update_fields += ["hr_decision_by", "hr_decision_at"]
+        locked.save(update_fields=update_fields)
         record_workflow_transition(
             locked,
             start,
@@ -129,6 +139,12 @@ def apply_manager_decision(
             approver_role="manager",
             metadata={"actor_source": actor_source},
         )
+        if hr_covered:
+            record_covered_stage(locked, start, "hr", actor=actor, source=actor_source)
+        if approve:
+            on_asset_return_stage_approved(locked, role="line_manager", actor=actor, at=locked.manager_decision_at)
+        if hr_covered:
+            on_asset_return_stage_approved(locked, role="hr", actor=actor, at=locked.hr_decision_at)
     return locked, actor_source
 
 
@@ -157,6 +173,8 @@ def apply_hr_decision(instance: AssetReturnRequest, *, actor, approve: bool, com
             note=comment,
             approver_role="hr",
         )
+        if approve:
+            on_asset_return_stage_approved(locked, role="hr", actor=actor, at=locked.hr_decision_at)
     return locked
 
 
@@ -187,6 +205,8 @@ def apply_ceo_decision(instance: AssetReturnRequest, *, actor, approve: bool, co
             note=comment,
             approver_role="ceo",
         )
+        if approve:
+            on_asset_return_stage_approved(locked, role="ceo", actor=actor, at=locked.ceo_decision_at)
     return locked
 
 
@@ -207,4 +227,6 @@ def mark_return_request_processed(request_obj: AssetReturnRequest, *, actor) -> 
         approver_role="hr",
         metadata={"result": "processed"},
     )
+    # The "Processed" row completes the form: freeze it once the caller's transaction commits.
+    on_asset_return_stage_approved(request_obj, role="asset_received", actor=actor, at=request_obj.processed_at)
     return request_obj

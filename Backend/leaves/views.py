@@ -10,7 +10,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.contenttypes.models import ContentType
 from django.db import transaction
 from django.db.models import Prefetch, Q
-from django.http import FileResponse, HttpResponse
+from django.http import FileResponse
 from django.utils import timezone
 from django_filters.rest_framework import DjangoFilterBackend
 from pypdf import PdfReader, PdfWriter
@@ -26,10 +26,16 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from audit.utils import audit
+from core.document_integrity.api import (
+    DocumentIntegrityActionsMixin,
+    frozen_pdf_response,
+    involved_q,
+    resolve_integrity_object,
+)
+from core.document_integrity.services import schedule_finalize
 from core.files import read_field_file_bytes
 from core.models import WorkflowInstance
 from core.pagination import StandardPagination
-from core.pdf import merge_pdfs
 from core.permissions import IsDepartmentCEOApprover, IsHRWorkflowApprover, get_role
 from core.responses import error, success
 from core.services import (
@@ -1152,6 +1158,22 @@ def _build_leave_request_pdf(instance: LeaveRequest):
     return build_leave_request_pdf(instance, fallback=_build_leave_request_pdf_fallback)
 
 
+def _leave_pdf_response(instance: LeaveRequest, request):
+    """Serve the frozen approved copy when one exists; render live otherwise.
+
+    See ``core.document_integrity.api.frozen_pdf_response`` (409 on a missing or
+    altered frozen copy, HR-only ``?workpaper=1&tz=``, ``?packet=1``).
+    """
+
+    return frozen_pdf_response(
+        instance,
+        request,
+        render_live=lambda: _build_leave_request_pdf(instance),
+        filename=f"leave_request_{instance.id}.pdf",
+        packet_pages=lambda: _leave_document_pdf_bytes(instance),
+    )
+
+
 def _build_annual_entitlements_pdf(instance) -> bytes:
     """Render the annual entitlements disbursement form from its approved map."""
 
@@ -1258,7 +1280,7 @@ class LeaveTypeViewSet(viewsets.ModelViewSet):
         return success(serializer.data)
 
 
-class LeaveRequestViewSet(viewsets.ModelViewSet):
+class LeaveRequestViewSet(DocumentIntegrityActionsMixin, viewsets.ModelViewSet):
     parser_classes = [MultiPartParser, FormParser, JSONParser]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ["status", "leave_type", "employee"]
@@ -1329,6 +1351,12 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
 
         if self.action in ["document", "pdf"]:
             return [IsAuthenticated(), IsOwnerOrHR()]
+
+        if self.action in ["integrity", "integrity_verify"]:
+            return [IsAuthenticated()]
+
+        if self.action == "integrity_retry_seal":
+            return [IsAuthenticated(), IsHRManagerOrAdmin()]
 
         if self.action in ["approve", "reject"]:
             return [IsAuthenticated(), IsHRWorkflowApprover()]
@@ -1803,15 +1831,35 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
         except LeaveRequest.DoesNotExist:
             return error("Not found", errors=["Not found."], status=404)
 
-        pdf_bytes = _build_leave_request_pdf(instance)
-        packet = _to_bool(request.query_params.get("packet", "0"))
-        filename = f"leave_request_{instance.id}.pdf"
-        if packet:
-            doc_bytes = _leave_document_pdf_bytes(instance)
-            if doc_bytes:
-                pdf_bytes = merge_pdfs([pdf_bytes, doc_bytes])
-                filename = f"leave_request_{instance.id}_packet.pdf"
-        return _configure_sensitive_download(HttpResponse(pdf_bytes, content_type="application/octet-stream"), filename)
+        return _leave_pdf_response(instance, request)
+
+    def get_integrity_object(self):
+        """Owner, alternative employee, recorded approvers, or HR in an accessible company."""
+
+        from .document_integrity import can_access_leave_document
+
+        user = self.request.user
+        return resolve_integrity_object(
+            self.request,
+            self.kwargs.get(self.lookup_field),
+            hr_queryset=self._unscoped_queryset(),
+            involved_queryset=lambda: self._base_queryset().filter(
+                involved_q(
+                    user,
+                    (
+                        "employee",
+                        "delegated_to",
+                        "delegate_decision_by",
+                        "manager_decision_by",
+                        "decided_by",
+                        "ceo_decision_by",
+                        "hr_completed_by",
+                        "entered_by",
+                    ),
+                )
+            ),
+            can_access=can_access_leave_document,
+        )
 
 
 class HRManualLeaveRequestViewSet(viewsets.ModelViewSet):
@@ -1876,6 +1924,7 @@ class HRManualLeaveRequestViewSet(viewsets.ModelViewSet):
 
         instance = serializer.save()
         sync_workflow(instance, actor=request.user)
+        schedule_finalize(instance, actor=request.user)
         warnings = serializer.policy_warnings
 
         audit(
@@ -1915,6 +1964,8 @@ class HRManualLeaveRequestViewSet(viewsets.ModelViewSet):
 
         updated = serializer.save()
         sync_workflow(updated, actor=request.user)
+        # An edited manual record is a new approved version: re-freeze it.
+        schedule_finalize(updated, actor=request.user)
         warnings = serializer.policy_warnings
 
         audit(
@@ -2065,15 +2116,7 @@ class ManagerLeaveRequestViewSet(viewsets.ReadOnlyModelViewSet):
     @action(detail=True, methods=["get"], permission_classes=[IsAuthenticated])
     def pdf(self, request, pk=None):
         instance = self.get_object()
-        pdf_bytes = _build_leave_request_pdf(instance)
-        packet = _to_bool(request.query_params.get("packet", "0"))
-        filename = f"leave_request_{instance.id}.pdf"
-        if packet:
-            doc_bytes = _leave_document_pdf_bytes(instance)
-            if doc_bytes:
-                pdf_bytes = merge_pdfs([pdf_bytes, doc_bytes])
-                filename = f"leave_request_{instance.id}_packet.pdf"
-        return _configure_sensitive_download(HttpResponse(pdf_bytes, content_type="application/octet-stream"), filename)
+        return _leave_pdf_response(instance, request)
 
 
 class LeaveBalanceViewSet(viewsets.ViewSet):
@@ -2268,7 +2311,7 @@ class LeaveBalanceAdjustmentViewSet(viewsets.ModelViewSet):
         return success(response.data, status=response.status_code)
 
 
-class AnnualLeavePaymentRequestViewSet(viewsets.ModelViewSet):
+class AnnualLeavePaymentRequestViewSet(DocumentIntegrityActionsMixin, viewsets.ModelViewSet):
     """Annual leave settlement requests: employee -> HR -> CEO."""
 
     queryset = AnnualLeavePaymentRequest.objects.select_related(
@@ -2290,6 +2333,11 @@ class AnnualLeavePaymentRequestViewSet(viewsets.ModelViewSet):
             return [IsAuthenticated(), IsHRManagerOrAdmin()]
         if self.action in {"approve", "reject"}:
             return [IsAuthenticated(), IsDepartmentCEOApprover()]
+        if self.action in {"integrity", "integrity_verify"}:
+            # Object access is decided by get_integrity_object (404 for anyone else).
+            return [IsAuthenticated()]
+        if self.action == "integrity_retry_seal":
+            return [IsAuthenticated(), IsHRManagerOrAdmin()]
         if self.action == "pdf":
             # Ownership and company scope are enforced by get_queryset below:
             # an employee only ever resolves their own settlement, and every
@@ -2451,17 +2499,39 @@ class AnnualLeavePaymentRequestViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["get"], permission_classes=[IsAuthenticated])
     def pdf(self, request, pk=None):
         instance = self.get_object()
-        pdf_bytes = _build_annual_entitlements_pdf(instance)
-        audit(
+        # Frozen copy once the CEO approved it (approved / carried_forward; 409 if it
+        # was altered), live render before that; HR may add ``?workpaper=1&tz=<IANA>``.
+        response = frozen_pdf_response(
+            instance,
             request,
-            "annual_leave_payment_exported_pdf",
-            entity="AnnualLeavePaymentRequest",
-            entity_id=instance.id,
-            metadata={"company_id": instance.company_id, "status": instance.status},
+            render_live=lambda: _build_annual_entitlements_pdf(instance),
+            filename=f"annual_entitlements_{instance.id}.pdf",
         )
-        return _configure_sensitive_download(
-            HttpResponse(pdf_bytes, content_type="application/octet-stream"),
-            f"annual_entitlements_{instance.id}.pdf",
+        if response.status_code == 200:
+            audit(
+                request,
+                "annual_leave_payment_exported_pdf",
+                entity="AnnualLeavePaymentRequest",
+                entity_id=instance.id,
+                metadata={"company_id": instance.company_id, "status": instance.status},
+            )
+        return response
+
+    def get_integrity_object(self):
+        """The employee, recorded filer/HR/CEO, or HR in an accessible company (404 otherwise)."""
+
+        from .annual_document_integrity import INVOLVED_FIELDS, can_access_annual_payment_document
+
+        user = self.request.user
+        base = AnnualLeavePaymentRequest.objects.select_related(
+            "employee", "employee_profile", "company", "submitted_by", "hr_reviewed_by", "ceo_decided_by"
+        )
+        return resolve_integrity_object(
+            self.request,
+            self.kwargs.get(self.lookup_field),
+            hr_queryset=filter_queryset_by_accessible_companies(base, self.request),
+            involved_queryset=lambda: base.filter(involved_q(user, INVOLVED_FIELDS)),
+            can_access=can_access_annual_payment_document,
         )
 
 
@@ -2559,12 +2629,4 @@ class CEOLeaveRequestViewSet(viewsets.ReadOnlyModelViewSet):
     @action(detail=True, methods=["get"])
     def pdf(self, request, pk=None):
         instance = self.get_object()
-        pdf_bytes = _build_leave_request_pdf(instance)
-        packet = _to_bool(request.query_params.get("packet", "0"))
-        filename = f"leave_request_{instance.id}.pdf"
-        if packet:
-            doc_bytes = _leave_document_pdf_bytes(instance)
-            if doc_bytes:
-                pdf_bytes = merge_pdfs([pdf_bytes, doc_bytes])
-                filename = f"leave_request_{instance.id}_packet.pdf"
-        return _configure_sensitive_download(HttpResponse(pdf_bytes, content_type="application/octet-stream"), filename)
+        return _leave_pdf_response(instance, request)

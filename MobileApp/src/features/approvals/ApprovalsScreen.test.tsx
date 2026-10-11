@@ -8,7 +8,6 @@ import { ApprovalsScreen } from './ApprovalsScreen';
 import type {
   ApprovalLeaveRequest,
   ApprovalMutationOutcome,
-  AttendanceCorrectionApproval,
   DelegationCandidate,
   DelegationRule,
   HiringRequestApproval,
@@ -19,7 +18,6 @@ const mockLoad = jest.fn<() => Promise<ApprovalLeaveRequest[]>>();
 const mockAct = jest.fn<() => Promise<ApprovalMutationOutcome>>();
 const mockLoadDelegationRules = jest.fn<() => Promise<DelegationRule[]>>();
 const mockLoadDelegationCandidates = jest.fn<() => Promise<DelegationCandidate[]>>();
-const mockLoadAttendanceCorrections = jest.fn<() => Promise<AttendanceCorrectionApproval[]>>();
 const mockLoadHiring = jest.fn<() => Promise<HiringRequestApproval[]>>();
 const mockLoadLoans = jest.fn<() => Promise<LoanRequestApproval[]>>();
 
@@ -38,16 +36,6 @@ jest.mock('./delegations-api', () => {
     ...actual,
     loadDelegationRules: () => mockLoadDelegationRules(),
     loadDelegationCandidates: () => mockLoadDelegationCandidates(),
-  };
-});
-
-jest.mock('./attendance-corrections-api', () => {
-  const actual = jest.requireActual<typeof import('./attendance-corrections-api')>(
-    './attendance-corrections-api',
-  );
-  return {
-    ...actual,
-    loadAttendanceCorrectionApprovals: () => mockLoadAttendanceCorrections(),
   };
 });
 
@@ -92,12 +80,10 @@ describe('ApprovalsScreen', () => {
     mockAct.mockReset();
     mockLoadDelegationRules.mockReset();
     mockLoadDelegationCandidates.mockReset();
-    mockLoadAttendanceCorrections.mockReset();
     mockLoadHiring.mockReset();
     mockLoadLoans.mockReset();
     mockLoadDelegationRules.mockResolvedValue([]);
     mockLoadDelegationCandidates.mockResolvedValue([]);
-    mockLoadAttendanceCorrections.mockResolvedValue([]);
     mockLoadHiring.mockResolvedValue([]);
     mockLoadLoans.mockResolvedValue([]);
   });
@@ -147,32 +133,6 @@ describe('ApprovalsScreen', () => {
     expect(await view.findByTestId('hiring-request-detail')).toBeTruthy();
     expect(view.queryByTestId('hiring-request-approve')).toBeNull();
     expect(view.queryByTestId('hiring-request-reject')).toBeNull();
-  });
-
-  it('shows a manager only the attendance-correction stage they can act on', async () => {
-    mockLoad.mockResolvedValue([]);
-    mockLoadAttendanceCorrections.mockResolvedValue([
-      {
-        id: 14,
-        employeeName: 'Correction Employee',
-        employeeEmail: null,
-        date: '2026-09-02',
-        currentCheckInAt: null,
-        currentCheckOutAt: null,
-        currentStatus: 'PRESENT',
-        requestedCheckInAt: null,
-        requestedCheckOutAt: '2026-09-02T17:30:00Z',
-        requestedStatus: null,
-        reason: 'Forgot to check out',
-        status: 'pending_manager',
-        createdAt: '2026-09-02T08:00:00Z',
-      },
-    ]);
-    const view = await renderWithProviders(<ApprovalsScreen />, asRole('Manager'));
-
-    expect(await view.findByTestId('attendance-correction-14')).toBeTruthy();
-    expect(view.getByText('Attendance corrections')).toBeTruthy();
-    expect(view.queryByText('Leave requests')).toBeNull();
   });
 
   it('offers no approvals surface to a role without one', async () => {

@@ -29,7 +29,7 @@ npm run build
 - Role and feature pages: `src/pages/`
 - Shared UI: `src/components/`
 - API clients: `src/services/api/`
-- English/Arabic translations: `src/i18n/translations.ts`
+- English/Arabic translations: `src/i18n/translations.en.ts` and `translations.ar.ts` (loaded one language at a time)
 - Tests: near their page/component or service
 
 For repository rules, read `../AGENTS.md`. For the shared architecture map, start with `../.agents/context/INDEX.md`. Request workflow tasks must also read `../.agents/context/workflow_engine.md`: the employee dashboard's Current Requests panel is a summary, while leave list/detail pages show the approval-trail pattern. Trace linked screens, APIs, workflow history, permissions, toggles, notifications, and tests before making a change.

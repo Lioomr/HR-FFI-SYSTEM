@@ -17,3 +17,8 @@ class PasswordResetConfirmRateThrottle(SimpleRateThrottle):
     def get_cache_key(self, request, view):
         ident = get_client_ip(request)
         return self.cache_format % {"scope": self.scope, "ident": ident}
+
+
+class PasswordResetRequestRateThrottle(PasswordResetConfirmRateThrottle):
+    scope = "password_reset_request"
+    rate = "10/min"

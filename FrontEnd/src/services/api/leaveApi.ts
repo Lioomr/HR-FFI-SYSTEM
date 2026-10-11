@@ -49,6 +49,8 @@ export interface LeaveRequest {
     | "rejected"
     | "cancelled";
   requires_hr_completion_visa?: boolean;
+  will_require_visa?: boolean | null;
+  visa_upload_required?: boolean;
   source?: "employee" | "hr_manual";
   manual_entry_reason?: string;
   source_document_ref?: string;
@@ -123,6 +125,8 @@ export interface CreateLeaveRequestPayload {
   end_date: string;
   reason: string;
   document?: File;
+  will_travel: boolean;
+  will_require_visa?: boolean;
   other_leave_description?: string;
   date_of_rejoin?: string | null;
   po_box?: string;
@@ -258,9 +262,19 @@ export async function getLeaveRequestDocumentBlob(
 export async function getLeaveRequestPdfBlob(
   id: string | number,
   download = true,
+  options: { workpaper?: boolean } = {},
 ): Promise<Blob> {
+  const params: Record<string, string | number> = {
+    download: download ? 1 : 0,
+  };
+  if (options.workpaper) {
+    // HR work paper: the backend appends the approval-trail page and prints its
+    // times in this browser's timezone (ignored for non-HR viewers).
+    params.workpaper = 1;
+    params.tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  }
   const { data } = await api.get(`/api/leaves/leave-requests/${id}/pdf/`, {
-    params: download ? { download: 1 } : { download: 0 },
+    params,
     responseType: "blob",
   });
   return data;

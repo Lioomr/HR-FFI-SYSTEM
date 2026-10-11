@@ -3,7 +3,6 @@ export { ApprovalsScreen } from './ApprovalsScreen';
 export { LeaveApprovalDetail } from './LeaveApprovalDetail';
 export { RejectReasonPrompt } from './RejectReasonPrompt';
 export { DelegationRulesSheet } from './DelegationRulesSheet';
-export { AttendanceCorrectionDetail } from './AttendanceCorrectionDetail';
 export { HiringRequestDetail } from './HiringRequestDetail';
 export { LoanRequestDetail } from './LoanRequestDetail';
 export * from './hiring-approvals-api';
@@ -17,7 +16,6 @@ export type {
   DelegationDraft,
   DelegationRule,
   DelegationUser,
-  AttendanceCorrectionApproval,
   HiringRequestApproval,
   LoanRequestApproval,
 } from './types';

@@ -90,6 +90,24 @@ def test_hr_list_is_coarse_until_a_comment_is_requested(world):
     assert after["manager_response"] and after["employee_response"]
 
 
+def test_pending_actions_returns_only_the_current_users_required_rating(world):
+    rating = rated_cycle(world)
+
+    world.client.force_authenticate(world.employee)
+    employee_payload = world.client.get("/contract-ratings/pending-actions/").data["data"]
+    assert employee_payload == {
+        "employee": {"id": rating.id, "status": ContractRating.Status.PENDING_RESPONSES},
+        "manager": None,
+    }
+
+    world.client.force_authenticate(world.manager)
+    manager_payload = world.client.get("/contract-ratings/pending-actions/").data["data"]
+    assert manager_payload == {
+        "employee": None,
+        "manager": {"id": rating.id, "status": ContractRating.Status.PENDING_RESPONSES},
+    }
+
+
 @pytest.mark.parametrize(
     "terms,effective_date",
     [({}, None), ({"basic_salary": "1200.00"}, None), ({}, timezone.localdate() + timedelta(days=1))],

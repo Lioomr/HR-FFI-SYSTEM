@@ -143,8 +143,9 @@ class PassportMrzTests(TestCase):
 
         self.assertTrue(result.valid)
         self.assertEqual(result.fields["passport_number"], "X12345678")
-        self.assertEqual(result.fields["full_name"], "SAMPLE EMPLOYEE TESTCASE")
-        self.assertEqual(result.fields["nationality"], "EGY")
+        self.assertEqual(result.fields["full_name"], "Sample Employee Testcase")
+        self.assertEqual(result.fields["nationality"], "Egypt")
+        self.assertEqual(result.fields["issuing_country"], "Egypt")
         self.assertEqual(result.fields["date_of_birth"], "1990-01-01")
         self.assertEqual(result.fields["expiry_date"], "2030-01-01")
         self.assertTrue(result.checks["document_number"])
@@ -179,7 +180,7 @@ class PassportMrzTests(TestCase):
         self.assertTrue(result.checks["date_of_birth"])
         self.assertTrue(result.checks["expiry_date"])
         self.assertEqual(result.fields["passport_number"], "A30702010")
-        self.assertEqual(result.fields["nationality"], "EGY")
+        self.assertEqual(result.fields["nationality"], "Egypt")
         self.assertEqual(result.fields["date_of_birth"], "2005-10-05")
         self.assertEqual(result.fields["expiry_date"], "2029-06-14")
         self.assertEqual(result.fields["issue_date"], "15/06/2022")
@@ -188,13 +189,35 @@ class PassportMrzTests(TestCase):
     def test_name_keeps_printed_order_when_mrz_separator_was_lost(self):
         result = parse_document(EmployeeDocument.DocumentType.PASSPORT, DROPPED_FILLER_PASSPORT_TEXT)
 
-        self.assertEqual(result.fields["full_name"], "OMR ABDELAAL REDA ABDELAAL SOLTAN")
+        self.assertEqual(result.fields["full_name"], "Omr Abdelaal Reda Abdelaal Soltan")
 
     def test_name_is_not_replaced_by_a_printed_line_with_different_words(self):
         text = DROPPED_FILLER_PASSPORT_TEXT.replace("OMR ABDELAAL REDA ABDELAAL SOLTAN", "SOMEONE ELSE ENTIRELY")
         result = parse_document(EmployeeDocument.DocumentType.PASSPORT, text)
 
-        self.assertEqual(result.fields["full_name"], "SOLTAN OMR ABDELAAL REDA ABDELAAL")
+        self.assertEqual(result.fields["full_name"], "Soltan Omr Abdelaal Reda Abdelaal")
+
+    def test_mrz_nationality_code_becomes_the_english_country_name(self):
+        result = parse_document(EmployeeDocument.DocumentType.PASSPORT, build_mrz(nationality="SAU"))
+
+        self.assertTrue(result.valid, result.warnings)
+        self.assertEqual(result.fields["nationality"], "Saudi Arabia")
+        self.assertEqual(result.fields["issuing_country"], "Saudi Arabia")
+
+    def test_unknown_mrz_nationality_code_is_kept_and_flagged_for_hr(self):
+        result = parse_document(EmployeeDocument.DocumentType.PASSPORT, build_mrz(nationality="QQQ"))
+
+        self.assertEqual(result.fields["nationality"], "QQQ")
+        self.assertTrue(any("QQQ" in warning and "nationality" in warning for warning in result.warnings))
+
+    def test_printed_mixed_case_name_is_not_altered(self):
+        result = parse_document(
+            EmployeeDocument.DocumentType.PASSPORT,
+            "Passport Number: X12345678\nName: Sara McNeil Al-Qahtani\nNationality: EGYPT",
+        )
+
+        self.assertEqual(result.fields["full_name"], "Sara McNeil Al-Qahtani")
+        self.assertEqual(result.fields["nationality"], "Egypt")
 
     def test_text_line_starting_with_p_is_not_treated_as_mrz(self):
         second_line = DROPPED_FILLER_PASSPORT_TEXT.splitlines()[-3]

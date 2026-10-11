@@ -19,6 +19,7 @@ vi.mock("../../../services/api/leaveApi", () => ({
   rejectLeaveRequest: vi.fn(),
   sendLeaveRequestToCEO: vi.fn(),
   hrCancelLeaveRequest: vi.fn(),
+  completeLeaveRequest: vi.fn(),
   getCEOLeaveRequest: vi.fn(),
   approveCEOLeaveRequest: vi.fn(),
   rejectCEOLeaveRequest: vi.fn(),
@@ -26,6 +27,12 @@ vi.mock("../../../services/api/leaveApi", () => ({
   getCEOLeaveRequestPdfBlob: vi.fn(),
   getLeaveRequestDocumentBlob: vi.fn(),
   getLeaveRequestPdfBlob: vi.fn(),
+}));
+vi.mock("../../../components/requests/RequestObligationsPanel", () => ({
+  default: () => null,
+}));
+vi.mock("../../../components/documents/DocumentIntegrityPanel", () => ({
+  default: () => null,
 }));
 
 import LeaveRequestDetailsPage from "./LeaveRequestDetailsPage";
@@ -96,7 +103,10 @@ describe("LeaveRequestDetailsPage (CEO)", () => {
 
     render(<LeaveRequestDetailsPage audience="ceo" />);
 
-    fireEvent.click(await screen.findByRole("button", { name: /Preview/ }));
+    fireEvent.click(await screen.findByRole("button", { name: /^Preview/ }));
+    fireEvent.click(
+      await screen.findByRole("menuitem", { name: /Preview PDF/ }),
+    );
 
     const dialog = await screen.findByRole("dialog");
     expect(
@@ -107,5 +117,136 @@ describe("LeaveRequestDetailsPage (CEO)", () => {
     expect(mocked.getCEOLeaveRequestPdfBlob).toHaveBeenCalledWith(2, false);
     expect(openSpy).not.toHaveBeenCalled();
     openSpy.mockRestore();
+  });
+});
+
+describe("LeaveRequestDetailsPage (HR completion)", () => {
+  it.each([false, null])(
+    "completes a travel request without a visa upload when the answer is %s",
+    async (willRequireVisa) => {
+      mocked.getLeaveRequest.mockResolvedValue(
+        ok({
+          ...request,
+          status: "pending_hr_completion",
+          will_travel: true,
+          will_require_visa: willRequireVisa,
+          requires_hr_completion_visa: true,
+          visa_upload_required: false,
+        }),
+      );
+      mocked.completeLeaveRequest.mockResolvedValue(
+        ok({ ...request, status: "approved" }),
+      );
+
+      render(<LeaveRequestDetailsPage />);
+      fireEvent.click(
+        await screen.findByRole("button", { name: /Complete & Approve/ }),
+      );
+      const dialog = await screen.findByRole("dialog");
+      expect(within(dialog).queryByText("Upload Visa")).not.toBeInTheDocument();
+      fireEvent.click(
+        within(dialog).getByRole("button", { name: "Complete & Approve" }),
+      );
+
+      await waitFor(() =>
+        expect(mocked.completeLeaveRequest).toHaveBeenCalledWith(2, {
+          comment: undefined,
+          visa_document: undefined,
+        }),
+      );
+    },
+  );
+
+  it("requires a visa PDF when the backend marks the upload required", async () => {
+    mocked.getLeaveRequest.mockResolvedValue(
+      ok({
+        ...request,
+        status: "pending_hr_completion",
+        will_travel: true,
+        will_require_visa: true,
+        requires_hr_completion_visa: true,
+        visa_upload_required: true,
+      }),
+    );
+    mocked.completeLeaveRequest.mockResolvedValue(
+      ok({ ...request, status: "approved" }),
+    );
+
+    render(<LeaveRequestDetailsPage />);
+    fireEvent.click(
+      await screen.findByRole("button", { name: /Upload Visa to Approve/ }),
+    );
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getAllByText("Upload Visa")).toHaveLength(2);
+    fireEvent.click(
+      within(dialog).getByRole("button", { name: /Upload Visa to Approve/ }),
+    );
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent(
+      "A visa PDF is required for this request.",
+    );
+    expect(mocked.completeLeaveRequest).not.toHaveBeenCalled();
+
+    const invalidFile = new File(["not a PDF"], "visa.txt", {
+      type: "text/plain",
+    });
+    fireEvent.change(
+      dialog.querySelector('input[type="file"]') as HTMLInputElement,
+      {
+        target: { files: [invalidFile] },
+      },
+    );
+    expect(within(dialog).getByRole("alert")).toHaveTextContent(
+      "Select a PDF file for the visa.",
+    );
+
+    const firstFile = new File(["%PDF-1.4"], "visa.pdf", {
+      type: "application/pdf",
+    });
+    fireEvent.change(
+      dialog.querySelector('input[type="file"]') as HTMLInputElement,
+      {
+        target: { files: [firstFile] },
+      },
+    );
+    expect(await within(dialog).findByText("visa.pdf")).toBeInTheDocument();
+
+    const replacementFile = new File(["%PDF-1.5"], "replacement.pdf", {
+      type: "application/pdf",
+    });
+    fireEvent.change(
+      dialog.querySelector('input[type="file"]') as HTMLInputElement,
+      {
+        target: { files: [replacementFile] },
+      },
+    );
+    expect(
+      await within(dialog).findByText("replacement.pdf"),
+    ).toBeInTheDocument();
+    expect(within(dialog).queryByText("visa.pdf")).not.toBeInTheDocument();
+    fireEvent.click(within(dialog).getByTitle("Remove file"));
+    expect(
+      within(dialog).queryByText("replacement.pdf"),
+    ).not.toBeInTheDocument();
+    fireEvent.click(
+      within(dialog).getByRole("button", { name: /Upload Visa to Approve/ }),
+    );
+    expect(within(dialog).getByRole("alert")).toHaveTextContent(
+      "A visa PDF is required for this request.",
+    );
+    fireEvent.change(
+      dialog.querySelector('input[type="file"]') as HTMLInputElement,
+      {
+        target: { files: [replacementFile] },
+      },
+    );
+    fireEvent.click(
+      within(dialog).getByRole("button", { name: /Upload Visa to Approve/ }),
+    );
+    await waitFor(() =>
+      expect(mocked.completeLeaveRequest).toHaveBeenCalledWith(2, {
+        comment: undefined,
+        visa_document: replacementFile,
+      }),
+    );
   });
 });

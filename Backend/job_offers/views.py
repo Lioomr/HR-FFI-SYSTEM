@@ -4,24 +4,35 @@ from pathlib import Path
 
 from django.db import transaction
 from django.db.models import Q
-from django.http import FileResponse, HttpResponse
+from django.http import FileResponse
 from django.utils import timezone
-from rest_framework import status
+from rest_framework import status, viewsets
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 
 from audit.utils import audit
+from core.document_integrity.api import (
+    DocumentIntegrityActionsMixin,
+    frozen_pdf_response,
+    involved_q,
+    resolve_integrity_object,
+)
 from core.permissions import IsHRManagerOrAdmin, get_role, is_department_ceo_approver_user
 from core.responses import error, success
 from core.services.messaging_providers import is_e164
 from core.services.request_references import has_sequential_employee_id, next_reference_for_profile
 from core.services.workflow_engine import can_user_act_on_instance, sync_workflow
 from organization.models import OrganizationNode
-from organization.services import filter_queryset_by_company_scope, get_active_company_for_request
+from organization.services import (
+    filter_queryset_by_accessible_companies,
+    filter_queryset_by_company_scope,
+    get_active_company_for_request,
+)
 
 from .automation import generate_reference_number, signer_snapshot
+from .document_integrity import freeze_sent_job_offer, on_job_offer_stage
 from .models import JobOffer, StartingWorkAcknowledgment
 from .notifications import (
     notify_job_offer_biotime_mapping_missing,
@@ -463,6 +474,9 @@ class JobOfferDecisionView(APIView):
                 ]
             )
             sync_workflow(offer, actor=request.user)
+            if self.target_status == JobOffer.ApprovalStatus.APPROVED:
+                # Personal mode: the CEO's attestation; the offer is frozen later, at send.
+                on_job_offer_stage(offer, role="ceo", actor=request.user, at=offer.ceo_decision_at)
         try:
             delivery = notify_job_offer_decided(offer)
         except Exception:
@@ -596,7 +610,11 @@ class JobOfferSendView(APIView):
                     "updated_at",
                 ]
             )
+            # Personal mode: the HR sender's attestation (the freeze itself follows below).
+            on_job_offer_stage(offer, role="hr", actor=request.user, at=offer.sent_at, freeze=False)
 
+        # Committed: freeze v1 now, so the delivery below sends exactly that frozen copy.
+        freeze_sent_job_offer(offer, actor=request.user)
         try:
             delivery_metadata = deliver_job_offer(offer)
         except Exception:
@@ -678,18 +696,20 @@ class JobOfferPdfView(APIView):
         offer = _get_internal_offer(request, offer_id)
         if not offer:
             return error("Job offer not found.", status=status.HTTP_404_NOT_FOUND)
-        pdf_bytes = build_job_offer_pdf(offer)
-        audit(
+        response = frozen_pdf_response(
+            offer,
             request,
-            "job_offer_pdf_downloaded",
-            entity="JobOffer",
-            entity_id=offer.id,
-            metadata=_offer_audit_metadata(offer),
+            render_live=lambda: build_job_offer_pdf(offer),
+            filename=f"job-offer-{offer.reference_number}.pdf",
         )
-        response = HttpResponse(pdf_bytes, content_type="application/octet-stream")
-        response["Content-Disposition"] = f'attachment; filename="job-offer-{offer.reference_number}.pdf"'
-        response["X-Content-Type-Options"] = "nosniff"
-        response["Cache-Control"] = "private, no-store"
+        if response.status_code == status.HTTP_200_OK:
+            audit(
+                request,
+                "job_offer_pdf_downloaded",
+                entity="JobOffer",
+                entity_id=offer.id,
+                metadata=_offer_audit_metadata(offer),
+            )
         return response
 
 
@@ -767,6 +787,8 @@ class JobOfferRespondView(APIView):
                 offer.accepted_at = now
                 offer.save(update_fields=["status", "accepted_at", "updated_at"])
                 updated_profile = update_employee_profile_from_offer(offer)
+            # The candidate's answer completes the acceptance block: freeze v2 on commit.
+            on_job_offer_stage(offer, role=None, actor=None)
 
         if decision == "rejected":
             audit(
@@ -911,16 +933,28 @@ class StartingWorkAcknowledgmentPdfView(APIView):
         acknowledgment = _scoped_starting_work_acknowledgments(request).filter(pk=acknowledgment_id).first()
         if acknowledgment is None:
             return error("Starting work acknowledgement not found.", status=status.HTTP_404_NOT_FOUND)
+        filename = acknowledgment.document.original_filename or f"starting-work-{acknowledgment.id}.pdf"
+
+        def stored_document() -> bytes:
+            # Nothing frozen (pending, rejected, voided, approved before the rollout): the stored file.
+            stored = acknowledgment.document.file
+            stored.open("rb")
+            try:
+                return stored.read()
+            finally:
+                stored.close()
+
         try:
-            filename = acknowledgment.document.original_filename or f"starting-work-{acknowledgment.id}.pdf"
-            response = FileResponse(
-                acknowledgment.document.file.open("rb"),
-                content_type="application/pdf",
-                as_attachment=True,
+            response = frozen_pdf_response(
+                acknowledgment,
+                request,
+                render_live=stored_document,
                 filename=Path(filename).name,
+                content_type="application/pdf",
             )
-            response["X-Content-Type-Options"] = "nosniff"
-            response["Cache-Control"] = "private, no-store"
+        except FileNotFoundError:
+            return error("Acknowledgement PDF is missing from storage.", status=status.HTTP_404_NOT_FOUND)
+        if response.status_code == status.HTTP_200_OK:
             audit(
                 request,
                 "starting_work_acknowledgment_pdf_downloaded",
@@ -928,9 +962,7 @@ class StartingWorkAcknowledgmentPdfView(APIView):
                 entity_id=acknowledgment.id,
                 metadata={"company_id": acknowledgment.company_id, "document_id": acknowledgment.document_id},
             )
-            return response
-        except FileNotFoundError:
-            return error("Acknowledgement PDF is missing from storage.", status=status.HTTP_404_NOT_FOUND)
+        return response
 
 
 class StartingWorkAcknowledgmentApproveView(APIView):
@@ -1034,4 +1066,51 @@ class StartingWorkAcknowledgmentVoidView(APIView):
         return success(
             _serialize_starting_work_acknowledgment(acknowledgment, request),
             message="Starting work acknowledgement voided and attendance restored.",
+        )
+
+
+class JobOfferIntegrityViewSet(DocumentIntegrityActionsMixin, viewsets.GenericViewSet):
+    """``/job-offers/{pk}/integrity/`` (+ ``verify/``, ``retry-seal/``), routed explicitly in ``urls.py``.
+
+    HR/SystemAdmin within their accessible companies, the CEO who decided the
+    offer, or the HR user who sent it; 404 for everyone else. The candidate is
+    external and has no access (HR verifies a candidate's copy by upload).
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get_integrity_object(self):
+        from .document_integrity import JOB_OFFER_INVOLVED_FIELDS, can_access_job_offer_document
+
+        user = self.request.user
+        base = JobOffer.objects.select_related("company", "employee_profile", "ceo_decision_by", "hr_signer_user")
+        return resolve_integrity_object(
+            self.request,
+            self.kwargs.get("pk"),
+            hr_queryset=filter_queryset_by_accessible_companies(base, self.request),
+            involved_queryset=lambda: base.filter(involved_q(user, JOB_OFFER_INVOLVED_FIELDS)),
+            can_access=can_access_job_offer_document,
+        )
+
+
+class StartingWorkAcknowledgmentIntegrityViewSet(DocumentIntegrityActionsMixin, viewsets.GenericViewSet):
+    """``/starting-work-acknowledgments/{pk}/integrity/`` (+ ``verify/``, ``retry-seal/``).
+
+    HR/SystemAdmin within their accessible companies, or the recorded HR
+    approver; the employee does not see this HR-only document. 404 otherwise.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get_integrity_object(self):
+        from .document_integrity import STARTING_WORK_INVOLVED_FIELDS, can_access_starting_work_document
+
+        user = self.request.user
+        base = StartingWorkAcknowledgment.objects.select_related("company", "employee_profile", "approved_by")
+        return resolve_integrity_object(
+            self.request,
+            self.kwargs.get("pk"),
+            hr_queryset=filter_queryset_by_accessible_companies(base, self.request),
+            involved_queryset=lambda: base.filter(involved_q(user, STARTING_WORK_INVOLVED_FIELDS)),
+            can_access=can_access_starting_work_document,
         )

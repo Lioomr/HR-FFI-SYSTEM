@@ -43,6 +43,28 @@ _ANNOUNCEMENT_BODY = """📢 *إعلان جديد*
 _FFI HR · الموارد البشرية_"""
 
 DEFAULT_WHATSAPP_TEMPLATES: dict[str, WhatsAppTemplateDefinition] = {
+    "password_reset_otp": WhatsAppTemplateDefinition(
+        key="password_reset_otp",
+        title="Password Recovery Code",
+        description="One-time code for self-service password recovery.",
+        variables=("otp",),
+        sample_variables={"otp": "123456"},
+        default_body="""🔐 *رمز إعادة تعيين كلمة المرور*
+
+رمز التحقق: {{ otp }}
+صالح لمدة 5 دقائق. لا تشارك هذا الرمز مع أي شخص.
+إذا لم تطلب إعادة تعيين كلمة المرور، تجاهل هذه الرسالة.
+
+━━━━━━━━━━━━
+
+🔐 *Password recovery code*
+
+Verification code: {{ otp }}
+Valid for 5 minutes. Do not share this code with anyone.
+If you did not request a password reset, ignore this message.
+
+_FFI HR · الموارد البشرية_""",
+    ),
     "job_offer": WhatsAppTemplateDefinition(
         key="job_offer",
         title="Job Offer",
@@ -63,6 +85,8 @@ DEFAULT_WHATSAPP_TEMPLATES: dict[str, WhatsAppTemplateDefinition] = {
 • *المسمى الوظيفي:* {{ position_title }}
 • *الرقم المرجعي:* {{ reference_number }}
 • *آخر موعد للرد:* {{ expiry_date }}
+
+🔗 {{ response_link }}
 
 ━━━━━━━━━━━━
 
@@ -98,6 +122,8 @@ _FFI HR · الموارد البشرية_""",
 • *الدور:* {{ role_ar }}
 • *الدعوة من:* {{ inviter_name }}
 • *صالحة لمدة:* {{ expires_in_hours }} ساعة
+
+🔗 {{ invite_link }}
 
 ━━━━━━━━━━━━
 
@@ -213,11 +239,14 @@ _FFI HR · الموارد البشرية_""",
         },
         default_body="""📝 *طلب بانتظار مراجعتك*
 
-مرحباً {{ approver_name }}،
-{{ request_type_ar }} من {{ requester_name }} بانتظار إجراء منك.
+مرحباً {{ approver_name_ar }}،
+{{ request_type_ar }} من {{ requester_name_ar }} بانتظار إجراء منك.
 
 • *رقم الطلب:* {{ request_id }}
 • *الحالة:* {{ status_label_ar }}
+{{ details_ar }}
+
+🔗 {{ action_url }}
 
 ━━━━━━━━━━━━
 
@@ -264,11 +293,14 @@ _FFI HR · الموارد البشرية_""",
         },
         default_body="""{{ status_icon }} *تحديث حالة {{ request_type_ar }}*
 
-مرحباً {{ employee_name }}،
+مرحباً {{ employee_name_ar }}،
 أصبحت حالة طلبك: *{{ status_label_ar }}*
 
 • *رقم الطلب:* {{ request_id }}
 • *السبب:* {{ reason }}
+{{ details_ar }}
+
+🔗 {{ action_url }}
 
 ━━━━━━━━━━━━
 
@@ -298,13 +330,15 @@ _FFI HR · الموارد البشرية_""",
         },
         default_body="""📝 *طلب إجازة بانتظار موافقتك*
 
-مرحباً {{ manager_name }}،
-وصلك طلب إجازة من {{ employee_name }} ويحتاج إلى مراجعتك.
+مرحباً {{ manager_name_ar }}،
+وصلك طلب إجازة من {{ employee_name_ar }} ويحتاج إلى مراجعتك.
 
-• *نوع الإجازة:* {{ leave_type }}
+• *نوع الإجازة:* {{ leave_type_ar }}
 • *من:* {{ start_date }}
 • *إلى:* {{ end_date }}
 • *عدد الأيام:* {{ total_days }}
+
+🔗 {{ action_url }}
 
 ━━━━━━━━━━━━
 
@@ -334,13 +368,15 @@ _FFI HR · الموارد البشرية_""",
         },
         default_body="""📨 *تم استلام طلب إجازتك*
 
-مرحباً {{ employee_name }}،
+مرحباً {{ employee_name_ar }}،
 استلمنا طلب إجازتك وأُرسل للمراجعة، وسنبلغك فور اتخاذ القرار.
 
-• *نوع الإجازة:* {{ leave_type }}
+• *نوع الإجازة:* {{ leave_type_ar }}
 • *من:* {{ start_date }}
 • *إلى:* {{ end_date }}
 • *عدد الأيام:* {{ total_days }}
+
+🔗 {{ action_url }}
 
 ━━━━━━━━━━━━
 
@@ -366,13 +402,15 @@ _FFI HR · الموارد البشرية_""",
         sample_variables={"employee_name": "Sara", **_LEAVE_SAMPLE, "action_url": ""},
         default_body="""✅ *تمت الموافقة على إجازتك*
 
-مرحباً {{ employee_name }}،
+مرحباً {{ employee_name_ar }}،
 يسعدنا إبلاغك بأنه تمت الموافقة على طلب إجازتك.
 
-• *نوع الإجازة:* {{ leave_type }}
+• *نوع الإجازة:* {{ leave_type_ar }}
 • *من:* {{ start_date }}
 • *إلى:* {{ end_date }}
 • *عدد الأيام:* {{ total_days }}
+
+🔗 {{ action_url }}
 
 ━━━━━━━━━━━━
 
@@ -405,13 +443,15 @@ _FFI HR · الموارد البشرية_""",
         },
         default_body="""❌ *لم تتم الموافقة على إجازتك*
 
-مرحباً {{ employee_name }}،
+مرحباً {{ employee_name_ar }}،
 نأسف لإبلاغك بأنه تم رفض طلب إجازتك. للاستفسار يُرجى التواصل مع مديرك أو الموارد البشرية.
 
-• *نوع الإجازة:* {{ leave_type }}
+• *نوع الإجازة:* {{ leave_type_ar }}
 • *من:* {{ start_date }}
 • *إلى:* {{ end_date }}
-• *السبب:* {{ rejection_reason }}
+• *السبب:* {{ rejection_reason_ar }}
+
+🔗 {{ action_url }}
 
 ━━━━━━━━━━━━
 
@@ -443,19 +483,21 @@ _FFI HR · الموارد البشرية_""",
             "action_url",
         ),
         sample_variables={"delegate_name": "Ahmed", "employee_name": "Sara", **_LEAVE_SAMPLE, "action_url": ""},
-        default_body="""🤝 *تم تعيينك مفوّضاً*
+        default_body="""🤝 *تم تعيينك موظفاً بديلاً*
 
-مرحباً {{ delegate_name }}،
-تم تعيينك مفوّضاً عن {{ employee_name }} خلال فترة الإجازة.
+مرحباً {{ delegate_name_ar }}،
+تم تعيينك موظفاً بديلاً عن {{ employee_name_ar }} خلال فترة الإجازة.
 
-• *نوع الإجازة:* {{ leave_type }}
+• *نوع الإجازة:* {{ leave_type_ar }}
 • *من:* {{ start_date }}
 • *إلى:* {{ end_date }}
 • *عدد الأيام:* {{ total_days }}
 
+🔗 {{ action_url }}
+
 ━━━━━━━━━━━━
 
-🤝 *You've been assigned as a delegate*
+🤝 *You've been assigned as an alternative employee*
 
 Hi {{ delegate_name }},
 You'll be covering for {{ employee_name }} during their leave.
@@ -482,11 +524,13 @@ _FFI HR · الموارد البشرية_""",
         },
         default_body="""⏰ *تذكير بتجديد مستند*
 
-مرحباً {{ employee_name }}،
+مرحباً {{ employee_name_ar }}،
 يقترب موعد انتهاء أحد مستنداتك، يُرجى تجديده في أقرب وقت.
 
-• *المستند:* {{ document_type }}
+• *المستند:* {{ document_type_ar }}
 • *تاريخ الانتهاء:* {{ expiry_date }}
+
+🔗 {{ action_url }}
 
 ━━━━━━━━━━━━
 
@@ -522,6 +566,8 @@ _FFI HR · الموارد البشرية_""",
 
 • *الرقم الوظيفي:* {{ employee_id }}
 • *تاريخ الانتهاء:* {{ expiry_date }}
+
+🔗 {{ action_url }}
 
 ━━━━━━━━━━━━
 
@@ -568,6 +614,8 @@ _FFI HR · الموارد البشرية_""",
 • *تاريخ المباشرة:* {{ start_date }}
 • *الرقم المرجعي:* {{ reference_number }}
 
+🔗 {{ action_url }}
+
 ━━━━━━━━━━━━
 
 🧾 *Starting work acknowledgment to verify*
@@ -611,15 +659,17 @@ _FFI HR · الموارد البشرية_""",
         },
         default_body="""⚠️ *إنذار التأخر في الحضور*
 
-مرحباً {{ employee_name }}،
+مرحباً {{ employee_name_ar }}،
 صدر لك إنذار تأخر في الحضور. نسختك الخاصة من الإنذار بصيغة PDF مرفقة بهذه الرسالة.
-لديك عذر عن التأخر؟ أرسل طلب صلاحية تأخر من الرابط أدناه وأرفق ما يثبته.
+لديك عذر عن التأخر؟ أرسل طلب إذن تأخير من الرابط أدناه وأرفق ما يثبته.
 
 • *نوع الإنذار:* {{ notice_level_ar }}
 • *تاريخ المخالفة:* {{ violation_date }}
 • *رقم التكرار:* {{ occurrence_number }}
 • *الرقم المرجعي:* {{ reference_number }}
 • *نتيجة السياسة:* {{ policy_result_ar }}
+
+🔗 {{ action_url }}
 
 ━━━━━━━━━━━━
 
@@ -674,6 +724,7 @@ TEMPLATE_ALIASES: dict[str, str] = {
 
 def list_template_definitions() -> list[WhatsAppTemplateDefinition]:
     ordered_keys = [
+        "password_reset_otp",
         "job_offer",
         "employee_invitation",
         "announcement_notification_v2",
@@ -725,15 +776,96 @@ def status_icon(status: Any) -> str:
     return "🔔"
 
 
+#: "Label: value" lines that workflows pass as ``details`` (always English) -> Arabic label.
+_DETAIL_LABELS_AR: dict[str, str] = {
+    "asset": "الأصل",
+    "employee": "الموظف",
+    "leave type": "نوع الإجازة",
+    "requested amount": "المبلغ المطلوب",
+    "approved amount": "المبلغ المعتمد",
+    "payment amount": "مبلغ الصرف",
+    "loan type": "نوع السلفة",
+    "eligible days": "الأيام المستحقة",
+    "leave-only days (not payable)": "أيام الإجازة فقط (غير قابلة للصرف)",
+    "leave-only days (paid out on termination)": "أيام الإجازة فقط (تُصرف عند إنهاء الخدمة)",
+    "status": "الحالة",
+    "current status": "الحالة الحالية",
+    "reason": "السبب",
+    "reference": "الرقم المرجعي",
+    "visa pdf": "وثيقة التأشيرة",
+    "requested changes": "التعديلات المطلوبة",
+    "permission type": "نوع الإذن",
+    "exit type": "نوع الخروج",
+    "employee preference": "تفضيل الموظف",
+    "manager recommendation": "توصية المدير",
+    "hr recommendation": "توصية الموارد البشرية",
+    "manual note": "ملاحظة يدوية",
+    "date": "التاريخ",
+    "time": "الوقت",
+    "from": "من",
+    "to": "إلى",
+}
+_DETAIL_VALUES_AR: dict[str, str] = {"required": "مطلوبة", "not required": "غير مطلوبة"}
+
+
+def localize_detail_ar(item: Any) -> str:
+    """Arabic rendering of one English ``details`` line; unknown wording is kept as written."""
+    from in_app_notifications.i18n import leave_type_label
+
+    text = str(item or "").strip()
+    label, sep, value = text.partition(": ")
+    label_ar = _DETAIL_LABELS_AR.get(label.strip().lower()) if sep else None
+    body = value if label_ar else leave_type_label(text)["ar"]
+    key = body.strip().lower()
+    if label_ar and label.strip().lower() == "visa pdf" and key in _DETAIL_VALUES_AR:
+        body = _DETAIL_VALUES_AR[key]
+    else:
+        body = leave_type_label(body)["ar"] if sep and label.strip().lower() == "leave type" else body
+    body = re.sub(r"(\d{4}-\d{2}-\d{2}) to (\d{4}-\d{2}-\d{2})", r"\1 إلى \2", body)
+    return f"{label_ar}: {body}" if label_ar else body
+
+
+_PERSON_NAME_VARIABLES = (
+    "employee_name",
+    "manager_name",
+    "delegate_name",
+    "approver_name",
+    "requester_name",
+    "recipient_name",
+)
+
+
 def prepare_template_variables(variables: dict[str, Any] | None) -> dict[str, Any]:
     """Derive Arabic labels and display helpers that older payloads never carried."""
-    from in_app_notifications.i18n import role_label, with_arabic_request_labels
+    from in_app_notifications.i18n import (
+        _LEGACY_LITERALS,
+        document_label,
+        leave_type_label,
+        role_label,
+        with_arabic_request_labels,
+    )
 
     prepared = with_arabic_request_labels(variables or {})
     if prepared.get("role") and not prepared.get("role_ar"):
         prepared["role_ar"] = role_label(prepared["role"])["ar"]
-    if prepared.get("employee_name") and not prepared.get("employee_name_ar"):
-        prepared["employee_name_ar"] = prepared["employee_name"]
+    # The Arabic block uses the Arabic name when the caller has one, otherwise the same name.
+    for name in _PERSON_NAME_VARIABLES:
+        if prepared.get(name) and not prepared.get(f"{name}_ar"):
+            prepared[f"{name}_ar"] = prepared[name]
+    if prepared.get("leave_type") and not prepared.get("leave_type_ar"):
+        prepared["leave_type_ar"] = leave_type_label(prepared["leave_type"])["ar"]
+    if prepared.get("document_type") and not prepared.get("document_type_ar"):
+        prepared["document_type_ar"] = document_label(prepared["document_type"], prepared["document_type"])["ar"]
+    details = prepared.get("details")
+    if details and not prepared.get("details_ar"):
+        prepared["details_ar"] = (
+            [localize_detail_ar(item) for item in details]
+            if isinstance(details, (list, tuple))
+            else localize_detail_ar(details)
+        )
+    reason = str(prepared.get("rejection_reason") or "").strip()
+    if reason and not prepared.get("rejection_reason_ar"):
+        prepared["rejection_reason_ar"] = _LEGACY_LITERALS.get(reason, (reason, reason))[1]
     if "status_label" in prepared and not prepared.get("status_icon"):
         prepared["status_icon"] = status_icon(prepared.get("status_label"))
     return prepared
@@ -745,7 +877,7 @@ def _format_value(name: str, value: Any) -> str:
         return "\n".join(f"• {item.lstrip('-• ').strip()}" for item in items if item)
     text = "" if value is None else str(value).strip()
     # Callers historically passed "there" when a name was unknown.
-    if name.endswith("_name") and text.lower() == "there":
+    if name.endswith(("_name", "_name_ar")) and text.lower() == "there":
         return ""
     if name.endswith(("_url", "_link")):
         return absolute_app_url(text)

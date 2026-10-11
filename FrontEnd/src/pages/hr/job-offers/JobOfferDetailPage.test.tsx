@@ -20,6 +20,11 @@ vi.mock("../../../services/api/jobOffersApi", () => ({
   submitJobOffer: vi.fn(),
   downloadJobOfferCv: vi.fn(),
   downloadJobOfferPdf: vi.fn(),
+  getJobOfferWorkpaperBlob: vi.fn(),
+}));
+
+vi.mock("../../../components/documents/DocumentIntegrityPanel", async () => ({
+  default: (await import("../../../test/integrityPanelStub")).default,
 }));
 
 vi.mock("../../../services/api/downloads", () => ({
@@ -54,6 +59,8 @@ const sendJobOffer = jobOffersApi.sendJobOffer as unknown as ReturnType<
 >;
 const downloadJobOfferPdf =
   jobOffersApi.downloadJobOfferPdf as unknown as ReturnType<typeof vi.fn>;
+const getJobOfferWorkpaperBlob =
+  jobOffersApi.getJobOfferWorkpaperBlob as unknown as ReturnType<typeof vi.fn>;
 const submitJobOffer = jobOffersApi.submitJobOffer as unknown as ReturnType<
   typeof vi.fn
 >;
@@ -117,6 +124,7 @@ beforeEach(() => {
   getJobOffer.mockReset();
   sendJobOffer.mockReset();
   downloadJobOfferPdf.mockReset();
+  getJobOfferWorkpaperBlob.mockReset();
   submitJobOffer.mockReset();
   downloadJobOfferCv.mockReset();
   triggerBlobDownload.mockReset();
@@ -212,7 +220,7 @@ describe("JobOfferDetailPage", () => {
   it("previews the offer PDF in-app instead of a new tab or a download", async () => {
     getJobOffer.mockResolvedValue({ status: "success", data: draftOffer });
     const blob = new Blob(["pdf"], { type: "application/pdf" });
-    downloadJobOfferPdf.mockResolvedValue(blob);
+    getJobOfferWorkpaperBlob.mockResolvedValue(blob);
 
     render(<JobOfferDetailPage />);
 
@@ -223,7 +231,11 @@ describe("JobOfferDetailPage", () => {
 
     const dialog = await screen.findByRole("dialog");
     expect(within(dialog).getByText("Preview PDF")).toBeInTheDocument();
-    await waitFor(() => expect(downloadJobOfferPdf).toHaveBeenCalledWith("11"));
+    // HR previews the work paper; only Download serves the original.
+    await waitFor(() =>
+      expect(getJobOfferWorkpaperBlob).toHaveBeenCalledWith("11"),
+    );
+    expect(downloadJobOfferPdf).not.toHaveBeenCalled();
     expect(window.open).not.toHaveBeenCalled();
     // A preview must never fall through to a file download.
     expect(triggerBlobDownload).not.toHaveBeenCalled();
@@ -897,5 +909,77 @@ describe("JobOfferDetailPage workflow history and CV", () => {
       await screen.findByText("Only unsent job offers can be submitted."),
     ).toBeInTheDocument();
     await waitFor(() => expect(getJobOffer).toHaveBeenCalled());
+  });
+});
+
+describe("JobOfferDetailPage document integrity", () => {
+  it("is not final for a draft", async () => {
+    getJobOffer.mockResolvedValue({ status: "success", data: draftOffer });
+    render(<JobOfferDetailPage />);
+    const panel = await screen.findByTestId("integrity-panel");
+    expect(panel).toHaveAttribute("data-type", "job_offer");
+    expect(panel).toHaveAttribute("data-final", "false");
+  });
+
+  it("is final for HR once sent, with seal retry and profile links", async () => {
+    getJobOffer.mockResolvedValue({
+      status: "success",
+      data: sentOfferWithWarning,
+    });
+    render(<JobOfferDetailPage />);
+    const panel = await screen.findByTestId("integrity-panel");
+    expect(panel).toHaveAttribute("data-final", "true");
+    expect(panel).toHaveAttribute("data-retry", "true");
+    expect(panel).toHaveAttribute("data-profile", "/hr/employees/9");
+  });
+
+  it("stays final after the candidate answers (version 2)", async () => {
+    getJobOffer.mockResolvedValue({
+      status: "success",
+      data: makeJobOffer({
+        ...sentOfferWithWarning,
+        status: "accepted",
+        accepted_at: "2026-08-03T09:00:00Z",
+      }),
+    });
+    render(<JobOfferDetailPage />);
+    expect(await screen.findByTestId("integrity-panel")).toHaveAttribute(
+      "data-final",
+      "true",
+    );
+  });
+
+  it("is not final for a draft that was cancelled before sending", async () => {
+    getJobOffer.mockResolvedValue({
+      status: "success",
+      data: makeJobOffer({ status: "cancelled", sent_at: null }),
+    });
+    render(<JobOfferDetailPage />);
+    expect(await screen.findByTestId("integrity-panel")).toHaveAttribute(
+      "data-final",
+      "false",
+    );
+  });
+
+  it("explains a blocked (409) PDF download", async () => {
+    getJobOffer.mockResolvedValue({
+      status: "success",
+      data: sentOfferWithWarning,
+    });
+    downloadJobOfferPdf.mockRejectedValue({
+      response: { status: 409, data: new Blob(["{}"]) },
+      message: "Request failed with status code 409",
+    });
+    render(<JobOfferDetailPage />);
+    fireEvent.click(await screen.findByRole("button", { name: /^Download$/i }));
+    fireEvent.click(
+      await screen.findByRole("menuitem", { name: /Download PDF/i }),
+    );
+    expect(
+      await screen.findByText(
+        "This approved document failed its integrity check, so it cannot be downloaded. Contact HR.",
+      ),
+    ).toBeInTheDocument();
+    expect(triggerBlobDownload).not.toHaveBeenCalled();
   });
 });

@@ -17,6 +17,7 @@ from core.services.messaging_providers import EvolutionWhatsAppProvider, is_e164
 from core.services.whatsapp_service import WhatsAppService
 from core.services.whatsapp_template_library import render_generic_notification
 
+from .executive_policy import HELD_FOR_DIGEST, should_hold_whatsapp
 from .i18n import render as render_i18n
 from .models import Notification, NotificationDelivery
 from .services import _broadcast_created, create_notification, link_company_id, with_company_param
@@ -359,7 +360,18 @@ def dispatch_notification_channels(
             ).first()
             if created:
                 transaction.on_commit(lambda notification_id=notification.id: _broadcast_created(notification_id))
-            if (created or redeliver_existing) and whatsapp_delivery.status != NotificationDelivery.Status.SENT:
+            held = (
+                created
+                and whatsapp_delivery.status == NotificationDelivery.Status.PENDING
+                and should_hold_whatsapp(recipient, event_key=event_key, metadata=metadata)
+            )
+            if held:
+                # Executive reminders and quiet-hours items stay in the bell; the daily digest reports them.
+                whatsapp_delivery.status = NotificationDelivery.Status.SKIPPED
+                whatsapp_delivery.provider = "evolution_whatsapp"
+                whatsapp_delivery.error_message = HELD_FOR_DIGEST
+                whatsapp_delivery.save(update_fields=["status", "provider", "error_message", "updated_at"])
+            elif (created or redeliver_existing) and whatsapp_delivery.status != NotificationDelivery.Status.SENT:
                 transaction.on_commit(
                     lambda notification_id=notification.id, payload=task_payload: _queue_whatsapp(
                         notification_id, payload

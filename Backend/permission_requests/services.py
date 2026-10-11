@@ -32,6 +32,7 @@ from core.services import (
     notify_users_for_pending_status,
 )
 from core.services.request_references import next_reference_for_profile
+from core.services.stage_coverage import manager_covers_hr, record_covered_stage
 from core.services.workflow_engine import begin_recorded_transition, record_workflow_transition
 from employees.models import EmployeeProfile
 from employees.services.manager_relationships import (
@@ -40,6 +41,7 @@ from employees.services.manager_relationships import (
     manager_approval_actor_source,
 )
 
+from .document_integrity import on_permission_stage_approved
 from .labels import EXIT_TYPE_LABELS, STATUS_LABELS
 from .models import ACTIVE_STATUSES, PENDING_STATUSES, PermissionRequest, PermissionRequestAttachment
 from .permissions import is_base_hr_approver, is_hr_approver_user
@@ -125,10 +127,13 @@ def resolve_initial_status(user, profile: EmployeeProfile):
     raise PermissionRequestError(NO_APPROVER_MESSAGE)
 
 
-def status_after_manager_approval(instance: PermissionRequest) -> str:
-    """An HR approver cannot approve their own request, so their HR stage is skipped."""
+def status_after_manager_approval(instance: PermissionRequest, *, hr_covered: bool = False) -> str:
+    """An HR approver cannot approve their own request, so their HR stage is skipped.
 
-    if is_base_hr_approver(instance.employee):
+    ``hr_covered``: the employee's manager is an HR manager, so their approval is the HR review too.
+    """
+
+    if hr_covered or is_base_hr_approver(instance.employee):
         return Status.APPROVED
     return Status.PENDING_HR
 
@@ -299,6 +304,7 @@ def submit_permission_request(*, user, profile: EmployeeProfile, data: dict):
                 record_workflow_transition(
                     instance, start, action=WorkflowAction.Action.SUBMIT, actor=user, approver_role=""
                 )
+                on_permission_stage_approved(instance, role="employee", actor=user, at=instance.created_at)
             return instance, manager_user
         except IntegrityError:
             # Retry transient uniqueness conflicts while issuing a reference.
@@ -401,20 +407,31 @@ def apply_manager_decision(instance: PermissionRequest, *, actor, decision: str,
         locked.manager_decision_by = actor
         locked.manager_decision_at = timezone.now()
         locked.manager_decision_note = note
-        next_status = Status.REJECTED if decision == Decision.REJECTED else status_after_manager_approval(locked)
+        hr_covered = decision != Decision.REJECTED and manager_covers_hr(actor, actor_source)
+        next_status = (
+            Status.REJECTED
+            if decision == Decision.REJECTED
+            else status_after_manager_approval(locked, hr_covered=hr_covered)
+        )
         if next_status == Status.APPROVED:
             _assert_final_approval_allowed(locked)
         locked.status = next_status
-        locked.save(
-            update_fields=[
-                "status",
-                "manager_decision",
-                "manager_decision_by",
-                "manager_decision_at",
-                "manager_decision_note",
-                "updated_at",
-            ]
-        )
+        # An HR approver's own request has no HR stage to record.
+        hr_covered = hr_covered and not is_base_hr_approver(locked.employee)
+        update_fields = [
+            "status",
+            "manager_decision",
+            "manager_decision_by",
+            "manager_decision_at",
+            "manager_decision_note",
+            "updated_at",
+        ]
+        if hr_covered:
+            locked.hr_decision = Decision.APPROVED
+            locked.hr_decision_by = actor
+            locked.hr_decision_at = locked.manager_decision_at
+            update_fields += ["hr_decision", "hr_decision_by", "hr_decision_at"]
+        locked.save(update_fields=update_fields)
         record_workflow_transition(
             locked,
             start,
@@ -424,6 +441,18 @@ def apply_manager_decision(instance: PermissionRequest, *, actor, decision: str,
             approver_role="manager",
             metadata={"decision": decision, "actor_source": actor_source},
         )
+        if hr_covered:
+            record_covered_stage(
+                locked, start, "hr", actor=actor, source=actor_source, metadata={"decision": Decision.APPROVED}
+            )
+        if decision != Decision.REJECTED:
+            # Approved here (no HR stage, or the manager covered it): the PDF is frozen
+            # after commit, once, and a freeze failure never undoes the approval.
+            on_permission_stage_approved(
+                locked, role="line_manager", actor=actor, at=locked.manager_decision_at, finalize=not hr_covered
+            )
+            if hr_covered:
+                on_permission_stage_approved(locked, role="hr", actor=actor, at=locked.hr_decision_at)
         if locked.status == Status.APPROVED:
             _upsert_attendance_adjustment(locked, actor=actor)
             schedule_attendance_recalculation(locked)
@@ -470,6 +499,7 @@ def apply_hr_decision(instance: PermissionRequest, *, actor, decision: str, note
             metadata={"decision": decision},
         )
         if locked.status == Status.APPROVED:
+            on_permission_stage_approved(locked, role="hr", actor=actor, at=locked.hr_decision_at)
             _upsert_attendance_adjustment(locked, actor=actor)
             schedule_attendance_recalculation(locked)
     return Transition(locked, from_status)

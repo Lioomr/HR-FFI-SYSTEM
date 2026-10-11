@@ -67,6 +67,7 @@ class TravelHRCompletionTestBase(APITestCase):
         self.ceo_user = self._employee("travel-ceo@example.com", "EMP-TRV-CEO", group=ceo_group)
         self.non_saudi_user = self._employee("travel-non-saudi@example.com", "EMP-TRV-001")
         self.saudi_user = self._employee("travel-saudi@example.com", "EMP-TRV-002", is_saudi=True)
+        self.alternative_user = self._employee("travel-alternative@example.com", "EMP-TRV-ALT")
 
     def _leave_type(self, code, name):
         leave_type, _ = LeaveType.objects.get_or_create(
@@ -234,6 +235,17 @@ class CEOApprovalRoutingTests(TravelHRCompletionTestBase):
 
 
 class WillTravelFieldTests(TravelHRCompletionTestBase):
+    def _travel_details(self, start):
+        return {
+            "date_of_rejoin": str(start + timedelta(days=2)),
+            "po_box": "12345",
+            "full_address": "123 Main Street, Riyadh",
+            "airplane_ticket_payer": "employee",
+            "airplane_ticket_address": "Riyadh airport",
+            "delegated_to": self.alternative_user.id,
+            "delegation_note": "Cover my duties while I travel.",
+        }
+
     def _submit(self, payload, request_format, offset_days):
         start = timezone.localdate() + timedelta(days=offset_days)
         data = {
@@ -241,6 +253,7 @@ class WillTravelFieldTests(TravelHRCompletionTestBase):
             "start_date": str(start),
             "end_date": str(start + timedelta(days=1)),
             "reason": "Vacation",
+            **(self._travel_details(start) if payload.get("will_travel") in (True, "true", "1") else {}),
             **payload,
         }
         self.client.force_authenticate(user=self.non_saudi_user)
@@ -254,6 +267,8 @@ class WillTravelFieldTests(TravelHRCompletionTestBase):
                 data = self._submit({}, request_format, offset_days)
 
                 self.assertIs(data["will_travel"], False)
+                self.assertIsNone(data["will_require_visa"])
+                self.assertIs(data["visa_upload_required"], False)
                 self.assertIs(data["requires_hr_completion_visa"], False)
                 self.assertIn("current_stage", data["workflow"])
                 self.assertIs(LeaveRequest.objects.get(pk=data["id"]).will_travel, False)
@@ -265,22 +280,148 @@ class WillTravelFieldTests(TravelHRCompletionTestBase):
     def test_multipart_create_accepts_will_travel(self):
         for offset_days, raw_value, expected in ((20, "true", True), (30, "false", False)):
             with self.subTest(will_travel=raw_value):
-                data = self._submit({"will_travel": raw_value}, "multipart", offset_days)
+                payload = {"will_travel": raw_value}
+                if expected:
+                    payload["will_require_visa"] = "false"
+                data = self._submit(payload, "multipart", offset_days)
 
                 self.assertIs(data["will_travel"], expected)
+                if not expected:
+                    self.assertIsNone(data["will_require_visa"])
                 self.assertIs(data["requires_hr_completion_visa"], expected)
+                self.assertIs(data["visa_upload_required"], False)
                 self.assertIs(LeaveRequest.objects.get(pk=data["id"]).will_travel, expected)
+
+    def test_non_saudi_traveller_must_answer_visa_question(self):
+        start = timezone.localdate() + timedelta(days=35)
+        payload = {
+            "leave_type": self.annual_type.id,
+            "start_date": str(start),
+            "end_date": str(start + timedelta(days=1)),
+            "reason": "Vacation",
+            "will_travel": True,
+            **self._travel_details(start),
+        }
+        self.client.force_authenticate(user=self.non_saudi_user)
+
+        for request_format in ("json", "multipart"):
+            with self.subTest(format=request_format):
+                response = self.client.post(REQUESTS_URL, payload, format=request_format)
+
+                self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
+                self.assertIn("will_require_visa", str(response.data))
+
+    def test_non_saudi_traveller_can_answer_yes_or_no(self):
+        for offset_days, answer in ((40, True), (50, False)):
+            with self.subTest(will_require_visa=answer):
+                data = self._submit({"will_travel": True, "will_require_visa": answer}, "json", offset_days)
+
+                self.assertIs(data["will_require_visa"], answer)
+                self.assertIs(data["visa_upload_required"], answer)
+                self.assertIs(data["requires_hr_completion_visa"], True)
+                self.assertEqual(data["delegated_to"]["id"], self.alternative_user.id)
+
+    def test_saudi_travel_submission_accepts_details_without_visa_answer(self):
+        start = timezone.localdate() + timedelta(days=54)
+        self.client.force_authenticate(user=self.saudi_user)
+
+        response = self.client.post(
+            REQUESTS_URL,
+            {
+                "leave_type": self.annual_type.id,
+                "start_date": str(start),
+                "end_date": str(start + timedelta(days=1)),
+                "reason": "Vacation",
+                "will_travel": True,
+                **self._travel_details(start),
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        self.assertIsNone(response.data["data"]["will_require_visa"])
+        self.assertIs(response.data["data"]["visa_upload_required"], False)
+
+    def test_travel_submission_requires_all_seven_travel_details(self):
+        start = timezone.localdate() + timedelta(days=55)
+        self.client.force_authenticate(user=self.non_saudi_user)
+
+        response = self.client.post(
+            REQUESTS_URL,
+            {
+                "leave_type": self.annual_type.id,
+                "start_date": str(start),
+                "end_date": str(start + timedelta(days=1)),
+                "reason": "Vacation",
+                "will_travel": True,
+                "will_require_visa": False,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
+        for field in self._travel_details(start):
+            self.assertIn(field, str(response.data))
+
+    def test_travel_submission_rejects_blank_text_details(self):
+        start = timezone.localdate() + timedelta(days=56)
+        details = self._travel_details(start)
+        details.update(po_box="  ", full_address="  ", delegation_note="  ")
+        self.client.force_authenticate(user=self.non_saudi_user)
+
+        response = self.client.post(
+            REQUESTS_URL,
+            {
+                "leave_type": self.annual_type.id,
+                "start_date": str(start),
+                "end_date": str(start + timedelta(days=1)),
+                "reason": "Vacation",
+                "will_travel": True,
+                "will_require_visa": False,
+                **details,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
+        for field in ("po_box", "full_address", "delegation_note"):
+            self.assertIn(field, str(response.data))
+
+    def test_visa_answer_is_rejected_when_travel_is_no_or_employee_is_saudi(self):
+        for user, will_travel in ((self.non_saudi_user, False), (self.saudi_user, True)):
+            for request_format in ("json", "multipart"):
+                with self.subTest(employee=user.email, format=request_format):
+                    start = timezone.localdate() + timedelta(days=60)
+                    self.client.force_authenticate(user=user)
+                    response = self.client.post(
+                        REQUESTS_URL,
+                        {
+                            "leave_type": self.annual_type.id,
+                            "start_date": str(start),
+                            "end_date": str(start + timedelta(days=1)),
+                            "reason": "Vacation",
+                            "will_travel": will_travel,
+                            "will_require_visa": False,
+                            **(self._travel_details(start) if will_travel else {}),
+                        },
+                        format=request_format,
+                    )
+
+                    self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
+                    self.assertIn("will_require_visa", str(response.data))
 
     def test_serializers_expose_will_travel(self):
         self.assertTrue(LeaveRequestSerializer().fields["will_travel"].read_only)
+        self.assertTrue(LeaveRequestSerializer().fields["will_require_visa"].read_only)
         self.assertIn("will_travel", LeaveRequestCreateSerializer.Meta.fields)
+        self.assertIn("will_require_visa", LeaveRequestCreateSerializer.Meta.fields)
         self.assertFalse(HRManualLeaveRequestSerializer(context={}).fields["will_travel"].read_only)
 
 
 class HRCompletionVisaTests(TravelHRCompletionTestBase):
     def test_rejects_non_saudi_travel_request_without_visa(self):
         request_obj = self._leave_request(
-            self.non_saudi_user, request_status=Status.PENDING_HR_COMPLETION, will_travel=True
+            self.non_saudi_user, request_status=Status.PENDING_HR_COMPLETION, will_travel=True, will_require_visa=True
         )
 
         response = self._complete(request_obj, {"comment": "Done"})
@@ -293,7 +434,7 @@ class HRCompletionVisaTests(TravelHRCompletionTestBase):
 
     def test_rejects_non_pdf_visa(self):
         request_obj = self._leave_request(
-            self.non_saudi_user, request_status=Status.PENDING_HR_COMPLETION, will_travel=True
+            self.non_saudi_user, request_status=Status.PENDING_HR_COMPLETION, will_travel=True, will_require_visa=True
         )
         upload = SimpleUploadedFile("visa.png", b"\x89PNG\r\n", content_type="image/png")
 
@@ -305,7 +446,7 @@ class HRCompletionVisaTests(TravelHRCompletionTestBase):
         self.assertFalse(EmployeeDocument.objects.filter(leave_request=request_obj).exists())
 
     def test_accepts_visa_pdf_and_approves_travel_request(self):
-        request_obj = self._leave_request(self.non_saudi_user, will_travel=True)
+        request_obj = self._leave_request(self.non_saudi_user, will_travel=True, will_require_visa=True)
         self._ceo_approve(request_obj)
         self.assertEqual(request_obj.status, Status.PENDING_HR_COMPLETION)
 
@@ -315,6 +456,7 @@ class HRCompletionVisaTests(TravelHRCompletionTestBase):
         data = response.data["data"]
         self.assertEqual(data["status"], Status.APPROVED)
         self.assertIs(data["requires_hr_completion_visa"], True)
+        self.assertIs(data["visa_upload_required"], True)
         self.assertEqual((data["workflow"]["status"], data["workflow"]["current_stage"]), ("approved", ""))
         transitions = [(entry["from_stage"], entry["to_stage"]) for entry in data["workflow"]["history"]]
         self.assertIn(("ceo", "hr_completion"), transitions)
@@ -338,6 +480,21 @@ class HRCompletionVisaTests(TravelHRCompletionTestBase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
         self.assertEqual(response.data["data"]["status"], Status.APPROVED)
+        self.assertFalse(EmployeeDocument.objects.filter(leave_request=request_obj).exists())
+
+    def test_existing_travel_request_completes_without_visa_answer_or_upload(self):
+        request_obj = self._leave_request(
+            self.non_saudi_user, request_status=Status.PENDING_HR_COMPLETION, will_travel=True
+        )
+
+        response = self._complete(request_obj, {"comment": "Reviewed"})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        data = response.data["data"]
+        self.assertEqual(data["status"], Status.APPROVED)
+        self.assertIsNone(data["will_require_visa"])
+        self.assertIs(data["requires_hr_completion_visa"], True)
+        self.assertIs(data["visa_upload_required"], False)
         self.assertFalse(EmployeeDocument.objects.filter(leave_request=request_obj).exists())
 
 

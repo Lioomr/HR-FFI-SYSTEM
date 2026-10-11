@@ -1,6 +1,7 @@
 import { api } from "./apiClient";
 import type { ApiResponse, PaginatedResponse } from "./apiTypes";
 import type { WorkflowSnapshot } from "../../types/workflow";
+import { STORAGE_KEYS } from "../../utils/storageKeys";
 
 /**
  * Employee "update my details" requests. One request carries several field
@@ -121,6 +122,78 @@ export const PROFILE_CHANGE_DATE_FIELDS: ProfileChangeField[] = [
 
 export const profileChangeFieldLabelKey = (field: string) =>
   `profileChange.field.${field}`;
+
+export const PROFILE_CHANGE_STATUS_COLORS: Record<ProfileChangeStatus, string> =
+  {
+    PENDING_HR: "orange",
+    APPROVED: "green",
+    PARTIALLY_APPROVED: "gold",
+    REJECTED: "red",
+    CANCELLED: "default",
+  };
+
+export const PROFILE_CHANGE_STATUS_KEYS: Record<ProfileChangeStatus, string> = {
+  PENDING_HR: "status.pendingHr",
+  APPROVED: "status.approved",
+  PARTIALLY_APPROVED: "status.partiallyApproved",
+  REJECTED: "status.rejected",
+  CANCELLED: "status.cancelled",
+};
+
+/** How long a decided request stays on the employee's profile page. */
+export const PROFILE_CHANGE_DECISION_WINDOW_DAYS = 7;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+export const isProfileChangeDecided = (status: ProfileChangeStatus) =>
+  status === "APPROVED" ||
+  status === "PARTIALLY_APPROVED" ||
+  status === "REJECTED";
+
+/**
+ * Whether the profile page should show this request's status: always while
+ * HR has to act, and for a short window after the decision unless dismissed.
+ */
+export function shouldShowProfileChangeStatus(
+  request: ProfileChangeRequest | undefined,
+  dismissedIds: readonly number[],
+  now: number = Date.now(),
+) {
+  if (!request) return false;
+  if (request.status === "PENDING_HR") return true;
+  if (!isProfileChangeDecided(request.status)) return false;
+  if (dismissedIds.includes(request.id)) return false;
+  const decidedAt = Date.parse(request.decided_at || request.submitted_at);
+  if (Number.isNaN(decidedAt)) return false;
+  return now - decidedAt <= PROFILE_CHANGE_DECISION_WINDOW_DAYS * DAY_MS;
+}
+
+// Dismissal is a per-browser convenience; storage can be blocked or full,
+// so every access is guarded and the page works without it.
+export function readDismissedProfileChangeIds(): number[] {
+  try {
+    const raw = window.localStorage.getItem(
+      STORAGE_KEYS.profileChangeDismissed,
+    );
+    const parsed: unknown = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed)
+      ? parsed.filter((id): id is number => Number.isInteger(id))
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+export function writeDismissedProfileChangeIds(ids: readonly number[]) {
+  try {
+    // Only recent ids matter; cap the list so it never grows unbounded.
+    window.localStorage.setItem(
+      STORAGE_KEYS.profileChangeDismissed,
+      JSON.stringify(ids.slice(-50)),
+    );
+  } catch {
+    // Dismissal then lasts for this visit only.
+  }
+}
 
 /** Extraction states after which polling stops. */
 const TERMINAL_EXTRACTION_STATUSES = [

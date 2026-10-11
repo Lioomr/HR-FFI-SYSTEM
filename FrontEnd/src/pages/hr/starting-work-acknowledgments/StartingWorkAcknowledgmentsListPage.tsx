@@ -331,7 +331,7 @@ export default function StartingWorkAcknowledgmentsListPage() {
   const isDefaultFilter = statusFilter === DEFAULT_STATUS_FILTER;
 
   return (
-    <div style={{ maxWidth: 1600, margin: "0 auto", paddingBottom: 24 }}>
+    <div style={{ width: "100%", minWidth: 0, paddingBottom: 24 }}>
       {messageContext}
       {modalContext}
 

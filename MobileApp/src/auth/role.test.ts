@@ -44,12 +44,6 @@ describe('role gates', () => {
   });
 
   it('grants approvals navigation to approver roles only', () => {
-    expect(ROLES.filter(hasAnyApprovalAccess)).toEqual([
-      'SystemAdmin',
-      'CFO',
-      'HRManager',
-      'Manager',
-      'CEO',
-    ]);
+    expect(ROLES.filter(hasAnyApprovalAccess)).toEqual(['SystemAdmin', 'CFO', 'HRManager', 'CEO']);
   });
 });

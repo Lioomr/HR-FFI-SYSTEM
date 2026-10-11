@@ -1,3 +1,4 @@
+import { shortEmployeeName } from "../../../utils/employeeName";
 import { useCallback, useEffect, useState } from "react";
 import type { CSSProperties } from "react";
 import { Link } from "react-router-dom";
@@ -528,7 +529,7 @@ export default function ProfileChangeRequestsPage() {
             to={`/hr/employees/${row.employee.id}`}
             style={{ color: "var(--brand-primary)", fontWeight: 500 }}
           >
-            {row.employee.full_name}
+            {shortEmployeeName(row.employee.full_name)}
           </Link>
           <div>
             <Text type="secondary" style={{ fontSize: 12 }}>
@@ -695,7 +696,7 @@ export default function ProfileChangeRequestsPage() {
         title={
           selected ? (
             <div style={WRAP}>
-              <div>{selected.employee.full_name}</div>
+              <div>{shortEmployeeName(selected.employee.full_name)}</div>
               <Space size={8} wrap style={{ marginTop: 2 }}>
                 <Text type="secondary" style={{ fontWeight: 400 }}>
                   {selected.reference_no || `#${selected.id}`}

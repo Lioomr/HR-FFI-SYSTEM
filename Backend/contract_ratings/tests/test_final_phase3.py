@@ -125,9 +125,18 @@ def test_failed_notification_is_persisted_and_retried(world, notifications):
 def test_stalled_pending_ceo_receives_periodic_nudge(world, notifications):
     pending_ceo(world)
     notifications.reset_mock()
-    now = timezone.now() + timedelta(hours=10)
-    process_contract_ratings(now=now)
-    process_contract_ratings(now=now + timedelta(hours=1))
+    start = timezone.now()
+    process_contract_ratings(now=start)
+    process_contract_ratings(now=start + timedelta(hours=10))
+    assert calls_for(notifications, "ceo_reminder") == []  # first nudge waits a full day
+
+    process_contract_ratings(now=start + timedelta(hours=25))
+    process_contract_ratings(now=start + timedelta(hours=26))
     reminders = calls_for(notifications, "ceo_reminder")
     assert {call["recipient"].pk for call in reminders} == {world.ceo.pk, world.admin.pk}
     assert len(reminders) == 2
+
+    process_contract_ratings(now=start + timedelta(hours=51))
+    process_contract_ratings(now=start + timedelta(hours=80))
+    process_contract_ratings(now=start + timedelta(hours=200))
+    assert len(calls_for(notifications, "ceo_reminder")) == 4  # two reminders x two approvers, then capped

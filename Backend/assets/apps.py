@@ -7,3 +7,6 @@ class AssetsConfig(AppConfig):
 
     def ready(self):
         from . import signals  # noqa: F401
+        from .document_integrity import register
+
+        register()

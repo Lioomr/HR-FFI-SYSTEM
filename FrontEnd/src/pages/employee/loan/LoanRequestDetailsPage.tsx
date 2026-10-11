@@ -1,14 +1,7 @@
 import BackButton from "../../../components/ui/BackButton";
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { Card, Descriptions, Tag, Typography, notification } from "antd";
-import {
-  FileTextOutlined,
-  CheckCircleFilled,
-  CloseCircleFilled,
-} from "@ant-design/icons";
-
-const { Text, Title } = Typography;
+import { Card, Descriptions, Tag, notification } from "antd";
 
 import PageHeader from "../../../components/ui/PageHeader";
 import { isApiError } from "../../../services/api/apiTypes";
@@ -21,9 +14,10 @@ import AmountWithSAR from "../../../components/ui/AmountWithSAR";
 import { useI18n } from "../../../i18n/useI18n";
 import LoanApprovalMap from "../../../components/loans/LoanApprovalMap";
 import LoanPdfDownloadButton from "../../../components/loan/LoanPdfDownloadButton";
-import ApprovalTimeline from "../../../components/requests/ApprovalTimeline";
+import DocumentIntegrityPanel from "../../../components/documents/DocumentIntegrityPanel";
+import { isDocumentFinal } from "../../../components/documents/documentTypes";
 import PendingActionBanner from "../../../components/requests/PendingActionBanner";
-import { formatDateTime, formatDateTimeShort } from "../../../utils/dateTime";
+import { formatDateTime } from "../../../utils/dateTime";
 
 function statusColor(status: LoanStatus) {
   switch (status) {
@@ -105,11 +99,6 @@ export default function EmployeeLoanRequestDetailsPage() {
       .join(" ");
   };
 
-  const getStageLabel = (stage: string) => {
-    const translated = t(`loans.history.stage.${stage}`);
-    if (translated !== `loans.history.stage.${stage}`) return translated;
-    return stage.replace(/_/g, " ");
-  };
   const getLoanTypeLabel = (loanType?: string) => {
     if (loanType === "installment")
       return t("loans.request.loanTypeInstallment");
@@ -217,180 +206,19 @@ export default function EmployeeLoanRequestDetailsPage() {
                 </Descriptions.Item>
               )}
             </Descriptions>
-
-            <div style={{ marginTop: 28, marginBottom: 12 }}>
-              <Title
-                level={5}
-                style={{
-                  fontFamily: "'Outfit', sans-serif",
-                  fontWeight: 700,
-                  letterSpacing: "-0.01em",
-                  margin: 0,
-                }}
-              >
-                {t("loans.details.historyTitle")}
-              </Title>
-            </div>
-
-            {item.workflow?.history?.length ? (
-              <ApprovalTimeline workflow={item.workflow} />
-            ) : (
-              <div style={{ position: "relative", paddingLeft: 4 }}>
-                {/* Vertical flow line */}
-                <div
-                  style={{
-                    position: "absolute",
-                    left: 15,
-                    top: 8,
-                    bottom: 12,
-                    width: 2,
-                    background:
-                      "linear-gradient(to bottom, #f97316 0%, #e2e8f0 25%)",
-                    opacity: 0.35,
-                    borderRadius: 2,
-                  }}
-                />
-
-                {(item.decision_history || []).map((entry, index) => {
-                  const isFirst = index === 0;
-                  const stageLower = entry.stage.toLowerCase();
-                  const noteLower = (entry.note || "").toLowerCase();
-
-                  let dotColor = "#94a3b8";
-                  let icon = <CheckCircleFilled style={{ fontSize: 12 }} />;
-
-                  if (stageLower.includes("submit")) {
-                    dotColor = "#3b82f6";
-                    icon = <FileTextOutlined style={{ fontSize: 12 }} />;
-                  } else if (stageLower.includes("deduct")) {
-                    dotColor = "#06b6d4";
-                    icon = <CheckCircleFilled style={{ fontSize: 12 }} />;
-                  } else if (
-                    stageLower.includes("reject") ||
-                    noteLower.includes("reject")
-                  ) {
-                    dotColor = "#ef4444";
-                    icon = <CloseCircleFilled style={{ fontSize: 12 }} />;
-                  } else if (
-                    stageLower.includes("approve") ||
-                    noteLower.includes("approv")
-                  ) {
-                    dotColor = "#10b981";
-                    icon = <CheckCircleFilled style={{ fontSize: 12 }} />;
-                  } else if (stageLower.includes("cancel")) {
-                    dotColor = "#6b7280";
-                    icon = <CloseCircleFilled style={{ fontSize: 12 }} />;
-                  }
-
-                  return (
-                    <div
-                      key={index}
-                      style={{
-                        display: "flex",
-                        gap: 14,
-                        marginBottom: 14,
-                        position: "relative",
-                        animation: `fadeInUp 0.4s ease-out ${index * 0.07}s both`,
-                      }}
-                    >
-                      <div
-                        style={{
-                          width: 24,
-                          height: 24,
-                          borderRadius: "50%",
-                          background: "#fff",
-                          border: `2px solid ${dotColor}`,
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          zIndex: 2,
-                          flexShrink: 0,
-                          marginTop: 2,
-                          boxShadow: isFirst ? `0 0 8px ${dotColor}30` : "none",
-                        }}
-                      >
-                        <div style={{ color: dotColor, lineHeight: 0 }}>
-                          {icon}
-                        </div>
-                      </div>
-
-                      <div
-                        className="glass"
-                        style={{
-                          flex: 1,
-                          padding: "8px 12px",
-                          borderRadius: 10,
-                          border: isFirst
-                            ? "1px solid rgba(249,115,22,0.15)"
-                            : "1px solid rgba(226,232,240,0.6)",
-                          boxShadow: "0 2px 6px rgba(0,0,0,0.02)",
-                          transition: "transform 0.15s ease",
-                          cursor: "default",
-                        }}
-                      >
-                        <div
-                          style={{
-                            display: "flex",
-                            justifyContent: "space-between",
-                            alignItems: "center",
-                          }}
-                        >
-                          <div
-                            style={{
-                              display: "flex",
-                              alignItems: "center",
-                              gap: 8,
-                            }}
-                          >
-                            <Text
-                              strong
-                              style={{
-                                fontSize: 12,
-                                letterSpacing: "0.01em",
-                                color: isFirst ? "#f97316" : "#475569",
-                              }}
-                            >
-                              {getStageLabel(entry.stage)}
-                            </Text>
-                            <Text style={{ fontSize: 11, color: "#94a3b8" }}>
-                              ·
-                            </Text>
-                            <Text style={{ fontSize: 11, color: "#64748b" }}>
-                              {entry.actor_email ||
-                                t("loans.details.systemActor")}
-                            </Text>
-                          </div>
-                          <Text
-                            type="secondary"
-                            style={{ fontSize: 10, whiteSpace: "nowrap" }}
-                          >
-                            {formatDateTimeShort(entry.at, "")}
-                          </Text>
-                        </div>
-                        {entry.note && (
-                          <div
-                            style={{
-                              marginTop: 6,
-                              padding: "4px 8px",
-                              background: "rgba(249,115,22,0.04)",
-                              borderRadius: 6,
-                              fontSize: 12,
-                              color: "#475569",
-                              borderLeft: "2px solid rgba(249,115,22,0.15)",
-                            }}
-                          >
-                            {entry.note}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
           </>
         )}
       </Card>
+
+      {item ? (
+        <div style={{ marginTop: 20 }}>
+          <DocumentIntegrityPanel
+            documentType="loan"
+            requestId={item.id}
+            isFinal={isDocumentFinal("loan", item.status)}
+          />
+        </div>
+      ) : null}
     </div>
   );
 }

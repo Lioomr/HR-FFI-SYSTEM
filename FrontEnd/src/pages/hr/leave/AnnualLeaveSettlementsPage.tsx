@@ -1,3 +1,4 @@
+import { shortEmployeeName } from "../../../utils/employeeName";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import {
@@ -45,6 +46,8 @@ import {
 } from "../../../components/leaves/annualLeaveSettlement";
 import AnnualLeaveSettlementApprovalMap from "../../../components/leaves/AnnualLeaveSettlementApprovalMap";
 import AnnualLeaveSettlementDetails from "../../../components/leaves/AnnualLeaveSettlementDetails";
+import DocumentIntegrityPanel from "../../../components/documents/DocumentIntegrityPanel";
+import { isDocumentFinal } from "../../../components/documents/documentTypes";
 import { useI18n } from "../../../i18n/useI18n";
 import {
   createHRAnnualLeaveSettlement,
@@ -135,6 +138,23 @@ function preferredReviewDecision(
  * HR can also open a settlement for an employee who never submitted one; that
  * request is created directly at `pending_ceo` by the backend.
  */
+/** HR/admin view of a settlement's frozen form: seal retry and profile links. */
+function SettlementIntegrity({
+  request,
+}: {
+  request: AnnualLeavePaymentRequest;
+}) {
+  return (
+    <DocumentIntegrityPanel
+      documentType="annual_entitlement"
+      requestId={request.id}
+      isFinal={isDocumentFinal("annual_entitlement", request.status)}
+      canRetrySeal
+      profilePath={(profileId) => `/hr/employees/${profileId}`}
+    />
+  );
+}
+
 export default function AnnualLeaveSettlementsPage() {
   const { t } = useI18n();
   const navigate = useNavigate();
@@ -341,12 +361,17 @@ export default function AnnualLeaveSettlementsPage() {
                 textDecoration: "none",
               }}
             >
-              {record.employee_name || `#${record.employee_id}`}
+              {shortEmployeeName(record.employee_name) ||
+                `#${record.employee_id}`}
             </Link>
           ) : (
-            <div style={{ fontWeight: 600 }}>{record.employee_name || "—"}</div>
+            <div style={{ fontWeight: 600 }}>
+              {shortEmployeeName(record.employee_name) || "—"}
+            </div>
           )}
-          <div style={{ fontSize: 12, color: "#64748b" }}>{record.public_reference || `#${record.id}`}</div>
+          <div style={{ fontSize: 12, color: "#64748b" }}>
+            {record.public_reference || `#${record.id}`}
+          </div>
         </div>
       ),
     },
@@ -411,7 +436,7 @@ export default function AnnualLeaveSettlementsPage() {
               size="small"
               disabled={processing}
               onClick={() => openReview(record)}
-              aria-label={`${t("annualPayment.review")}: ${record.employee_name || record.id}`}
+              aria-label={`${t("annualPayment.review")}: ${shortEmployeeName(record.employee_name) || record.id}`}
             >
               {t("annualPayment.review")}
             </Button>
@@ -498,6 +523,7 @@ export default function AnnualLeaveSettlementsPage() {
           <Space direction="vertical" size={16} style={{ width: "100%" }}>
             <AnnualLeaveSettlementApprovalMap request={deepLinked} t={t} />
             <AnnualLeaveSettlementDetails request={deepLinked} showEmployee />
+            <SettlementIntegrity request={deepLinked} />
           </Space>
         </Card>
       )}
@@ -522,9 +548,16 @@ export default function AnnualLeaveSettlementsPage() {
           scroll={{ x: 1080 }}
           locale={{ emptyText: t("annualPayment.hrEmpty") }}
           expandable={{
-            expandedRowRender: (record) => (
-              <AnnualLeaveSettlementDetails request={record} showEmployee />
-            ),
+            expandedRowRender: (record) =>
+              // Approved and carried-forward settlements have a frozen form.
+              isDocumentFinal("annual_entitlement", record.status) ? (
+                <Space direction="vertical" size={16} style={{ width: "100%" }}>
+                  <AnnualLeaveSettlementDetails request={record} showEmployee />
+                  <SettlementIntegrity request={record} />
+                </Space>
+              ) : (
+                <AnnualLeaveSettlementDetails request={record} showEmployee />
+              ),
           }}
           pagination={{
             current: page,
@@ -715,7 +748,7 @@ export default function AnnualLeaveSettlementsPage() {
               optionFilterProp="label"
               options={employees.map((employee) => ({
                 value: employee.id,
-                label: `${employee.full_name_en || employee.full_name || employee.employee_id} (${employee.employee_id})`,
+                label: `${shortEmployeeName(employee.full_name_en || employee.full_name) || employee.employee_id} (${employee.employee_id})`,
               }))}
             />
           </Form.Item>

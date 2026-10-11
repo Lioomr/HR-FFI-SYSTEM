@@ -197,13 +197,13 @@ def _notify_violation(profile, violation):
         return
     try:
         from in_app_notifications.dispatcher import dispatch_notification_channels
+        from in_app_notifications.i18n import notification_text
         from in_app_notifications.models import Notification
 
         dispatch_notification_channels(
             recipient=profile.user,
             event_key="attendance.late_violation",
-            title="Late attendance recorded",
-            message=f"A late attendance violation was recorded for {violation.date.isoformat()}.",
+            **notification_text("attendance.late_violation", date=violation.date.isoformat()),
             category=Notification.Category.ATTENDANCE,
             action_url="/employee/attendance",
             related_object=violation,

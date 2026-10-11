@@ -17,11 +17,13 @@ from django.utils import timezone
 
 from core.models import WorkflowAction
 from core.responses import error
+from core.services.stage_coverage import MANAGER_OWN_SOURCES, is_in_group, manager_covers_hr, record_covered_stage
 from core.services.workflow_engine import begin_recorded_transition, record_workflow_transition
 from employees.services.manager_relationships import get_valid_manager_user, manager_approval_actor_source
 
+from .document_integrity import on_loan_stage_approved
 from .models import LoanRequest
-from .permissions import get_active_workflow_config
+from .permissions import get_active_workflow_config, is_cfo_requester
 
 Status = LoanRequest.RequestStatus
 Recommendation = LoanRequest.Recommendation
@@ -136,6 +138,44 @@ def record_loan_submission(instance: LoanRequest, *, actor) -> None:
     record_workflow_transition(
         instance, start, action=Action.SUBMIT, actor=actor, note=instance.reason or "", approver_role=""
     )
+    on_loan_stage_approved(instance, role="employee", actor=instance.employee or actor, at=instance.created_at)
+
+
+def _manager_cfo_coverage(locked: LoanRequest) -> tuple[object, str] | None:
+    """Return the real manager and source when their recommendations safely cover CFO."""
+
+    manager = locked.manager_decision_by
+    source = manager_approval_actor_source(
+        manager,
+        locked.employee_profile,
+        capability=LOAN_APPROVAL_CAPABILITY,
+        allow_admin=True,
+    )
+    if (
+        source not in MANAGER_OWN_SOURCES
+        or is_in_group(manager, "SystemAdmin")
+        or not is_cfo_requester(manager)
+        or locked.manager_recommendation != Recommendation.APPROVE
+        or locked.hr_recommendation != Recommendation.APPROVE
+        # HR managers' own loans require the CEO route and must not be finalized here.
+        or _is_hr_manager(locked.employee)
+    ):
+        return None
+    return manager, source
+
+
+def _apply_manager_covered_cfo(locked: LoanRequest) -> tuple[list[str], tuple[object, str] | None]:
+    coverage = _manager_cfo_coverage(locked)
+    if coverage is None:
+        return [], None
+
+    manager, _source = coverage
+    update_fields = _approve_amount(locked)
+    locked.cfo_decision_by = manager
+    locked.cfo_decision_at = timezone.now()
+    locked.cfo_decision_note = ""
+    update_fields += ["cfo_decision_by", "cfo_decision_at", "cfo_decision_note"]
+    return update_fields, coverage
 
 
 def apply_manager_recommendation(
@@ -158,21 +198,30 @@ def apply_manager_recommendation(
             raise LoanTransitionError(NOT_PENDING_MANAGER_MESSAGE)
 
         start = begin_recorded_transition(locked, actor=actor)
-        locked.status = Status.PENDING_HR
         locked.manager_decision_by = actor
         locked.manager_decision_at = timezone.now()
         locked.manager_decision_note = note
         locked.manager_recommendation = recommendation
-        locked.save(
-            update_fields=[
-                "status",
-                "manager_decision_by",
-                "manager_decision_at",
-                "manager_decision_note",
-                "manager_recommendation",
-                "updated_at",
-            ]
-        )
+        update_fields = [
+            "status",
+            "manager_decision_by",
+            "manager_decision_at",
+            "manager_decision_note",
+            "manager_recommendation",
+            "updated_at",
+        ]
+        # A manager who is also an HR manager has given the HR recommendation too, so HR
+        # is not asked again and the request goes straight to the CFO.
+        hr_covered = manager_covers_hr(actor, actor_source)
+        locked.status = Status.PENDING_CFO if hr_covered else Status.PENDING_HR
+        if hr_covered:
+            locked.finance_decision_by = actor
+            locked.finance_decision_at = locked.manager_decision_at
+            locked.hr_recommendation = recommendation
+            update_fields += ["finance_decision_by", "finance_decision_at", "hr_recommendation"]
+        cfo_update_fields, cfo_coverage = _apply_manager_covered_cfo(locked) if hr_covered else ([], None)
+        update_fields += [field for field in cfo_update_fields if field not in update_fields]
+        locked.save(update_fields=update_fields)
         record_workflow_transition(
             locked,
             start,
@@ -182,6 +231,24 @@ def apply_manager_recommendation(
             approver_role="manager",
             metadata={"recommendation": recommendation, "actor_source": actor_source},
         )
+        if hr_covered:
+            record_covered_stage(
+                locked,
+                start,
+                "hr",
+                actor=actor,
+                source=actor_source,
+                action=Action.ADVANCE,
+                metadata={"recommendation": recommendation},
+            )
+        if cfo_coverage:
+            manager, source = cfo_coverage
+            record_covered_stage(locked, start, "cfo", actor=manager, by="manager", source=source)
+        on_loan_stage_approved(locked, role="line_manager", actor=actor, at=locked.manager_decision_at)
+        if hr_covered:
+            on_loan_stage_approved(locked, role="hr", actor=actor, at=locked.finance_decision_at)
+        if cfo_coverage:
+            on_loan_stage_approved(locked, role="cfo", actor=manager, at=locked.cfo_decision_at)
     return locked, actor_source
 
 
@@ -203,16 +270,17 @@ def apply_hr_recommendation(instance: LoanRequest, *, actor, recommendation: str
         locked.finance_decision_at = timezone.now()
         locked.finance_decision_note = note
         locked.hr_recommendation = recommendation
-        locked.save(
-            update_fields=[
-                "status",
-                "finance_decision_by",
-                "finance_decision_at",
-                "finance_decision_note",
-                "hr_recommendation",
-                "updated_at",
-            ]
-        )
+        update_fields = [
+            "status",
+            "finance_decision_by",
+            "finance_decision_at",
+            "finance_decision_note",
+            "hr_recommendation",
+            "updated_at",
+        ]
+        cfo_update_fields, cfo_coverage = _apply_manager_covered_cfo(locked)
+        update_fields += [field for field in cfo_update_fields if field not in update_fields]
+        locked.save(update_fields=update_fields)
         record_workflow_transition(
             locked,
             start,
@@ -222,6 +290,12 @@ def apply_hr_recommendation(instance: LoanRequest, *, actor, recommendation: str
             approver_role="hr",
             metadata={"recommendation": recommendation},
         )
+        if cfo_coverage:
+            manager, source = cfo_coverage
+            record_covered_stage(locked, start, "cfo", actor=manager, by="manager", source=source)
+        on_loan_stage_approved(locked, role="hr", actor=actor, at=locked.finance_decision_at)
+        if cfo_coverage:
+            on_loan_stage_approved(locked, role="cfo", actor=manager, at=locked.cfo_decision_at)
     return locked
 
 
@@ -271,6 +345,7 @@ def apply_cfo_approval(instance: LoanRequest, *, actor, note: str = "") -> LoanR
             update_fields=[*update_fields, "cfo_decision_by", "cfo_decision_at", "cfo_decision_note", "updated_at"]
         )
         record_workflow_transition(locked, start, action=Action.ADVANCE, actor=actor, note=note, approver_role="cfo")
+        on_loan_stage_approved(locked, role="cfo", actor=actor, at=locked.cfo_decision_at)
     return locked
 
 
@@ -292,6 +367,9 @@ def _apply_cfo_final_or_referral(
         locked.cfo_decision_note = comment
         locked.save(update_fields=["status", "cfo_decision_by", "cfo_decision_at", "cfo_decision_note", "updated_at"])
         record_workflow_transition(locked, start, action=action, actor=actor, note=comment, approver_role="cfo")
+        if target_status == Status.PENDING_CEO:
+            # A referral is the CFO's recorded decision on the form; a rejection is never frozen.
+            on_loan_stage_approved(locked, role="cfo", actor=actor, at=locked.cfo_decision_at)
     return locked
 
 
@@ -326,6 +404,7 @@ def apply_ceo_approval(instance: LoanRequest, *, actor, note: str = "") -> LoanR
             update_fields=[*update_fields, "ceo_decision_by", "ceo_decision_at", "ceo_decision_note", "updated_at"]
         )
         record_workflow_transition(locked, start, action=Action.APPROVE, actor=actor, note=note, approver_role="ceo")
+        on_loan_stage_approved(locked, role="ceo", actor=actor, at=locked.ceo_decision_at)
     return locked
 
 
@@ -366,6 +445,8 @@ def apply_disbursement(instance: LoanRequest, *, actor, note: str = "") -> LoanR
         record_workflow_transition(
             locked, start, action=Action.DISBURSE, actor=actor, note=note, approver_role="disbursement"
         )
+        # The last column on the form: the loan is now ``approved`` and its PDF is frozen after commit.
+        on_loan_stage_approved(locked, role="disbursement", actor=actor, at=locked.disbursed_at)
     return locked
 
 

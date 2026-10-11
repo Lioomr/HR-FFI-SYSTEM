@@ -1,3 +1,4 @@
+import { shortEmployeeName } from "../../../utils/employeeName";
 import { useCallback, useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
@@ -224,6 +225,13 @@ export default function LeaveInboxPage() {
       tone: "pending",
     },
     {
+      key: "pending_hr_completion",
+      status: "pending_hr_completion",
+      label: t("leave.status.pending_hr_completion"),
+      icon: <AuditOutlined />,
+      tone: "pending",
+    },
+    {
       key: "approved",
       status: "approved",
       label: t("status.approved"),
@@ -253,6 +261,7 @@ export default function LeaveInboxPage() {
       case "pending_manager":
         return "orange";
       case "pending_hr":
+      case "pending_hr_completion":
         return "purple";
       case "pending_ceo":
         return "volcano";
@@ -275,9 +284,10 @@ export default function LeaveInboxPage() {
       title: t("hr.dashboard.employee"),
       key: "employee",
       render: (_, record) => {
-        const employeeName =
+        const employeeName = shortEmployeeName(
           record.employee?.full_name ||
-          `ID: ${record.employee?.id ?? record.employee_profile ?? "-"}`;
+            `ID: ${record.employee?.id ?? record.employee_profile ?? "-"}`,
+        );
         const employeeProfileId =
           record.employee_profile ??
           employees.find((employee) => employee.user_id === record.employee?.id)
@@ -374,6 +384,7 @@ export default function LeaveInboxPage() {
         <div style={{ display: "flex", gap: 8, justifyContent: "center" }}>
           <Tooltip title={t("common.details")}>
             <Button
+              aria-label={t("common.view")}
               icon={<EyeOutlined />}
               onClick={() => navigate(`/hr/leave/requests/${record.id}`)}
               size="small"
@@ -676,6 +687,9 @@ export default function LeaveInboxPage() {
                 {t("status.pendingManager")}
               </Option>
               <Option value="pending_hr">{t("status.pendingHr")}</Option>
+              <Option value="pending_hr_completion">
+                {t("leave.status.pending_hr_completion")}
+              </Option>
               <Option value="pending_ceo">{t("status.pendingCeo")}</Option>
               <Option value="approved">{t("status.approved")}</Option>
               <Option value="rejected">{t("status.rejected")}</Option>
@@ -776,7 +790,7 @@ export default function LeaveInboxPage() {
               optionFilterProp="label"
               options={employees.map((e) => ({
                 value: e.id,
-                label: `${e.full_name_en || e.full_name || e.employee_id} (${e.employee_id})`,
+                label: `${shortEmployeeName(e.full_name_en || e.full_name) || e.employee_id} (${e.employee_id})`,
               }))}
             />
           </Form.Item>

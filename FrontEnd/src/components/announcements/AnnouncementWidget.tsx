@@ -180,6 +180,7 @@ export default function AnnouncementWidget({ role }: { role?: string }) {
               <List.Item
                 actions={[
                   <Button
+                    aria-label={t("common.view")}
                     type="link"
                     size="small"
                     icon={

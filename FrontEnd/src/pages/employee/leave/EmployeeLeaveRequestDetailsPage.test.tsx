@@ -125,7 +125,10 @@ describe("EmployeeLeaveRequestDetailsPage", () => {
 
     renderPage("/employee/leave/requests/5");
 
-    fireEvent.click(await screen.findByRole("button", { name: /Preview/ }));
+    fireEvent.click(await screen.findByRole("button", { name: /^Preview/ }));
+    fireEvent.click(
+      await screen.findByRole("menuitem", { name: /Preview Attachment/ }),
+    );
 
     const dialog = await screen.findByRole("dialog");
     expect(

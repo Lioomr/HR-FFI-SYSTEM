@@ -3,6 +3,7 @@ import secrets
 from datetime import timedelta
 
 from django.conf import settings
+from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.db import transaction
 from django.utils import timezone
@@ -35,7 +36,8 @@ def store_hashed_reset_token(user_id, token: str) -> None:
     token_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
     ttl_seconds = int(getattr(settings, "PASSWORD_RESET_TOKEN_TTL_SECONDS", 3600))
     key = password_reset_cache_key(user_id)
-    entry = {"token_hash": token_hash}
+    token_version = get_user_model().objects.values_list("auth_token_version", flat=True).get(pk=user_id)
+    entry = {"token_hash": token_hash, "token_version": token_version}
     cache.set(key, entry, ttl_seconds)
     # The cache fails open when Redis is down (config/settings.py), so confirm the
     # write rather than email a link that can never be redeemed.
@@ -52,6 +54,11 @@ def verify_reset_token(user_id, token: str) -> bool:
     entry = cache.get(password_reset_cache_key(user_id))
     if not entry:
         return False
+    token_version = get_user_model().objects.filter(pk=user_id).values_list("auth_token_version", flat=True).first()
+    # Reject legacy entries without a version as well as stale reset links, even
+    # if best-effort deletion was swallowed during a temporary cache outage.
+    if token_version is None or entry.get("token_version") != token_version:
+        return False
     token_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
     return secrets.compare_digest(token_hash, entry.get("token_hash", ""))
 
@@ -65,8 +72,14 @@ def consume_reset_token(user_id, token: str) -> bool:
     """
     if not verify_reset_token(user_id, token):
         return False
-    cache.delete(password_reset_cache_key(user_id))
-    return True
+    return invalidate_reset_token(user_id)
+
+
+def invalidate_reset_token(user_id) -> bool:
+    """Remove any pending email reset link, failing closed if it remains cached."""
+    key = password_reset_cache_key(user_id)
+    cache.delete(key)
+    return cache.get(key) is None
 
 
 def get_client_ip(request):

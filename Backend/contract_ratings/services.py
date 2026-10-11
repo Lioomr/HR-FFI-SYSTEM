@@ -272,6 +272,10 @@ def _submit_response(rating_id, actor, data, rater_type):
     rating.save()
     event = "contract_rating_manager_submitted" if manager else "contract_rating_employee_submitted"
     _record(rating, event, actor, start=start, action=WorkflowAction.Action.SUBMIT)
+    if manager:
+        from .document_integrity import on_contract_rating_stage
+
+        on_contract_rating_stage(rating, role="line_manager", actor=actor, at=response.submitted_at)
     if previous:
         _record(
             rating,
@@ -413,11 +417,15 @@ def submit_hr_comment(rating_id, *, actor, comment):
     if rating.status != S.DECIDED and _guard(rating, profile, actor):
         return rating
     start = begin_recorded_transition(rating, actor=actor)
+    previous_signer_id = rating.hr_comment_by_id
     rating.hr_comment = comment.strip()
     rating.hr_comment_by = actor
     rating.hr_comment_submitted_at = timezone.now()
     rating.save(update_fields=["hr_comment", "hr_comment_by", "hr_comment_submitted_at", "updated_at"])
     _record(rating, "contract_rating_hr_comment_submitted", actor, start=start)
+    from .document_integrity import on_contract_rating_hr_comment
+
+    on_contract_rating_hr_comment(rating, actor=actor, signer_changed=previous_signer_id != actor.id)
     _notify(rating, "hr_comment_submitted", ["requesting_ceo"])
     return rating
 
@@ -553,6 +561,10 @@ def submit_ceo_decision(
             actor,
             metadata={"contract_expiry": str(profile.contract_expiry)},
         )
+    from .document_integrity import on_contract_rating_decided
+
+    # Freezes the HR/CEO decision copy after commit; a failure is logged, never raised.
+    on_contract_rating_decided(rating, actor=actor)
     audiences = ["hr"]
     if rating.rating_mode == ContractRating.RatingMode.RATE:
         audiences.append("manager")
@@ -607,6 +619,7 @@ def acknowledge_termination_notice(rating_id, *, actor):
     require_company_access(actor, rating)
     if not is_hr_workflow_approver_user(actor):
         raise PermissionDenied("Only HR may acknowledge termination notice.")
+    _reject_self_dealing(rating, profile, actor)
     if (
         rating.status != S.DECIDED
         or rating.ceo_decision != ContractDecision.DecisionType.TERMINATE

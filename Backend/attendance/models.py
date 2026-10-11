@@ -353,6 +353,10 @@ class AttendanceLateNotice(models.Model):
     )
     delivery_message = models.CharField(max_length=255, blank=True)
     issued_at = models.DateTimeField(auto_now_add=True)
+    #: SHA-256 of the exact stored/delivered notice bytes, recorded once at issuance
+    #: (tamper evidence for ``POST /api/documents/verify-upload/``). Empty for older notices.
+    document_sha256 = models.CharField(max_length=64, blank=True, db_index=True)
+    document_hashed_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         ordering = ["-issued_at", "-id"]
@@ -418,6 +422,8 @@ class WorkLocation(models.Model):
 
 
 class AttendanceCorrectionRequest(models.Model):
+    """Retired storage retained only for historical migration compatibility; no API or workflow."""
+
     class Status(models.TextChoices):
         DRAFT = "draft", _("Draft")
         PENDING_MANAGER = "pending_manager", _("Pending Manager")

@@ -57,7 +57,10 @@ function OutcomePanel({
       >
         {icon}
       </div>
-      <Title level={3} style={{ margin: 0, fontWeight: 800, color: "#0f172a" }}>
+      <Title
+        level={1}
+        style={{ margin: 0, fontWeight: 800, color: "#0f172a", fontSize: 24 }}
+      >
         {title}
       </Title>
       <Text

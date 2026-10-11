@@ -1,3 +1,4 @@
+import { shortEmployeeName } from "../../utils/employeeName";
 import { Alert } from "antd";
 
 import type { WorkflowSnapshot } from "../../types/workflow";
@@ -11,7 +12,8 @@ export default function PendingActionBanner({
   const { t } = useI18n();
   if (!workflow || workflow.status !== "in_review") return null;
   const actor =
-    workflow.current_actor?.full_name || workflow.current_actor?.email;
+    shortEmployeeName(workflow.current_actor?.full_name) ||
+    workflow.current_actor?.email;
   const stage = workflow.current_stage;
 
   let message: string;

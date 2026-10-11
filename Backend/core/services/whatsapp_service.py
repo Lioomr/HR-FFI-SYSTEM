@@ -18,6 +18,7 @@ class WhatsAppTemplateSpec:
 
 
 WHATSAPP_TEMPLATE_REGISTRY: dict[str, WhatsAppTemplateSpec] = {
+    "password_reset_otp": WhatsAppTemplateSpec(template_name="password_reset_otp", variable_order=("otp",)),
     "job_offer": WhatsAppTemplateSpec(
         template_name="job_offer",
         variable_order=("candidate_name", "position_title", "reference_number", "expiry_date", "response_link"),

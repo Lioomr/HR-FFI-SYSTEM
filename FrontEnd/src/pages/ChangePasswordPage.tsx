@@ -16,6 +16,8 @@ import { changePasswordApi } from "../services/api/authApi";
 import { isApiError } from "../services/api/apiTypes";
 import { useAuthStore } from "../auth/authStore";
 import { useI18n } from "../i18n/useI18n";
+import { getFieldApiError, getFirstApiErrorMessage } from "../utils/formErrors";
+import { localizePasswordError } from "../utils/passwordErrors";
 
 type FormValues = {
   currentPassword: string;
@@ -50,7 +52,13 @@ export default function ChangePasswordPage() {
       });
 
       if (isApiError(res)) {
-        setError(res.message || t("common.tryAgain"));
+        setError(
+          localizePasswordError(
+            getFieldApiError(res, "new_password") ||
+              getFirstApiErrorMessage(res),
+            t,
+          ) || t("common.tryAgain"),
+        );
         return;
       }
 
@@ -60,8 +68,13 @@ export default function ChangePasswordPage() {
       // Clear auth and redirect to login
       useAuthStore.getState().logout();
       navigate("/login");
-    } catch (e: any) {
-      setError(e?.message || t("common.tryAgain"));
+    } catch (e: unknown) {
+      setError(
+        localizePasswordError(
+          getFieldApiError(e, "new_password") || getFirstApiErrorMessage(e),
+          t,
+        ) || t("common.tryAgain"),
+      );
     } finally {
       setSubmitting(false);
     }
@@ -112,8 +125,13 @@ export default function ChangePasswordPage() {
             <LockOutlined style={{ fontSize: 32, color: "#fff" }} />
           </div>
           <Title
-            level={2}
-            style={{ color: "#fff", margin: 0, fontWeight: 700 }}
+            level={1}
+            style={{
+              color: "#fff",
+              margin: 0,
+              fontWeight: 700,
+              fontSize: 30,
+            }}
           >
             {t("changePassword.title")}
           </Title>

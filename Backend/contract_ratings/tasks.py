@@ -8,7 +8,6 @@ from django.utils import timezone
 
 from core.services.workflow_engine import begin_recorded_transition
 from employees.contract_expiry import (
-    CEO_REMINDER_INTERVAL,
     CONTRACT_RATING_CREATION_DAYS,
     _company_ceo_recipients,
     _company_hr_recipients,
@@ -26,6 +25,10 @@ from in_app_notifications.services import notification_company_for_recipient
 from .models import ContractRating
 
 logger = logging.getLogger(__name__)
+
+# A stalled rating nudges the CEO at most twice, a day apart. The daily digest covers the rest.
+CEO_REMINDER_INTERVAL = timedelta(hours=24)
+CEO_REMINDER_MAX = 2
 
 
 def _dispatch(rating, recipient, audience, key, event, message):
@@ -196,9 +199,16 @@ def _process_rating(rating_id, today, now):
                 notify_event(rating, "reminder", [audience], key=f"65_DAY_{audience}")
     if rating.status == "PENDING_CEO":
         last = rating.notification_milestones.get("ceo_reminder_at")
-        if not last or now - datetime.fromisoformat(last) >= CEO_REMINDER_INTERVAL:
-            notify_event(rating, "ceo_reminder", ["ceo"], key=f"ceo_reminder:{now.isoformat()}")
+        sent = int(rating.notification_milestones.get("ceo_reminder_count") or 0)
+        if not last:
+            # The submission notice just went out; measure the first reminder from here.
             rating.notification_milestones["ceo_reminder_at"] = now.isoformat()
+            rating.save(update_fields=["notification_milestones", "updated_at"])
+        elif sent < CEO_REMINDER_MAX and now - datetime.fromisoformat(last) >= CEO_REMINDER_INTERVAL:
+            notify_event(rating, "ceo_reminder", ["ceo"], key=f"ceo_reminder:{now.isoformat()}")
+            # notify_event replaces the milestones dict, so write through the rating.
+            rating.notification_milestones["ceo_reminder_at"] = now.isoformat()
+            rating.notification_milestones["ceo_reminder_count"] = sent + 1
             rating.save(update_fields=["notification_milestones", "updated_at"])
 
 

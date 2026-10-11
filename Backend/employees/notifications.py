@@ -101,6 +101,7 @@ def notify_document_expiry_in_app(
             whatsapp_template="document_expiry_reminder",
             whatsapp_variables={
                 "employee_name": profile.full_name or profile.employee_id or "Employee",
+                "employee_name_ar": profile.full_name_ar or "",
                 "document_type": document.get("label") or document_type or "Document",
                 "expiry_date": _format_expiry_date(document.get("expiry_date")),
                 "action_url": "/employee/profile",

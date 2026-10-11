@@ -133,6 +133,28 @@ class PasswordResetConfirmSerializer(serializers.Serializer):
     new_password = serializers.CharField()
 
 
+class PasswordResetOTPRequestSerializer(serializers.Serializer):
+    identifier = serializers.CharField(max_length=254)
+
+
+class PasswordResetOTPVerifySerializer(PasswordResetOTPRequestSerializer):
+    otp = serializers.RegexField(r"^[0-9]{6}$", max_length=6, min_length=6)
+
+
+class PasswordResetOTPConfirmSerializer(PasswordResetOTPVerifySerializer):
+    new_password = serializers.CharField(trim_whitespace=False, max_length=128)
+
+
+def resolve_password_reset_user(identifier):
+    if "@" in identifier:
+        users = list(User.objects.filter(email__iexact=identifier)[:2])
+        return users[0] if len(users) == 1 else None
+    try:
+        return _resolve_user_by_phone(identifier)
+    except serializers.ValidationError:
+        return None
+
+
 class VersionedTokenRefreshSerializer(TokenRefreshSerializer):
     token_class = RefreshToken
 

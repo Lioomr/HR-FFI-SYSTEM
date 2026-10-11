@@ -169,8 +169,8 @@ export default function NotificationBell({
             icon={<BellOutlined />}
             type="text"
             style={{
-              width: isMobile ? 30 : 36,
-              height: isMobile ? 30 : 36,
+              width: isMobile ? 44 : 36,
+              height: isMobile ? 44 : 36,
               borderRadius: 10,
               color,
               background,

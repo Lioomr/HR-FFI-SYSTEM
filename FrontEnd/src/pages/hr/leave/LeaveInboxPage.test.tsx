@@ -98,4 +98,22 @@ describe("LeaveInboxPage filters", () => {
       ),
     );
   });
+
+  it("exposes pending HR completion as a filter", async () => {
+    render(
+      <MemoryRouter>
+        <LeaveInboxPage />
+      </MemoryRouter>,
+    );
+    const chips = await screen.findByRole("group", { name: "Status" });
+    const completion = Array.from(chips.querySelectorAll("button")).find(
+      (button) => button.textContent === "Pending HR Completion",
+    ) as HTMLButtonElement;
+    fireEvent.click(completion);
+    await waitFor(() =>
+      expect(getLeaveRequests).toHaveBeenLastCalledWith(
+        expect.objectContaining({ status: "pending_hr_completion", page: 1 }),
+      ),
+    );
+  });
 });

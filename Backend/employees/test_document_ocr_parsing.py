@@ -10,7 +10,8 @@ they stay fast.
 from django.test import TestCase
 
 from .models import EmployeeDocument
-from .ocr.parsers import label_date_value, label_value, parse_document, strip_trailing_noise
+from .ocr.countries import country_name
+from .ocr.parsers import label_date_value, label_value, parse_document, strip_trailing_noise, title_case_name
 
 NAME_LABELS = r"Full\s*Name|Name|الاسم"
 NATIONALITY_LABELS = r"Nationality|الجنسية"
@@ -132,3 +133,40 @@ class BilingualDuplicateTextTests(TestCase):
         self.assertEqual(result.fields["iqama_number"], "2345678904")
         self.assertTrue(result.checks["id_format"])
         self.assertTrue(result.checks["id_checksum"])
+
+
+class CountryNameTests(TestCase):
+    def test_mrz_codes_map_to_the_english_names_the_profile_uses(self):
+        self.assertEqual(country_name("EGY"), ("Egypt", True))
+        self.assertEqual(country_name("SAU"), ("Saudi Arabia", True))
+        self.assertEqual(country_name("PAK"), ("Pakistan", True))
+        self.assertEqual(country_name("PHL"), ("Philippines", True))
+        self.assertEqual(country_name("D"), ("Germany", True))
+        self.assertEqual(country_name("GBD"), ("United Kingdom", True))
+
+    def test_a_spelled_name_gets_its_canonical_spelling(self):
+        self.assertEqual(country_name("EGYPT"), ("Egypt", True))
+        self.assertEqual(country_name("saudi  arabia"), ("Saudi Arabia", True))
+
+    def test_unknown_code_is_kept_and_reported(self):
+        self.assertEqual(country_name("QQQ"), ("QQQ", False))
+        self.assertEqual(country_name("XXX"), ("XXX", False))
+
+    def test_other_text_is_returned_unchanged(self):
+        self.assertEqual(country_name("Egyptian"), ("Egyptian", True))
+        self.assertEqual(country_name(""), ("", True))
+
+
+class TitleCaseNameTests(TestCase):
+    def test_all_caps_mrz_name_is_title_cased(self):
+        self.assertEqual(title_case_name("OMR ABDELAAL REDA ABDELAAL SOLTAN"), "Omr Abdelaal Reda Abdelaal Soltan")
+
+    def test_hyphens_apostrophes_and_mc_prefixes(self):
+        self.assertEqual(title_case_name("SARA AL-QAHTANI"), "Sara Al-Qahtani")
+        self.assertEqual(title_case_name("SEAN O'BRIEN"), "Sean O'Brien")
+        self.assertEqual(title_case_name("MA'MOUN MCDONALD"), "Ma'moun McDonald")
+
+    def test_mixed_case_and_non_latin_names_are_untouched(self):
+        self.assertEqual(title_case_name("Sara McNeil al-Qahtani"), "Sara McNeil al-Qahtani")
+        self.assertEqual(title_case_name("عينة موظف"), "عينة موظف")
+        self.assertEqual(title_case_name(""), "")

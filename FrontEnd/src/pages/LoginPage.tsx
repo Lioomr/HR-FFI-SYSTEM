@@ -7,7 +7,7 @@ import {
   SettingOutlined,
   TeamOutlined,
 } from "@ant-design/icons";
-import { useLocation, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { UserOutlined } from "@ant-design/icons";
 import { useAuthStore } from "../auth/authStore";
 import { loginApi } from "../services/api/authApi";
@@ -181,16 +181,17 @@ export default function LoginPage() {
               textShadow: "0 2px 12px rgba(0,0,0,0.45)",
             }}
           >
-            <div
+            <h1
               style={{
                 color: "#fff",
                 fontSize: 36,
                 fontWeight: 700,
                 lineHeight: 1.4,
+                margin: 0,
               }}
             >
               {t("auth.login.tagline")}
-            </div>
+            </h1>
             <div
               style={{
                 width: 88,
@@ -269,6 +270,7 @@ export default function LoginPage() {
             >
               <Form.Item label={t("language.label")}>
                 <Select
+                  aria-label={t("language.label")}
                   size="large"
                   value={language}
                   onChange={(value) => setLanguage(value as AppLanguage)}
@@ -340,6 +342,11 @@ export default function LoginPage() {
               >
                 {t("auth.signIn")}
               </Button>
+              <div style={{ textAlign: "center", marginTop: 16 }}>
+                <Link to="/forgot-password">
+                  {t("passwordRecovery.forgot")}
+                </Link>
+              </div>
             </Form>
           </Card>
 

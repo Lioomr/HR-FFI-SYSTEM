@@ -324,7 +324,7 @@ describe("ContractDecisionsPage list", () => {
 });
 
 describe("ContractDecisionsPage detail", () => {
-  it("renders every retained HR and CEO attempt in the workflow history", async () => {
+  it("shows the HR and CEO stages in the progress map only", async () => {
     getMock.mockResolvedValue(
       detailPayload(
         decision({
@@ -370,19 +370,10 @@ describe("ContractDecisionsPage detail", () => {
 
     renderAt("/hr/contract-decisions/7");
 
-    const history = within(
-      (await screen.findByText("Workflow history")).closest(
-        ".ant-card",
-      ) as HTMLElement,
-    );
-    // Both HR attempts and both CEO attempts survive, not just the latest pair.
-    expect(history.getByText("First submission")).toBeInTheDocument();
-    expect(history.getByText("First CEO look")).toBeInTheDocument();
-    expect(history.getByText("Second submission")).toBeInTheDocument();
-    expect(history.getByText("Second CEO look")).toBeInTheDocument();
-    // Action codes render through the dictionary ("submit" → "Submitted").
-    expect(history.getAllByText("Submitted")).toHaveLength(2);
-    // The progress map above the history names both workflow stages.
+    // The progress map is the only trail; there is no separate history card.
+    await screen.findByText("Decision progress");
+    expect(screen.queryByText("Workflow history")).toBeNull();
+    // The progress map names both workflow stages.
     expect(screen.getByText("Decision progress")).toBeInTheDocument();
     // Compact (phone) layout: the waiting CEO stage keeps its full card.
     expect(screen.getByRole("button", { name: /Show details/ })).toBeTruthy();
@@ -788,9 +779,8 @@ describe("ContractDecisionsPage Arabic", () => {
 
     renderAt("/hr/contract-decisions/7");
 
-    expect(await screen.findByText("سجل سير العمل")).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "معالجة يدوية" }),
+      await screen.findByRole("button", { name: "معالجة يدوية" }),
     ).toBeInTheDocument();
   });
 });

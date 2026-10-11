@@ -23,6 +23,10 @@ vi.mock("../../services/api/jobOffersApi", () => ({
   downloadJobOfferCv: vi.fn(),
 }));
 
+vi.mock("../../components/documents/DocumentIntegrityPanel", async () => ({
+  default: (await import("../../test/integrityPanelStub")).default,
+}));
+
 vi.mock("../../services/api/downloads", () => ({
   triggerBlobDownload: vi.fn(),
 }));
@@ -425,5 +429,32 @@ describe("CEOJobOfferDetailPage commercial editing", () => {
     expect(
       await screen.findByText("CEO may edit commercial job-offer fields only."),
     ).toBeInTheDocument();
+  });
+});
+
+describe("CEOJobOfferDetailPage document integrity", () => {
+  it("is not final while the offer awaits the CEO", async () => {
+    getJobOffer.mockResolvedValue(ok(pendingOffer));
+    render(<CEOJobOfferDetailPage />);
+    const panel = await screen.findByTestId("integrity-panel");
+    expect(panel).toHaveAttribute("data-type", "job_offer");
+    expect(panel).toHaveAttribute("data-final", "false");
+  });
+
+  it("shows the CEO a read-only card once the offer was sent", async () => {
+    getJobOffer.mockResolvedValue(
+      ok(
+        makeJobOffer({
+          status: "sent",
+          approval_status: "approved",
+          sent_at: "2026-08-02T09:00:00Z",
+        }),
+      ),
+    );
+    render(<CEOJobOfferDetailPage />);
+    const panel = await screen.findByTestId("integrity-panel");
+    expect(panel).toHaveAttribute("data-final", "true");
+    expect(panel).toHaveAttribute("data-retry", "false");
+    expect(panel).toHaveAttribute("data-profile", "");
   });
 });

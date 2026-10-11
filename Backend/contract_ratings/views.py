@@ -5,6 +5,7 @@ from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.permissions import IsAuthenticated
 
+from core.document_integrity.api import DocumentIntegrityActionsMixin, frozen_pdf_response
 from core.pagination import StandardPagination
 from core.permissions import is_department_ceo_approver_user, is_hr_workflow_approver_user
 from core.responses import error, success
@@ -14,6 +15,7 @@ from organization.services import ensure_company_write_allowed, filter_queryset_
 
 from . import services
 from .criteria import CRITERIA, GRADE_RANGES
+from .document_integrity import DECISION_ROLES
 from .models import ContractRating
 from .pdf import build_contract_rating_pdf
 from .permissions import viewer_role
@@ -25,7 +27,7 @@ from .serializers import (
 )
 
 
-class ContractRatingViewSet(viewsets.ReadOnlyModelViewSet):
+class ContractRatingViewSet(DocumentIntegrityActionsMixin, viewsets.ReadOnlyModelViewSet):
     permission_classes = [IsAuthenticated]
     serializer_class = ContractRatingReadSerializer
     pagination_class = StandardPagination
@@ -56,11 +58,14 @@ class ContractRatingViewSet(viewsets.ReadOnlyModelViewSet):
             ),
             rating_mode=ContractRating.RatingMode.RATE,
         )
+        # Whatever else they approve, a person's own rating is visible to them only
+        # as the rated employee (rate mode); HR and CEO scopes never include it.
+        own = Q(employee_profile__user=user)
         if is_hr_workflow_approver_user(user):
-            return (qs | managed).distinct()
+            return (qs.exclude(own & ~Q(rating_mode=ContractRating.RatingMode.RATE)) | managed).distinct()
         scope = Q(employee_profile__user=user, rating_mode=ContractRating.RatingMode.RATE)
         if is_department_ceo_approver_user(user):
-            scope |= Q(status="PENDING_CEO") | Q(ceo_decided_by=user)
+            scope |= (Q(status="PENDING_CEO") | Q(ceo_decided_by=user)) & ~own
         return (qs.filter(scope) | managed).distinct()
 
     def list(self, request, *args, **kwargs):
@@ -77,25 +82,97 @@ class ContractRatingViewSet(viewsets.ReadOnlyModelViewSet):
     def retrieve(self, request, *args, **kwargs):
         return success(self.get_serializer(self.get_object()).data)
 
+    @action(detail=False, methods=["get"], url_path="pending-actions")
+    def pending_actions(self, request):
+        """Return only the rating IDs that can block the current user.
+
+        Route guards previously downloaded up to 200 fully serialized ratings
+        on every employee/manager entry just to find one outstanding action.
+        Keep the same authorization boundary as ``get_queryset`` while making
+        that check a pair of indexed ``LIMIT 1`` lookups.
+        """
+
+        queryset = self.get_queryset().filter(rating_mode=ContractRating.RatingMode.RATE)
+        employee = (
+            queryset.filter(
+                employee_profile__user=request.user,
+                status__in=[
+                    ContractRating.Status.PENDING_RESPONSES,
+                    ContractRating.Status.WAITING_EMPLOYEE,
+                ],
+            )
+            .order_by("-created_at", "-id")
+            .values("id", "status")
+            .first()
+        )
+        manager = (
+            queryset.filter(
+                manager_scope_q(
+                    request.user,
+                    employee_prefix="employee_profile__",
+                    cross_company_capability=CONTRACT_RATING_CAPABILITY,
+                ),
+                status__in=[
+                    ContractRating.Status.PENDING_RESPONSES,
+                    ContractRating.Status.WAITING_MANAGER,
+                ],
+            )
+            .order_by("-created_at", "-id")
+            .values("id", "status")
+            .first()
+        )
+        return success({"employee": employee, "manager": manager})
+
     @action(detail=True, methods=["get"])
     def pdf(self, request, pk=None):
         rating = self.get_object()
         role = viewer_role(request.user, rating)
+        if role is None:
+            raise PermissionDenied("You cannot view this rating.")
         if role == "hr" and not rating.hr_comment_requested_at:
             raise PermissionDenied("HR detail access requires a CEO comment request for this rating.")
         response_row = rating.employee_response if role == "employee" else rating.manager_response
+        reference = public_reference_for(rating) or f"CR-{rating.id}"
+        filename = f"contract_rating_{reference}.pdf"
         try:
-            pdf_bytes = build_contract_rating_pdf(
-                rating,
-                response=response_row,
-                include_decision=role in {"hr", "ceo"},
-            )
+            if role in DECISION_ROLES:
+                # HR/CEO decision copy: the frozen copy once decided (409 if altered or
+                # missing, HR-only ?workpaper=1&tz=), else the live render as before.
+                return frozen_pdf_response(
+                    rating,
+                    request,
+                    render_live=lambda: build_contract_rating_pdf(
+                        rating, response=rating.manager_response, include_decision=True
+                    ),
+                    filename=filename,
+                    content_type="application/pdf",
+                )
+            # Employee/manager copies are confidential per-audience renders: always live,
+            # never frozen and not the verifiable original.
+            pdf_bytes = build_contract_rating_pdf(rating, response=response_row, include_decision=False)
         except ValueError as exc:
             return error("PDF unavailable", errors=[str(exc)], status=503)
         response = HttpResponse(pdf_bytes, content_type="application/pdf")
-        reference = public_reference_for(rating) or f"CR-{rating.id}"
-        response["Content-Disposition"] = f'attachment; filename="contract_rating_{reference}.pdf"'
+        response["Content-Disposition"] = f'attachment; filename="{filename}"'
         return response
+
+    def get_integrity_object(self):
+        """The decision copy's record for ``integrity/`` endpoints, or ``None`` (404).
+
+        Same lookup as the download (company-scoped ``get_queryset``) and the same
+        rule (``viewer_role`` hr after a CEO comment request, or ceo); the employee
+        and manager copies are never frozen, so they have nothing to report.
+        """
+
+        from .document_integrity import can_access_contract_rating_document
+
+        pk = str(self.kwargs.get(self.lookup_url_kwarg or self.lookup_field) or "")
+        if not pk.isdigit():
+            return None
+        rating = self.get_queryset().filter(pk=int(pk)).first()
+        if rating is None or not can_access_contract_rating_document(self.request.user, rating):
+            return None
+        return rating
 
     @action(detail=False, methods=["get"])
     def criteria(self, request):

@@ -26,6 +26,7 @@ import NotFound404Page from "../pages/NotFound404Page";
 // route -> component identity import the same lazy-wrapped references from
 // there instead of the raw page modules.
 import {
+  PasswordRecoveryPage,
   AdminDashboardPage,
   AdminUsersListPage,
   AdminUserCreatePage,
@@ -59,6 +60,7 @@ import {
   LabelJobsHistoryPage,
   HRRentsPage,
   TemplateLibraryPage,
+  VerifyDocumentPage,
   JobOffersListPage,
   JobOfferFormPage,
   JobOfferDetailPage,
@@ -66,7 +68,6 @@ import {
   StartingWorkAcknowledgmentDetailPage,
   EmployeePayslipsListPage,
   EmployeePayslipDetailsPage,
-  EmployeeLeavesPage,
   RequestLeavePage,
   MyLeaveRequestsPage,
   MyLeaveBalancePage,
@@ -83,7 +84,6 @@ import {
   LeaveRequestDetailsPage,
   LoanInboxPage,
   HrLoanRequestDetailsPage,
-  HrLeaveBalancesPage,
   AttendancePolicyPage,
   PenaltiesListPage,
   PenaltyDetailPage,
@@ -167,8 +167,16 @@ export const routes = [
     element: LazyRegisterInvitePage,
     errorElement: <RouteErrorBoundary />,
   },
-  // Public: landing page for the one-time link an admin-triggered password
-  // reset emails out. No auth — the token in the URL is the credential.
+  // Public: self-service WhatsApp password recovery.
+  {
+    path: "/forgot-password",
+    element: (
+      <Suspense fallback={<LoadingState />}>
+        <PasswordRecoveryPage />
+      </Suspense>
+    ),
+  },
+  // Public: existing administrator-triggered email reset link.
   {
     path: "/reset-password",
     element: <ResetPasswordPage />,
@@ -315,6 +323,7 @@ export const routes = [
               { path: "hr/rent-types", element: <RentTypesPage /> },
               { path: "hr/rents", element: <HRRentsPage /> },
               { path: "hr/templates", element: <TemplateLibraryPage /> },
+              { path: "hr/documents/verify", element: <VerifyDocumentPage /> },
 
               // Job Offers
               { path: "hr/job-offers", element: <JobOffersListPage /> },
@@ -424,17 +433,6 @@ export const routes = [
                 path: "hr/announcements/:id/edit",
                 element: <EditAnnouncementPage />,
               },
-
-              // Existing pages
-              {
-                path: "hr/attendance",
-                element: <AttendancePreviewPage role="hr" />,
-              },
-              {
-                path: "hr/attendance-correction-requests",
-                element: <Navigate to="/hr/attendance" replace />,
-              },
-              { path: "hr/leave-balances", element: <HrLeaveBalancesPage /> },
             ],
           },
 
@@ -497,11 +495,7 @@ export const routes = [
                     path: "employee/penalties/:id",
                     element: <PenaltyDetailPage role="employee" />,
                   },
-                  {
-                    path: "employee/attendance-corrections",
-                    element: <Navigate to="/employee/attendance" replace />,
-                  },
-                  { path: "employee/leaves", element: <EmployeeLeavesPage /> },
+
                   {
                     path: "employee/payslips",
                     element: <EmployeePayslipsListPage />,
@@ -605,10 +599,7 @@ export const routes = [
                         path: "manager/attendance",
                         element: <ManagerAttendancePage />,
                       },
-                      {
-                        path: "manager/attendance-corrections",
-                        element: <Navigate to="/manager/attendance" replace />,
-                      },
+
                       { path: "manager/team", element: <ManagerTeamPage /> },
                       {
                         path: "manager/team/:id",

@@ -191,6 +191,11 @@ class LeaveRequest(models.Model):
         default=False,
         help_text=_("Whether the employee will travel during the leave."),
     )
+    will_require_visa = models.BooleanField(
+        null=True,
+        blank=True,
+        help_text=_("Whether the employee expects to require a visa for this leave. Null for earlier requests."),
+    )
 
     # Work delegation
     delegated_to = models.ForeignKey(
@@ -278,7 +283,7 @@ class LeaveRequest(models.Model):
         return f"{employee_label} - {self.leave_type.code} ({self.status})"
 
     def requires_hr_completion(self) -> bool:
-        """Only a non-Saudi employee who travels needs HR to record a visa after CEO approval."""
+        """Non-Saudi travel requires HR review after CEO approval."""
         if not self.will_travel:
             return False
         profile = self.employee_profile
@@ -288,6 +293,10 @@ class LeaveRequest(models.Model):
             except ObjectDoesNotExist:
                 profile = None
         return profile is not None and not profile.is_saudi
+
+    def requires_visa_upload(self) -> bool:
+        """Only an explicit visa requirement makes the HR upload mandatory."""
+        return self.will_require_visa is True
 
     def clean(self):
         super().clean()

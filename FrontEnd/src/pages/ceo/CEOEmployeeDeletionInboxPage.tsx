@@ -1,3 +1,4 @@
+import { shortEmployeeName } from "../../utils/employeeName";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button, Grid, Input, Segmented, Space, Table, Typography } from "antd";
@@ -112,7 +113,9 @@ export default function CEOEmployeeDeletionInboxPage() {
       language === "ar"
         ? snapshot.full_name_ar || snapshot.full_name || snapshot.full_name_en
         : snapshot.full_name_en || snapshot.full_name || snapshot.full_name_ar;
-    return localized || snapshot.employee_id || `#${record.id}`;
+    return (
+      shortEmployeeName(localized) || snapshot.employee_id || `#${record.id}`
+    );
   };
 
   const columns: ColumnsType<EmployeeArchiveRequest> = [
@@ -241,13 +244,13 @@ export default function CEOEmployeeDeletionInboxPage() {
             allowClear
           />
           <Segmented
-          options={segmentedOptions}
-          value={statusFilter}
-          aria-label={t("common.status")}
-          onChange={(value) => {
-            setStatusFilter(value as EmployeeArchiveStatus);
-            setPage(1);
-          }}
+            options={segmentedOptions}
+            value={statusFilter}
+            aria-label={t("common.status")}
+            onChange={(value) => {
+              setStatusFilter(value as EmployeeArchiveStatus);
+              setPage(1);
+            }}
           />
         </Space>
       }

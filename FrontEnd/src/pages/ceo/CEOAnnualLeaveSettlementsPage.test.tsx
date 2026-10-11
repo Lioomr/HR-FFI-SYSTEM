@@ -20,6 +20,10 @@ vi.mock("../../services/api/annualLeavePaymentsApi", async () => {
   };
 });
 
+vi.mock("../../components/documents/DocumentIntegrityPanel", async () => ({
+  default: (await import("../../test/integrityPanelStub")).default,
+}));
+
 import CEOAnnualLeaveSettlementsPage from "./CEOAnnualLeaveSettlementsPage";
 import * as annualApi from "../../services/api/annualLeavePaymentsApi";
 import type { AnnualLeavePaymentRequest } from "../../services/api/annualLeavePaymentsApi";
@@ -388,5 +392,22 @@ describe("CEO Annual Leave settlements queue", () => {
     expect(
       screen.queryByRole("region", { name: "Decision actions" }),
     ).not.toBeInTheDocument();
+  });
+});
+
+describe("CEO Annual Leave settlement document integrity", () => {
+  it("shows the CEO a read-only, not-yet-final card on the deep link", async () => {
+    renderPage("/ceo/annual-leave-payments/9");
+    const panel = await screen.findByTestId(
+      "integrity-panel",
+      {},
+      {
+        timeout: 8000,
+      },
+    );
+    expect(panel).toHaveAttribute("data-type", "annual_entitlement");
+    expect(panel).toHaveAttribute("data-final", "false");
+    expect(panel).toHaveAttribute("data-retry", "false");
+    expect(panel).toHaveAttribute("data-profile", "");
   });
 });

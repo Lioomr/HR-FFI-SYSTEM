@@ -34,9 +34,7 @@ describe("attendance read contract", () => {
     // Manual attendance create/edit is retired; the only write is HR recalculation.
     expect(Object.keys(attendance).sort()).toEqual([
       "downloadAttendanceNotice",
-      "getAttendanceNotice",
       "getAttendanceNotices",
-      "getAttendanceViolation",
       "getAttendanceViolations",
       "getCEOAttendance",
       "getGlobalAttendance",
@@ -52,11 +50,9 @@ describe("attendance read contract", () => {
 describe("attendance policy contract", () => {
   it("reads today's summary and violations without company selectors", async () => {
     await attendance.getTodayAttendanceSummary();
-    await attendance.getAttendanceViolation(41);
     await attendance.getAttendanceViolations();
     expect(vi.mocked(api.get).mock.calls).toEqual([
       ["/api/attendance/me/today-summary/"],
-      ["/api/attendance/violations/41/"],
       ["/api/attendance/violations/", { params: {} }],
     ]);
     // apiClient adds X-Active-Company-Id; callers never pass a company.
@@ -143,7 +139,6 @@ describe("late attendance notice contract", () => {
       date_to: "2026-09-13",
       search: " jane ",
     });
-    await attendance.getAttendanceNotice(31);
 
     expect(vi.mocked(api.get).mock.calls).toEqual([
       ["/api/attendance/notices/", { params: {} }],
@@ -161,7 +156,6 @@ describe("late attendance notice contract", () => {
           },
         },
       ],
-      ["/api/attendance/notices/31/"],
     ]);
     // apiClient adds X-Active-Company-Id; callers never pass a company.
     expect(JSON.stringify(vi.mocked(api.get).mock.calls)).not.toMatch(

@@ -7,9 +7,16 @@ import {
   rejectFinanceLoanRequest,
 } from "../../../services/api/loanApi";
 import { useI18n } from "../../../i18n/useI18n";
+import { useAuthStore } from "../../../auth/authStore";
+
+const HR_ADMIN_ROLES = ["HRManager", "SystemAdmin"];
 
 export default function HrLoanRequestDetailsPage() {
   const { t } = useI18n();
+  const role = useAuthStore((state) => state.user?.role);
+  // Finance approvers also reach this page (/finance/...); only HR/admin get
+  // the work-paper preview, seal retry and employee profile links.
+  const isHrAdmin = HR_ADMIN_ROLES.includes(role ?? "");
   const isFinancePath = window.location.pathname.startsWith("/finance/");
   const backPath = isFinancePath
     ? "/finance/loan-requests"
@@ -36,6 +43,20 @@ export default function HrLoanRequestDetailsPage() {
       // `IsLoanOwnerOrHR` admits HRManager and SystemAdmin, so among the shared
       // review surfaces only this one offers the PDF.
       showPdfDownload
+      showPdfPreview={isHrAdmin}
+      employeeProfilePath={
+        isHrAdmin
+          ? (employeeProfileId) => `/hr/employees/${employeeProfileId}`
+          : undefined
+      }
+      integrity={
+        isHrAdmin
+          ? {
+              canRetrySeal: true,
+              profilePath: (profileId) => `/hr/employees/${profileId}`,
+            }
+          : undefined
+      }
       approveLabel={
         isFinancePath
           ? t("loans.inbox.btnMarkDisbursed")

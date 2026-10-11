@@ -373,7 +373,7 @@ class EvolutionTemplateRenderingTests(DefaultTemplateMixin, SimpleTestCase):
             },
         )
 
-        self.assertLess(message.find("تم تعيينك"), message.find("assigned as a delegate"))
+        self.assertLess(message.find("تم تعيينك"), message.find("assigned as an alternative employee"))
         self.assertIn("Hi Omar,", message)
         self.assertIn("covering for Sara", message)
 

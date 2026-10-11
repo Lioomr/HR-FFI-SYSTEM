@@ -16,6 +16,10 @@ FrontEnd/.env.*
 
 # Private keys (never commit)
 ffi_hr_key.pem
+# Document-signing key material (dev CA, seal, PKCS#12); see plans/Document Signing API Handoff.md
+Backend/signing_keys/
+*.p12
+*.pfx
 
 # Local production access runbooks (never commit)
 PRODUCTION_AGENT_RUNBOOK.local.md
@@ -199,3 +203,7 @@ Backend/static/pdf_templates/company_logos/*
 /internship_completion_certificate_omar_reda_landscape.png
 /Backend/static/pdf_templates/generate_leave_request_canva_style.py
 /Backend/static/pdf_templates/generate_starting_work_acknowledgment_final.py
+
+# Local video tutorial experiments and generated media
+/brag-output-2026-10-11-071158/
+/onetake-reset-tutorial-ar/

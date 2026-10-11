@@ -337,6 +337,18 @@
   font-size: 18px;
 }
 
+.employees-column-search {
+  width: 260px;
+  padding: 10px;
+}
+
+.employees-column-search__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 10px;
+}
+
 .employees-expiry {
   display: flex;
   flex-direction: column;

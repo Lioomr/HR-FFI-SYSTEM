@@ -49,7 +49,6 @@ const ALLOWED_PATHS = [
   // legacy literal `/api/leaves/hr/`.
   '/api/leaves/leave-requests/',
   '/api/leaves/ceo/leave-requests/',
-  '/api/attendance-correction-requests/',
   '/api/core/workflow/delegations/',
   '/api/employees/delegation-candidates/',
   '/api/loans/hr/loan-requests/',

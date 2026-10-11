@@ -18,7 +18,7 @@ from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 
 from assets.models import AssetReturnRequest
-from attendance.models import AttendanceCorrectionRequest, AttendanceRecord
+from attendance.models import AttendanceRecord
 from audit.models import AuditLog
 from audit.utils import audit
 from audit.views import AuditPagination, apply_filters
@@ -193,22 +193,6 @@ def _sync_pending_request_workflows_for_request(request, *, limit_per_type: int 
     )
     for record in _maybe_limit(attendance_qs):
         _sync(record)
-
-    correction_statuses = [
-        AttendanceCorrectionRequest.Status.PENDING_MANAGER,
-        AttendanceCorrectionRequest.Status.PENDING_HR,
-    ]
-    correction_qs = (
-        filter_queryset_by_company_scope(
-            AttendanceCorrectionRequest.objects.all(),
-            request,
-            field_name="employee_profile__company_id",
-        )
-        .filter(status__in=correction_statuses)
-        .order_by("-updated_at", "-id")
-    )
-    for correction in _maybe_limit(correction_qs):
-        _sync(correction)
 
     loan_statuses = [
         LoanRequest.RequestStatus.SUBMITTED,

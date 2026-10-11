@@ -15,10 +15,15 @@ from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 
 from audit.utils import audit
+from core.document_integrity.api import (
+    DocumentIntegrityActionsMixin,
+    frozen_pdf_response,
+    involved_q,
+    resolve_integrity_object,
+)
 from core.files import read_field_file_bytes
 from core.models import WorkflowInstance
 from core.pagination import StandardPagination
-from core.pdf import merge_pdfs
 from core.permissions import IsDepartmentCEOApprover, get_role
 from core.responses import error, success
 from core.services import (
@@ -46,6 +51,13 @@ from organization.services import (
     get_active_company_for_request,
 )
 
+from .document_integrity import (
+    DAMAGE_INVOLVED_FIELDS,
+    RETURN_INVOLVED_FIELDS,
+    can_access_asset_damage_document,
+    can_access_asset_return_document,
+    on_asset_damage_stage_approved,
+)
 from .models import Asset, AssetAssignment, AssetDamageReport, AssetReturnRequest, PrintedLabelJob
 from .permissions import IsEmployeeSelfAsset, IsHRManagerOrSystemAdmin
 from .serializers import (
@@ -61,6 +73,7 @@ from .serializers import (
     AssetSerializer,
     PrintedLabelJobSerializer,
 )
+from .services.damage_reports import AssetDamageTransitionError, approve_damage_report_by_ceo
 from .services.label_pdf import ASSET_LABEL_QR_SALT, render_labels_pdf
 from .services.return_requests import (
     OPEN_STATUSES as OPEN_RETURN_REQUEST_STATUSES,
@@ -158,10 +171,6 @@ _RETURN_STATUS_LABELS = {
     AssetReturnRequest.RequestStatus.PROCESSED: ("Processed", "تم التنفيذ"),
     AssetReturnRequest.RequestStatus.REJECTED: ("Rejected", "مرفوض"),
 }
-
-
-def _to_bool(value):
-    return str(value).strip().lower() in {"1", "true", "yes", "y"}
 
 
 def _display_user_asset(user):
@@ -340,6 +349,30 @@ def _build_return_request_pdf(req: AssetReturnRequest) -> bytes:
         status_label=status_en,
     )
     return render_request_pdf(doc)
+
+
+def _asset_pdf_response(instance, request, *, render_live, filename, audit_prefix, entity):
+    """Asset request PDF: the frozen approved copy when one exists, else a live render.
+
+    ``?packet=1`` still appends the asset invoice (not the verifiable original);
+    ``?workpaper=1&tz=`` gives HR the approval trail. The module audit is kept
+    (``<prefix>_exported_pdf`` / ``_exported_packet``) and skipped on a 409.
+    """
+
+    merged = []
+
+    def packet_pages():
+        invoice_bytes = _asset_invoice_pdf_bytes(instance.asset)
+        merged.append(bool(invoice_bytes))
+        return invoice_bytes
+
+    response = frozen_pdf_response(
+        instance, request, render_live=render_live, filename=filename, packet_pages=packet_pages
+    )
+    if response.status_code == 200:
+        suffix = "exported_packet" if any(merged) else "exported_pdf"
+        audit(request, f"{audit_prefix}_{suffix}", entity=entity, entity_id=instance.id)
+    return response
 
 
 class AssetViewSet(viewsets.ModelViewSet):
@@ -1037,6 +1070,7 @@ class AssetViewSet(viewsets.ModelViewSet):
             description=serializer.validated_data["description"],
             status=initial_status,
         )
+        on_asset_damage_stage_approved(report, role="employee", actor=request.user, at=report.reported_at)
 
         audit(
             request,
@@ -1240,24 +1274,13 @@ class AssetViewSet(viewsets.ModelViewSet):
         report = self._resolve_damage_report_for_pdf(request, report_id)
         if not report:
             return error("Not found", errors=["Not found."], status=404)
-        pdf_bytes = _build_damage_report_pdf(report)
-        packet = _to_bool(request.query_params.get("packet", "0"))
-        audit_action = "asset_damage_report_exported_pdf"
-        if packet:
-            invoice_bytes = _asset_invoice_pdf_bytes(report.asset)
-            if invoice_bytes:
-                pdf_bytes = merge_pdfs([pdf_bytes, invoice_bytes])
-                audit_action = "asset_damage_report_exported_packet"
-        audit(
+        return _asset_pdf_response(
+            report,
             request,
-            audit_action,
+            render_live=lambda: _build_damage_report_pdf(report),
+            filename=f"asset_damage_report_{report.id}.pdf",
+            audit_prefix="asset_damage_report",
             entity="AssetDamageReport",
-            entity_id=report.id,
-        )
-        filename = f"asset_damage_report_{report.id}_packet.pdf" if packet else f"asset_damage_report_{report.id}.pdf"
-        return _configure_sensitive_download(
-            HttpResponse(pdf_bytes, content_type="application/octet-stream"),
-            filename,
         )
 
     @action(
@@ -1270,24 +1293,13 @@ class AssetViewSet(viewsets.ModelViewSet):
         req = self._resolve_return_request_for_pdf(request, request_id)
         if not req:
             return error("Not found", errors=["Not found."], status=404)
-        pdf_bytes = _build_return_request_pdf(req)
-        packet = _to_bool(request.query_params.get("packet", "0"))
-        audit_action = "asset_return_request_exported_pdf"
-        if packet:
-            invoice_bytes = _asset_invoice_pdf_bytes(req.asset)
-            if invoice_bytes:
-                pdf_bytes = merge_pdfs([pdf_bytes, invoice_bytes])
-                audit_action = "asset_return_request_exported_packet"
-        audit(
+        return _asset_pdf_response(
+            req,
             request,
-            audit_action,
+            render_live=lambda: _build_return_request_pdf(req),
+            filename=f"asset_return_request_{req.id}.pdf",
+            audit_prefix="asset_return_request",
             entity="AssetReturnRequest",
-            entity_id=req.id,
-        )
-        filename = f"asset_return_request_{req.id}_packet.pdf" if packet else f"asset_return_request_{req.id}.pdf"
-        return _configure_sensitive_download(
-            HttpResponse(pdf_bytes, content_type="application/octet-stream"),
-            filename,
         )
 
 
@@ -1322,11 +1334,12 @@ class CEOAssetDamageReportViewSet(viewsets.ReadOnlyModelViewSet):
         if not s.is_valid():
             return error("Validation error", errors=s.errors.get("comment", ["Invalid payload."]), status=422)
 
-        instance.status = AssetDamageReport.RequestStatus.APPROVED
-        instance.ceo_decision_by = request.user
-        instance.ceo_decision_at = timezone.now()
-        instance.ceo_decision_note = s.validated_data.get("comment", "")
-        instance.save(update_fields=["status", "ceo_decision_by", "ceo_decision_at", "ceo_decision_note"])
+        try:
+            instance = approve_damage_report_by_ceo(
+                instance, actor=request.user, comment=s.validated_data.get("comment", "")
+            )
+        except AssetDamageTransitionError as exc:
+            return error("Validation error", errors=[str(exc)], status=422)
         audit(request, "asset_damage_report_approved_ceo", entity="AssetDamageReport", entity_id=instance.id)
         try:
             notify_profile_request_status_whatsapp(
@@ -1455,15 +1468,27 @@ class ManagerAssetReturnRequestViewSet(viewsets.ReadOnlyModelViewSet):
             metadata={"actor_source": actor_source},
         )
         try:
-            notify_users_for_pending_status(
-                users=get_hr_approver_users(),
-                request_type="Asset Return Request",
-                request_id=instance.id,
-                requester_name=instance.employee.full_name or instance.employee.user.email,
-                status_label=instance.status,
-                details=[f"Asset: {instance.asset.name_en or instance.asset.asset_code} ({instance.asset.asset_code})"],
-                action_path="/hr/assets",
-            )
+            asset_detail = f"Asset: {instance.asset.name_en or instance.asset.asset_code} ({instance.asset.asset_code})"
+            if instance.status == AssetReturnRequest.RequestStatus.APPROVED:
+                # The manager is also an HR manager, so nobody else decides: tell the employee.
+                notify_profile_request_status_whatsapp(
+                    profile=instance.employee,
+                    request_type="Asset Return Request",
+                    request_id=instance.id,
+                    status_label="Approved",
+                    details=[asset_detail],
+                    action_path="/employee/assets",
+                )
+            else:
+                notify_users_for_pending_status(
+                    users=get_hr_approver_users(),
+                    request_type="Asset Return Request",
+                    request_id=instance.id,
+                    requester_name=instance.employee.full_name or instance.employee.user.email,
+                    status_label=instance.status,
+                    details=[asset_detail],
+                    action_path="/hr/assets",
+                )
         except Exception:
             _log_notification_failure(
                 "asset_return_manager_approval_notification_failed",
@@ -1597,3 +1622,42 @@ class CEOAssetReturnRequestViewSet(viewsets.ReadOnlyModelViewSet):
                 actor_id=request.user.id,
             )
         return success(self.get_serializer(instance).data)
+
+
+class _AssetIntegrityViewSet(DocumentIntegrityActionsMixin, viewsets.GenericViewSet):
+    """``{id}/integrity/``, ``integrity/verify/``, ``integrity/retry-seal/`` beside an asset PDF route.
+
+    Owner, recorded approvers, or HR/SystemAdmin in an accessible company; 404 for
+    anyone else. The PDF download itself stays owner/HR only (``AssetViewSet``).
+    """
+
+    permission_classes = [IsAuthenticated]
+    model = None
+    involved_fields: tuple = ()
+
+    @staticmethod
+    def can_access(user, instance) -> bool:  # pragma: no cover - overridden
+        return False
+
+    def get_integrity_object(self):
+        user = self.request.user
+        base = self.model.objects.select_related("asset", "employee", "employee__user")
+        return resolve_integrity_object(
+            self.request,
+            self.kwargs.get(self.lookup_field),
+            hr_queryset=filter_queryset_by_accessible_companies(base, self.request, field_name="asset__company_id"),
+            involved_queryset=lambda: base.filter(involved_q(user, self.involved_fields)),
+            can_access=self.can_access,
+        )
+
+
+class AssetReturnRequestIntegrityViewSet(_AssetIntegrityViewSet):
+    model = AssetReturnRequest
+    involved_fields = RETURN_INVOLVED_FIELDS
+    can_access = staticmethod(can_access_asset_return_document)
+
+
+class AssetDamageReportIntegrityViewSet(_AssetIntegrityViewSet):
+    model = AssetDamageReport
+    involved_fields = DAMAGE_INVOLVED_FIELDS
+    can_access = staticmethod(can_access_asset_damage_document)

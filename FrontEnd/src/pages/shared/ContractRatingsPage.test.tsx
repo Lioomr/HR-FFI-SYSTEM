@@ -17,6 +17,17 @@ vi.mock("../../services/api/contractRatingsApi", async (importOriginal) => ({
   listContractRatings: vi.fn(),
   submitRatingCeoDecision: vi.fn(),
   submitRatingHrGate: vi.fn(),
+  downloadContractRatingPdf: vi.fn(),
+  getContractRatingWorkpaperBlob: vi.fn(),
+}));
+
+vi.mock("../../components/documents/DocumentIntegrityPanel", async () => ({
+  default: (await import("../../test/integrityPanelStub")).default,
+}));
+
+const openPreview = vi.fn();
+vi.mock("../../components/ui/useFilePreview", () => ({
+  useFilePreview: () => ({ openPreview, previewModal: null }),
 }));
 
 import ContractRatingsPage from "./ContractRatingsPage";
@@ -450,6 +461,138 @@ describe("ContractRatingsPage — CEO", () => {
     );
     expect(
       await screen.findByText("This rating is not pending a CEO decision."),
+    ).toBeTruthy();
+  });
+});
+
+describe("ContractRatingsPage document integrity", () => {
+  const decided = {
+    ...ratedFull,
+    status: "DECIDED" as const,
+    ceo_decision: "RENEW" as const,
+    ceo_decided_at: "2026-09-16T08:00:00Z",
+    ceo_decided_by: 9,
+    ceo_decided_by_name: "The CEO",
+  };
+  const decidedWithComment = {
+    ...decided,
+    hr_comment_requested_at: "2026-09-15T08:00:00Z",
+    hr_comment_requested_by_name: "The CEO",
+  };
+
+  beforeEach(() => {
+    openPreview.mockReset();
+    vi.mocked(api.downloadContractRatingPdf).mockReset();
+    vi.mocked(api.getContractRatingWorkpaperBlob).mockReset();
+  });
+
+  it("gives HR the decision card with seal retry once a comment was requested", async () => {
+    getRating.mockResolvedValue({
+      status: "success",
+      data: decidedWithComment,
+    });
+    renderAt("/hr/contract-ratings/1");
+    const panel = await screen.findByTestId("integrity-panel");
+    expect(panel).toHaveAttribute("data-type", "contract_rating");
+    expect(panel).toHaveAttribute("data-id", "1");
+    expect(panel).toHaveAttribute("data-final", "true");
+    expect(panel).toHaveAttribute("data-retry", "true");
+    expect(panel).toHaveAttribute("data-profile", "/hr/employees/9");
+  });
+
+  it("shows the CEO a read-only card with plain-text names", async () => {
+    getRating.mockResolvedValue({ status: "success", data: decided });
+    renderAt("/ceo/contract-ratings/1");
+    const panel = await screen.findByTestId("integrity-panel");
+    expect(panel).toHaveAttribute("data-retry", "false");
+    expect(panel).toHaveAttribute("data-profile", "");
+  });
+
+  it("renders no card before the CEO decision", async () => {
+    getRating.mockResolvedValue({ status: "success", data: skippedFull });
+    renderAt("/ceo/contract-ratings/1");
+    await screen.findAllByText(/RT EMP1/);
+    expect(screen.queryByTestId("integrity-panel")).toBeNull();
+  });
+
+  it("renders no card for HR without a CEO comment request", async () => {
+    getRating.mockResolvedValue({
+      status: "success",
+      data: {
+        ...header,
+        viewer: "hr_coarse",
+        status: "DECIDED",
+        rating_mode: "RATE",
+        hr_comment_requested_at: null,
+        gate: null,
+        outcome: null,
+      },
+    });
+    renderAt("/hr/contract-ratings/1");
+    await screen.findAllByText(/RT EMP1/);
+    expect(screen.queryByTestId("integrity-panel")).toBeNull();
+  });
+
+  it.each(["employee", "manager"] as const)(
+    "never renders integrity UI for the %s view of a decided rating",
+    async (viewer) => {
+      getRating.mockResolvedValue({
+        status: "success",
+        data: {
+          ...header,
+          viewer,
+          status: "DECIDED",
+          rating_mode: "RATE",
+          ...(viewer === "employee"
+            ? { employee_response: null }
+            : { manager_response: null }),
+        } as never,
+      });
+      renderAt("/hr/contract-ratings/1");
+      await screen.findAllByText(/RT EMP1/);
+      expect(screen.queryByTestId("integrity-panel")).toBeNull();
+    },
+  );
+
+  it("previews the HR work paper but downloads the original", async () => {
+    const paper = new Blob(["%PDF-work"]);
+    vi.mocked(api.getContractRatingWorkpaperBlob).mockResolvedValue(paper);
+    vi.mocked(api.downloadContractRatingPdf).mockResolvedValue(
+      new Blob(["%PDF-orig"]),
+    );
+    getRating.mockResolvedValue({
+      status: "success",
+      data: decidedWithComment,
+    });
+    renderAt("/hr/contract-ratings/1");
+    fireEvent.click(await screen.findByRole("button", { name: /Preview/ }));
+    const request = openPreview.mock.calls[0][0];
+    await expect(request.load()).resolves.toBe(paper);
+    expect(api.getContractRatingWorkpaperBlob).toHaveBeenCalledWith("1");
+    expect(api.downloadContractRatingPdf).not.toHaveBeenCalled();
+  });
+
+  it("previews the plain copy for the CEO", async () => {
+    vi.mocked(api.downloadContractRatingPdf).mockResolvedValue(new Blob(["x"]));
+    getRating.mockResolvedValue({ status: "success", data: decided });
+    renderAt("/ceo/contract-ratings/1");
+    fireEvent.click(await screen.findByRole("button", { name: /Preview/ }));
+    await openPreview.mock.calls[0][0].load();
+    expect(api.downloadContractRatingPdf).toHaveBeenCalledWith("1");
+    expect(api.getContractRatingWorkpaperBlob).not.toHaveBeenCalled();
+  });
+
+  it("explains a blocked (409) decision-copy download", async () => {
+    vi.mocked(api.downloadContractRatingPdf).mockRejectedValue({
+      response: { status: 409, data: new Blob(["{}"]) },
+    });
+    getRating.mockResolvedValue({ status: "success", data: decided });
+    renderAt("/ceo/contract-ratings/1");
+    fireEvent.click(await screen.findByRole("button", { name: /Download/ }));
+    expect(
+      await screen.findByText(
+        "This approved document failed its integrity check, so it cannot be downloaded. Contact HR.",
+      ),
     ).toBeTruthy();
   });
 });

@@ -258,7 +258,7 @@ PASSPORT = DocumentFixture(
     ],
     expected={
         "passport_number": SAMPLE_PASSPORT_NUMBER,
-        "nationality": "EGY",
+        "nationality": "Egypt",
         "date_of_birth": "1990-01-01",
         "expiry_date": "2030-01-01",
         "status": "success",

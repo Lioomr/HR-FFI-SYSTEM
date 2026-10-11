@@ -30,7 +30,6 @@ import PageHeader from "../../components/ui/PageHeader";
 import ResponsiveTable from "../../components/ui/ResponsiveTable";
 import ErrorState from "../../components/ui/ErrorState";
 import LoadingState from "../../components/ui/LoadingState";
-import ApprovalTimeline from "../../components/requests/ApprovalTimeline";
 import ApprovalFlowMap from "../../components/requests/ApprovalFlowMap";
 import { buildStagesFromWorkflow } from "../../components/requests/workflowPresentation";
 import StickyDecisionBar from "../../components/ceo/StickyDecisionBar";
@@ -64,10 +63,14 @@ import {
 } from "../../services/api/httpErrors";
 import { triggerBlobDownload } from "../../services/api/downloads";
 import { useFilePreview } from "../../components/ui/useFilePreview";
+import DocumentIntegrityPanel from "../../components/documents/DocumentIntegrityPanel";
+import { isDocumentFinal } from "../../components/documents/documentTypes";
+import { isDocumentBlocked } from "../../components/documents/integrityPresentation";
 import {
   acknowledgeRatingTerminationNotice,
   downloadContractRatingPdf,
   getContractRating,
+  getContractRatingWorkpaperBlob,
   isRatedFullContractRating,
   listContractRatings,
   requestRatingHrComment,
@@ -258,8 +261,15 @@ export default function ContractRatingsPage() {
     if (!id) return;
     openPreview({
       title: t("contractRatings.previewPdf"),
-      filename: `contract_rating_${id}.pdf`,
-      load: () => downloadContractRatingPdf(id),
+      // HR previews the work paper (decision copy + approval trail); the CEO
+      // sees the plain copy. Download always serves the verifiable original.
+      filename: isCeoRoute
+        ? `contract_rating_${id}.pdf`
+        : `contract_rating_${id}_workpaper.pdf`,
+      load: () =>
+        isCeoRoute
+          ? downloadContractRatingPdf(id)
+          : getContractRatingWorkpaperBlob(id),
     });
   };
 
@@ -275,7 +285,10 @@ export default function ContractRatingsPage() {
       messageApi.error(
         isForbidden(error)
           ? getHttpErrorMessage(error)
-          : t("contractRatings.pdfFailed"),
+          : isDocumentBlocked(error)
+            ? // 409: the frozen decision copy is missing or fails its hash.
+              t("documentIntegrity.downloadBlocked")
+            : t("contractRatings.pdfFailed"),
       );
     } finally {
       setPdfDownloading(false);
@@ -920,14 +933,26 @@ export default function ContractRatingsPage() {
           </div>
         ) : null}
 
-        {/* G. Workflow history */}
-        <Card title={t("contractRatings.history")}>
-          {item.workflow?.history?.length ? (
-            <ApprovalTimeline workflow={item.workflow} />
-          ) : (
-            <Text type="secondary">{t("contractRatings.historyEmpty")}</Text>
-          )}
-        </Card>
+        {/* Only the decision-copy viewers (CEO, or HR once the CEO asked for
+            an HR comment) reach this "full" view; the employee and manager
+            views never render integrity UI. A CEO who did not decide gets a
+            quiet "not available" from the backend's 404. */}
+        {isDocumentFinal("contract_rating", item.status) &&
+        (isCeoRoute || Boolean(item.hr_comment_requested_at)) ? (
+          <div style={{ marginBottom: 16 }}>
+            <DocumentIntegrityPanel
+              documentType="contract_rating"
+              requestId={item.id}
+              isFinal
+              canRetrySeal={!isCeoRoute}
+              profilePath={
+                isCeoRoute
+                  ? undefined
+                  : (profileId) => `/hr/employees/${profileId}`
+              }
+            />
+          </div>
+        ) : null}
 
         {canCeoAct ? (
           <CeoRatingDecisionPanel

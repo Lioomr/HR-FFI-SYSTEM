@@ -46,3 +46,11 @@ def send_error_report_email(subject: str, text_body: str, html_body: str) -> boo
         logger.error("error_report_email_failed", extra={"reason": result.get("reason")})
         return False
     return True
+
+
+@shared_task(name="core.tasks.seal_frozen_document")
+def seal_frozen_document(document_id: int) -> str:
+    """Apply the organization seal (and personal signatures) to a frozen document."""
+    from core.document_integrity.services import seal_document
+
+    return seal_document(document_id).seal_status

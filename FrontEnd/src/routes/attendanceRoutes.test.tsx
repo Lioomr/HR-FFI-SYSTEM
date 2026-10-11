@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ReactElement } from "react";
-import { Navigate, type RouteObject } from "react-router-dom";
+import { type RouteObject } from "react-router-dom";
 import { routes } from "./routes";
 // Attendance pages are code-split with React.lazy (see ./lazyPages). Compare
 // against the same lazy-wrapped reference the routes use, rather than the
@@ -41,14 +41,6 @@ function collect(
 }
 const paths = collect(routes);
 describe("BioTime attendance routes", () => {
-  it.each([
-    ["employee/attendance-corrections", "/employee/attendance"],
-    ["hr/attendance-correction-requests", "/hr/attendance"],
-    ["manager/attendance-corrections", "/manager/attendance"],
-  ])("%s redirects to %s", (path, to) => {
-    expect(paths.get(path)?.type).toBe(Navigate);
-    expect(paths.get(path)?.props).toMatchObject({ to, replace: true });
-  });
   it("keeps the CEO leave detail page available", () => {
     expect(paths.get("ceo/leave/requests/:id")?.type).toBe(
       LeaveRequestDetailsPage,

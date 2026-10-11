@@ -1,8 +1,10 @@
+import { shortEmployeeName } from "../../../utils/employeeName";
 import BackButton from "../../../components/ui/BackButton";
 import { useCallback, useEffect, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import {
   DownloadOutlined,
+  DownOutlined,
   EyeOutlined,
   FilePdfOutlined,
 } from "@ant-design/icons";
@@ -10,6 +12,7 @@ import {
   Button,
   Card,
   Descriptions,
+  Dropdown,
   Input,
   Modal,
   Space,
@@ -25,9 +28,10 @@ import ErrorState from "../../../components/ui/ErrorState";
 import LoadingState from "../../../components/ui/LoadingState";
 import PageHeader from "../../../components/ui/PageHeader";
 import { useFilePreview } from "../../../components/ui/useFilePreview";
-import ApprovalTimeline from "../../../components/requests/ApprovalTimeline";
 import PendingActionBanner from "../../../components/requests/PendingActionBanner";
 import RequestObligationsPanel from "../../../components/requests/RequestObligationsPanel";
+import DocumentIntegrityPanel from "../../../components/documents/DocumentIntegrityPanel";
+import { isDocumentBlocked } from "../../../components/documents/integrityPresentation";
 import { isApiError } from "../../../services/api/apiTypes";
 import {
   getLeaveRequest,
@@ -133,11 +137,22 @@ export default function EmployeeLeaveRequestDetailsPage() {
       const description =
         getHttpStatus(err) === 403
           ? t("leave.pdfDownloadForbidden")
-          : t("leave.pdfDownloadFailed");
+          : isDocumentBlocked(err)
+            ? t("documentIntegrity.downloadBlocked")
+            : t("leave.pdfDownloadFailed");
       notification.error({ message: t("common.error"), description });
     } finally {
       setPdfLoading(false);
     }
+  };
+
+  const previewPdf = () => {
+    if (!request) return;
+    openPreview({
+      title: t("leave.previewRequestPdf"),
+      filename: `leave_request_${request.id}.pdf`,
+      load: () => getLeaveRequestPdfBlob(request.id, false),
+    });
   };
 
   const previewDocument = () => {
@@ -269,27 +284,69 @@ export default function EmployeeLeaveRequestDetailsPage() {
         }
         actions={
           <Space wrap>
-            <Button
-              icon={<FilePdfOutlined />}
-              onClick={handlePdfDownload}
-              loading={pdfLoading}
+            <Dropdown
+              trigger={["click"]}
+              menu={{
+                items: [
+                  {
+                    key: "pdf",
+                    label: t("leave.downloadRequestPdf"),
+                    icon: <FilePdfOutlined />,
+                    disabled: pdfLoading,
+                  },
+                  ...(request.document
+                    ? [
+                        {
+                          key: "document",
+                          label: t("leave.downloadAttachment"),
+                          icon: <DownloadOutlined />,
+                          disabled: documentLoading,
+                        },
+                      ]
+                    : []),
+                ],
+                onClick: ({ key }) => {
+                  if (key === "pdf") void handlePdfDownload();
+                  else void downloadDocument();
+                },
+              }}
             >
-              {t("leave.downloadRequestPdf")}
-            </Button>
-            {request.document ? (
-              <>
-                <Button icon={<EyeOutlined />} onClick={previewDocument}>
-                  {t("leave.previewAttachment")}
-                </Button>
-                <Button
-                  icon={<DownloadOutlined />}
-                  onClick={downloadDocument}
-                  loading={documentLoading}
-                >
-                  {t("leave.downloadAttachment")}
-                </Button>
-              </>
-            ) : null}
+              <Button
+                icon={<DownloadOutlined aria-hidden />}
+                loading={pdfLoading || documentLoading}
+              >
+                {t("common.download")} <DownOutlined aria-hidden />
+              </Button>
+            </Dropdown>
+            <Dropdown
+              trigger={["click"]}
+              menu={{
+                items: [
+                  {
+                    key: "pdf",
+                    label: t("leave.previewRequestPdf"),
+                    icon: <FilePdfOutlined />,
+                  },
+                  ...(request.document
+                    ? [
+                        {
+                          key: "document",
+                          label: t("leave.previewAttachment"),
+                          icon: <EyeOutlined />,
+                        },
+                      ]
+                    : []),
+                ],
+                onClick: ({ key }) => {
+                  if (key === "pdf") previewPdf();
+                  else previewDocument();
+                },
+              }}
+            >
+              <Button icon={<EyeOutlined aria-hidden />}>
+                {t("common.preview")} <DownOutlined aria-hidden />
+              </Button>
+            </Dropdown>
             <BackButton
               onClick={() => navigate(backPath)}
               style={{ borderRadius: 10, minHeight: 40 }}
@@ -305,7 +362,6 @@ export default function EmployeeLeaveRequestDetailsPage() {
       <div style={{ display: "grid", gap: 18 }}>
         <PendingActionBanner workflow={request.workflow} />
         <LeaveApprovalMap request={request} t={t} />
-        <ApprovalTimeline workflow={request.workflow} />
         <RequestObligationsPanel
           parentType="leave_request"
           parentId={request.id}
@@ -349,6 +405,17 @@ export default function EmployeeLeaveRequestDetailsPage() {
                 {request.reason || "-"}
               </Text>
             </Descriptions.Item>
+            {request.source !== "hr_manual" && (
+              <Descriptions.Item label={t("leave.willTravel")}>
+                {t(request.will_travel ? "common.yes" : "common.no")}
+              </Descriptions.Item>
+            )}
+            {request.requires_hr_completion_visa &&
+              request.will_require_visa != null && (
+                <Descriptions.Item label={t("leave.willRequireVisa")}>
+                  {t(request.will_require_visa ? "common.yes" : "common.no")}
+                </Descriptions.Item>
+              )}
             {request.status === "rejected" ? (
               <Descriptions.Item label={t("leave.rejectionReason")} span={2}>
                 <Text style={{ color: "#b91c1c", whiteSpace: "pre-wrap" }}>
@@ -363,6 +430,11 @@ export default function EmployeeLeaveRequestDetailsPage() {
             ) : null}
           </Descriptions>
         </Card>
+
+        <DocumentIntegrityPanel
+          requestId={request.id}
+          isFinal={request.status === "approved"}
+        />
       </div>
 
       <Modal
@@ -390,7 +462,7 @@ export default function EmployeeLeaveRequestDetailsPage() {
         <StickyDecisionBar>
           <ApprovalActions
             size="large"
-            subjectLabel={request.employee?.full_name}
+            subjectLabel={shortEmployeeName(request.employee?.full_name)}
             approveLoading={processing}
             onApprove={handleDelegateApprove}
             onReject={() => setRejectModalVisible(true)}

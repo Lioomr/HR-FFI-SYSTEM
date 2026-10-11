@@ -11,6 +11,7 @@ import {
   isUnauthorized,
 } from "../../services/api/httpErrors";
 import { useI18n } from "../../i18n/useI18n";
+import { isDocumentBlocked } from "../documents/integrityPresentation";
 
 /**
  * Downloads a loan request PDF through the authenticated API client.
@@ -48,6 +49,10 @@ export default function LoanPdfDownloadButton({
         messageApi.error(t("loans.pdf.forbidden"));
       } else if (isNotFound(error)) {
         messageApi.error(t("loans.pdf.notFound"));
+      } else if (isDocumentBlocked(error)) {
+        // 409: the frozen approved copy is missing or fails its hash, and the
+        // backend never silently re-renders it.
+        messageApi.error(t("documentIntegrity.downloadBlocked"));
       } else {
         messageApi.error(getHttpErrorMessage(error) || t("loans.pdf.failed"));
       }

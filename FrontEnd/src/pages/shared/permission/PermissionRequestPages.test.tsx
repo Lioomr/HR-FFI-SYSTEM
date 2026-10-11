@@ -26,8 +26,13 @@ vi.mock("../../../services/api/permissionRequestsApi", async () => {
     decidePermissionRequest: vi.fn(),
     downloadPermissionRequestAttachment: vi.fn(),
     addPermissionRequestAttachments: vi.fn(),
+    downloadPermissionRequestPdf: vi.fn(),
   };
 });
+
+vi.mock("../../../components/documents/DocumentIntegrityPanel", async () => ({
+  default: (await import("../../../test/integrityPanelStub")).default,
+}));
 
 const base: PermissionRequest = {
   id: 1,
@@ -340,5 +345,60 @@ describe("late permission detail", () => {
 
     expect(await screen.findByText("Evidence (1)")).toBeInTheDocument();
     expect(screen.queryByText("Add evidence")).not.toBeInTheDocument();
+  });
+});
+
+describe("permission document integrity", () => {
+  const approved = () =>
+    response({
+      status: "approved",
+      workflow: { ...base.workflow, can_cancel: false },
+    });
+
+  it("gives HR the final card with seal retry and profile links", async () => {
+    vi.mocked(permissionApi.getPermissionRequest).mockResolvedValue(approved());
+    render(<PermissionRequestDetailPage role="hr" />);
+    const panel = await screen.findByTestId("integrity-panel");
+    expect(panel).toHaveAttribute("data-type", "permission");
+    expect(panel).toHaveAttribute("data-id", "1");
+    expect(panel).toHaveAttribute("data-final", "true");
+    expect(panel).toHaveAttribute("data-retry", "true");
+    expect(panel).toHaveAttribute("data-profile", "/hr/employees/9");
+  });
+
+  it.each(["employee", "manager"] as const)(
+    "keeps the %s card read-only with plain-text names",
+    async (role) => {
+      vi.mocked(permissionApi.getPermissionRequest).mockResolvedValue(
+        approved(),
+      );
+      render(<PermissionRequestDetailPage role={role} />);
+      const panel = await screen.findByTestId("integrity-panel");
+      expect(panel).toHaveAttribute("data-final", "true");
+      expect(panel).toHaveAttribute("data-retry", "false");
+      expect(panel).toHaveAttribute("data-profile", "");
+    },
+  );
+
+  it("is not final while the request is pending", async () => {
+    render(<PermissionRequestDetailPage role="hr" />);
+    expect(await screen.findByTestId("integrity-panel")).toHaveAttribute(
+      "data-final",
+      "false",
+    );
+  });
+
+  it("explains a blocked (409) PDF download", async () => {
+    vi.mocked(permissionApi.getPermissionRequest).mockResolvedValue(approved());
+    vi.mocked(permissionApi.downloadPermissionRequestPdf).mockRejectedValue({
+      response: { status: 409, data: new Blob(["{}"]) },
+    });
+    render(<PermissionRequestDetailPage role="employee" />);
+    fireEvent.click(await screen.findByText("Download PDF"));
+    expect(
+      await screen.findByText(
+        "This approved document failed its integrity check, so it cannot be downloaded. Contact HR.",
+      ),
+    ).toBeInTheDocument();
   });
 });

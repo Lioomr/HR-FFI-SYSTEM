@@ -660,6 +660,7 @@ class ManagerWorkflowTests(APITestCase):
             end_date=date(2026, 10, 9),
             status=LeaveRequest.RequestStatus.PENDING_HR_COMPLETION,
             will_travel=True,
+            will_require_visa=True,
         )
 
         self.client.force_authenticate(user=self.hr_user)

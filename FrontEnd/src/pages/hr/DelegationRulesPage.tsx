@@ -221,7 +221,11 @@ export default function DelegationRulesPage() {
             }
           }}
         >
-          <Button danger icon={<DeleteOutlined />} />
+          <Button
+            aria-label={t("common.delete")}
+            danger
+            icon={<DeleteOutlined />}
+          />
         </Popconfirm>
       ),
     },

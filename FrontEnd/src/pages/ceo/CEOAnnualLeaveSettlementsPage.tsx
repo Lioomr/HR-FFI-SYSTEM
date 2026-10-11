@@ -1,3 +1,4 @@
+import { shortEmployeeName } from "../../utils/employeeName";
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
@@ -23,6 +24,8 @@ import {
 } from "../../components/leaves/annualLeaveSettlement";
 import AnnualLeaveSettlementApprovalMap from "../../components/leaves/AnnualLeaveSettlementApprovalMap";
 import AnnualLeaveSettlementDetails from "../../components/leaves/AnnualLeaveSettlementDetails";
+import DocumentIntegrityPanel from "../../components/documents/DocumentIntegrityPanel";
+import { isDocumentFinal } from "../../components/documents/documentTypes";
 import { useI18n } from "../../i18n/useI18n";
 import {
   approveAnnualLeavePaymentRequest,
@@ -106,7 +109,9 @@ export default function CEOAnnualLeaveSettlementsPage() {
     : undefined;
 
   const employeeName = (record: AnnualLeavePaymentRequest) =>
-    record.employee_name || `#${record.employee_id ?? record.id}`;
+    shortEmployeeName(
+      record.employee_name || `#${record.employee_id ?? record.id}`,
+    );
 
   const submitApprove = async () => {
     if (!approving) return;
@@ -206,7 +211,9 @@ export default function CEOAnnualLeaveSettlementsPage() {
           <div style={{ fontWeight: 600, color: "#0f172a" }}>
             {employeeName(record)}
           </div>
-          <div style={{ fontSize: 12, color: "#64748b" }}>{record.public_reference || `#${record.id}`}</div>
+          <div style={{ fontSize: 12, color: "#64748b" }}>
+            {record.public_reference || `#${record.id}`}
+          </div>
         </div>
       ),
     },
@@ -312,6 +319,15 @@ export default function CEOAnnualLeaveSettlementsPage() {
                 <AnnualLeaveSettlementDetails
                   request={deepLinked}
                   showEmployee
+                />
+                {/* Read-only for the CEO: no seal retry, plain-text names. */}
+                <DocumentIntegrityPanel
+                  documentType="annual_entitlement"
+                  requestId={deepLinked.id}
+                  isFinal={isDocumentFinal(
+                    "annual_entitlement",
+                    deepLinked.status,
+                  )}
                 />
               </Space>
             </Card>

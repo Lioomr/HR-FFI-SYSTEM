@@ -100,6 +100,7 @@ export interface ListEmployeesParams {
   sponsor?: string;
   status?: string;
   nationality?: string;
+  manager?: string;
   join_date_order?: "asc" | "desc";
   archive_state?: "active" | "archived" | "all";
   /** "unlinked": only employees without a user account (invite candidates). */
@@ -210,14 +211,29 @@ export async function exportEmployees(
 /**
  * Get a single employee by ID
  */
-export async function getEmployee(
+// The signed-in employee's own record is read by the layout, route guards and
+// the landing page together on every page load. Callers that ask while an
+// identical request is still running share it; nothing is kept afterwards, so
+// a later call always sees fresh data.
+const inflightEmployeeReads = new Map<string, Promise<ApiResponse<Employee>>>();
+
+export function getEmployee(
   id: string | number,
   params?: Record<string, string | number>,
 ): Promise<ApiResponse<Employee>> {
-  const { data } = await api.get<ApiResponse<Employee>>(`/employees/${id}`, {
-    params,
-  });
-  return data;
+  const read = () =>
+    api
+      .get<ApiResponse<Employee>>(`/employees/${id}`, { params })
+      .then(({ data }) => data);
+  if (String(id) !== "me") return read();
+
+  const key = JSON.stringify(params ?? {});
+  let request = inflightEmployeeReads.get(key);
+  if (!request) {
+    request = read().finally(() => inflightEmployeeReads.delete(key));
+    inflightEmployeeReads.set(key, request);
+  }
+  return request;
 }
 
 /**

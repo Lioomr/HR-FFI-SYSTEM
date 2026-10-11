@@ -1,3 +1,4 @@
+import { shortEmployeeName } from "../../utils/employeeName";
 import { useCallback, useEffect, useState } from "react";
 import { Alert, Button, Select, Space, Tag } from "antd";
 import { ReloadOutlined } from "@ant-design/icons";
@@ -97,12 +98,14 @@ export default function ManagerAttendancePage() {
               title: t("common.employee"),
               key: "employee",
               render: (_, record) =>
-                (language === "ar"
-                  ? record.employee_name_ar
-                  : record.employee_name_en) ||
-                record.employee_name ||
-                record.employee_email ||
-                "—",
+                shortEmployeeName(
+                  (language === "ar"
+                    ? record.employee_name_ar
+                    : record.employee_name_en) ||
+                    record.employee_name ||
+                    record.employee_email ||
+                    "—",
+                ),
             },
             {
               title: t("attendance.date"),

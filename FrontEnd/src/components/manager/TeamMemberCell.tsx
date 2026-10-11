@@ -1,3 +1,4 @@
+import { shortEmployeeName } from "../../utils/employeeName";
 import { Avatar } from "antd";
 import { UserOutlined } from "@ant-design/icons";
 import { Link } from "react-router-dom";
@@ -61,7 +62,7 @@ export default function TeamMemberCell({
               textDecoration: "none",
             }}
           >
-            {name || "—"}
+            {shortEmployeeName(name) || "—"}
           </Link>
         ) : (
           <div
@@ -74,7 +75,7 @@ export default function TeamMemberCell({
               whiteSpace: "nowrap",
             }}
           >
-            {name || "—"}
+            {shortEmployeeName(name) || "—"}
           </div>
         )}
         {secondary && (

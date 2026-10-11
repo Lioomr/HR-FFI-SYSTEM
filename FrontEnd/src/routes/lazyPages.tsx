@@ -120,6 +120,9 @@ export const HRRentsPage = lazy(() => import("../pages/hr/rents/HRRentsPage"));
 export const TemplateLibraryPage = lazy(
   () => import("../pages/hr/templates/TemplateLibraryPage"),
 );
+export const VerifyDocumentPage = lazy(
+  () => import("../pages/hr/documents/VerifyDocumentPage"),
+);
 
 // ─── HR: job offers ─────────────────────────────────────────────────────────
 export const JobOffersListPage = lazy(
@@ -151,9 +154,6 @@ export const EmployeePayslipDetailsPage = lazy(
 );
 
 // ─── Employee: leave / loan / assets / attendance ───────────────────────────
-export const EmployeeLeavesPage = lazy(
-  () => import("../pages/employee/EmployeeLeavesPage"),
-);
 export const RequestLeavePage = lazy(
   () => import("../pages/employee/leave/RequestLeavePage"),
 );
@@ -203,9 +203,6 @@ export const LoanInboxPage = lazy(
 );
 export const HrLoanRequestDetailsPage = lazy(
   () => import("../pages/hr/loan/LoanRequestDetailsPage"),
-);
-export const HrLeaveBalancesPage = lazy(
-  () => import("../pages/hr/HrLeaveBalancesPage"),
 );
 export const AttendancePolicyPage = lazy(
   () => import("../pages/hr/AttendancePolicyPage"),
@@ -358,4 +355,8 @@ export const JobOfferResponsePage = lazy(
 );
 export const Unauthorized403Page = lazy(
   () => import("../pages/Unauthorized403Page"),
+);
+
+export const PasswordRecoveryPage = lazy(
+  () => import("../pages/PasswordRecoveryPage"),
 );

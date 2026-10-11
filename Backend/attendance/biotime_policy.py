@@ -18,6 +18,8 @@ being mapped, or a company deactivated).
 
 from __future__ import annotations
 
+import re
+
 from rest_framework import status
 
 from core.responses import error
@@ -66,7 +68,7 @@ def has_active_biotime_mapping(profile) -> bool:
 
 
 def is_attendance_exempt(profile) -> bool:
-    """Return the explicit exemption or the automatic CEO-role exemption.
+    """Return explicit exemptions and automatic CEO/General Manager exemptions.
 
     Enforcement remains the responsibility of later attendance/permission
     workflows. Keeping the rule here prevents those workflows from hard-coding
@@ -77,7 +79,17 @@ def is_attendance_exempt(profile) -> bool:
     if bool(getattr(profile, "attendance_exempt", False)):
         return True
     user = getattr(profile, "user", None)
-    return bool(user and user.groups.filter(name="CEO").exists())
+    if user and user.groups.filter(name__in=("CEO", "GM", "General Manager")).exists():
+        return True
+
+    general_manager_titles = {"gm", "general manager", "المدير العام"}
+    for field in ("job_title", "job_title_en", "job_title_ar"):
+        title = getattr(profile, field, "") or ""
+        normalized = re.sub(r"[^\w\s]", " ", title.casefold(), flags=re.UNICODE)
+        normalized = " ".join(normalized.split())
+        if normalized in general_manager_titles:
+            return True
+    return False
 
 
 def limit_to_mapped_employees(queryset, *, profile_field="employee_profile"):

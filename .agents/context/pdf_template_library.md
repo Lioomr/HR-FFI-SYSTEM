@@ -76,7 +76,15 @@ measured template/map before they can use company-specific variants.
 recorded for that stage - never from the user downloading the PDF. A stage
 nobody completed yields `None`, the mapped box stays blank, and
 `log_signature_diagnostics` records the gap (field name and state only; never
-bytes, storage paths, or tokens).
+bytes, storage paths, or tokens). A recorded signer with no stored image gets
+their **profile name** printed in the signature box instead
+(`signer_signatures` -> name-fallback asset, diagnostic state `name_fallback`);
+when the map has a typed-name twin field that already shows the name, nothing
+extra is drawn. The name never falls back to an email address.
+
+Approved leave PDFs are frozen at final approval and served from storage
+(`core/document_integrity`, `DOCUMENT_SIGNING_MODE`); see
+`plans/Document Signing API Handoff.md`. Other forms still render live.
 
 Storage is `EmployeeProfile.signature` (`FileField`, `PrivateUploadStorage`,
 `upload_to="employee_signatures/"`) plus `signature_uploaded_at`. One reusable

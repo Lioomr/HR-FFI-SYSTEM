@@ -21,9 +21,9 @@ from employees.models import EmployeeProfile
 from employees.services.employee_ids import SEQUENTIAL_COMPANY_PREFIXES, allocate_employee_id
 from invites.models import Invite
 
+from .document_integrity import job_offer_pdf_for_delivery
 from .models import JobOffer
 from .notifications import get_company_ceo_recipients
-from .pdf import build_job_offer_pdf
 from .starting_work_pdf import StartingWorkAcknowledgmentData, build_starting_work_acknowledgment_pdf
 
 logger = logging.getLogger(__name__)
@@ -71,7 +71,14 @@ def _send_offer_email(
     if not to_email:
         return _skipped_delivery(provider="bird", reason="Recipient email is missing.")
     try:
-        message = f"Please find the job offer for {offer.candidate_full_name} ({offer.position_title}) attached."
+        message = (
+            f"Please find the job offer for {offer.candidate_full_name} ({offer.position_title}) attached. "
+            "Please review it and respond using the link below."
+        )
+        message_ar = (
+            f"يرجى الاطلاع على عرض العمل المرفق للمرشّح {offer.candidate_full_name} ({offer.position_title}) "
+            "والرد عليه من خلال الرابط أدناه."
+        )
         html_content = render_to_string(
             "emails/generic_notification.html",
             {
@@ -80,7 +87,7 @@ def _send_offer_email(
                 "title_ar": "عرض عمل",
                 "employee_name": recipient_name,
                 "message": message,
-                "message_ar": "يرجى الاطلاع على عرض العمل المرفق والرد عليه من خلال الرابط أدناه.",
+                "message_ar": message_ar,
                 "preheader": f"Job offer {offer.reference_number} is ready for your response.",
                 "preheader_ar": f"عرض العمل رقم {offer.reference_number} جاهز للرد.",
                 "status_label": "Action required",
@@ -157,6 +164,7 @@ def deliver_job_offer(offer: JobOffer) -> dict[str, Any]:
     pdf_base64 = ""
     media_url = ""
     attachments: list[dict[str, Any]] = []
+    pdf_document: dict[str, Any] = {"frozen": False, "version": None, "sha256": None}
     needs_pdf_delivery = bool(
         offer.candidate_phone_number
         or offer.candidate_email
@@ -164,7 +172,8 @@ def deliver_job_offer(offer: JobOffer) -> dict[str, Any]:
     )
     if needs_pdf_delivery:
         try:
-            pdf_bytes = build_job_offer_pdf(offer)
+            # The frozen (tamper-evident) copy when the send froze one; live only when nothing is frozen.
+            pdf_bytes, pdf_document = job_offer_pdf_for_delivery(offer)
             pdf_base64 = base64.b64encode(pdf_bytes).decode("ascii")
             upload = email_service.upload_media(filename=filename, content=pdf_bytes, content_type="application/pdf")
             if upload.get("success") and upload.get("media_url"):
@@ -260,6 +269,7 @@ def deliver_job_offer(offer: JobOffer) -> dict[str, Any]:
         "ceo": {"recipients": ceo_deliveries},
         "warning_details": warning_details,
         "warnings": warnings,
+        "pdf": pdf_document,
     }
 
 

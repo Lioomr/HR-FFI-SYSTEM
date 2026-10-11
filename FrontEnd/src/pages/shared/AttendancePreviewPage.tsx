@@ -1,3 +1,4 @@
+import { shortEmployeeName } from "../../utils/employeeName";
 import React, {
   useCallback,
   useEffect,
@@ -419,7 +420,7 @@ const AttendancePreviewPage: React.FC<AttendancePreviewPageProps> = ({
   };
 
   const getEmployeeShortName = (record: AttendanceRecord) =>
-    getEmployeeName(record).trim().split(/\s+/).slice(0, 2).join(" ");
+    shortEmployeeName(getEmployeeName(record));
 
   const handleExport = async () => {
     setExporting(true);
@@ -511,7 +512,7 @@ const AttendancePreviewPage: React.FC<AttendancePreviewPageProps> = ({
           employee.email;
         return {
           value: employee.id,
-          label: name,
+          label: shortEmployeeName(name),
         };
       }),
     [employeeOptionsSource, language],

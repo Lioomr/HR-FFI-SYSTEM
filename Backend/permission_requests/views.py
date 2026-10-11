@@ -8,7 +8,7 @@ import os
 
 from django.contrib.contenttypes.models import ContentType
 from django.db.models import Q
-from django.http import FileResponse, HttpResponse
+from django.http import FileResponse
 from django.utils.dateparse import parse_date
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
@@ -16,9 +16,16 @@ from rest_framework.exceptions import ValidationError
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.permissions import IsAuthenticated
 
+from core.document_integrity.api import (
+    DocumentIntegrityActionsMixin,
+    frozen_pdf_response,
+    involved_q,
+    resolve_integrity_object,
+)
 from core.models import WorkflowInstance
 from core.pagination import StandardPagination
 from core.responses import error, success
+from employees.permissions import IsHRManagerOrAdmin
 from employees.services.manager_relationships import PERMISSION_REQUEST_APPROVAL_CAPABILITY, manager_scope_q
 from organization.services import (
     filter_queryset_by_accessible_companies,
@@ -68,7 +75,7 @@ def _not_found():
     return error("Not found", errors=["Not found."], status=status.HTTP_404_NOT_FOUND)
 
 
-class PermissionRequestViewSet(viewsets.GenericViewSet):
+class PermissionRequestViewSet(DocumentIntegrityActionsMixin, viewsets.GenericViewSet):
     queryset = PermissionRequest.objects.none()
     serializer_class = PermissionRequestReadSerializer
     permission_classes = [IsAuthenticated]
@@ -84,6 +91,9 @@ class PermissionRequestViewSet(viewsets.GenericViewSet):
             return [IsAuthenticated(), IsPermissionRequestManager()]
         if self.action in HR_ACTIONS:
             return [IsAuthenticated(), IsPermissionRequestHRApprover()]
+        if self.action == "integrity_retry_seal":
+            return [IsAuthenticated(), IsHRManagerOrAdmin()]
+        # integrity, integrity_verify: object access is decided by get_integrity_object.
         # list, retrieve, cancel, pdf: object access is decided by _visible_queryset.
         return [IsAuthenticated()]
 
@@ -243,13 +253,33 @@ class PermissionRequestViewSet(viewsets.GenericViewSet):
         instance = self._get_visible(pk)
         if instance is None:
             return _not_found()
-        pdf_bytes = build_permission_request_pdf(instance)
-        services.audit_permission_request(request, "permission_request_pdf_downloaded", instance)
-        response = HttpResponse(pdf_bytes, content_type="application/pdf")
-        response["Content-Disposition"] = f'attachment; filename="permission_request_{instance.reference_no}.pdf"'
-        response["Cache-Control"] = "private, no-store"
-        response["X-Content-Type-Options"] = "nosniff"
+        # Frozen copy once approved (409 if it was altered), live render before that;
+        # HR may add ``?workpaper=1&tz=<IANA>`` for the approval-trail page.
+        response = frozen_pdf_response(
+            instance,
+            request,
+            render_live=lambda: build_permission_request_pdf(instance),
+            filename=f"permission_request_{instance.reference_no}.pdf",
+            content_type="application/pdf",
+        )
+        if response.status_code == 200:
+            services.audit_permission_request(request, "permission_request_pdf_downloaded", instance)
         return response
+
+    def get_integrity_object(self):
+        """Owner, recorded approvers, or HR in an accessible company (404 for anyone else)."""
+
+        from .document_integrity import INVOLVED_FIELDS, can_access_permission_document
+
+        user = self.request.user
+        base = self._base_queryset()
+        return resolve_integrity_object(
+            self.request,
+            self.kwargs.get(self.lookup_field),
+            hr_queryset=filter_queryset_by_accessible_companies(base, self.request),
+            involved_queryset=lambda: base.filter(involved_q(user, INVOLVED_FIELDS)),
+            can_access=can_access_permission_document,
+        )
 
     @action(detail=True, methods=["post"], url_path="attachments")
     def add_attachments(self, request, pk=None):

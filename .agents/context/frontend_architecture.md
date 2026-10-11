@@ -39,7 +39,7 @@ FrontEnd/src/
 ├── routes/           # Route definitions + role guards
 │   └── routes.tsx    # RequireAuth, RequireRole, RouteErrorBoundary wrappers
 ├── hooks/            # Custom React hooks
-├── i18n/             # Bilingual support (translations.ts, useI18n.ts, i18nStore.ts)
+├── i18n/             # Bilingual support (translations.en.ts / translations.ar.ts, translationLoader.ts, useI18n.ts, i18nStore.ts)
 └── App.tsx
 ```
 

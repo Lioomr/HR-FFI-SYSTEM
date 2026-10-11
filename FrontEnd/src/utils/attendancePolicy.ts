@@ -1,3 +1,4 @@
+import { shortEmployeeName } from "./employeeName";
 import type { Dayjs } from "dayjs";
 import {
   NOTICE_DELIVERY_STATUSES,
@@ -205,9 +206,9 @@ export function violationEmployeeName(
   language: string,
 ): string {
   if (language === "ar" && violation.employee_name_ar?.trim()) {
-    return violation.employee_name_ar;
+    return shortEmployeeName(violation.employee_name_ar);
   }
-  return violation.employee_name;
+  return shortEmployeeName(violation.employee_name);
 }
 
 const DECIMAL_RE = /^(-?)(\d*)(?:\.(\d*))?$/;

@@ -440,3 +440,13 @@ class WhatsAppMessageTemplate(models.Model):
 
     def __str__(self) -> str:
         return self.key
+
+
+# Tamper-evident approved documents live in their own module; importing them here
+# registers them with the ``core`` app.
+from core.document_integrity.models import (  # noqa: E402,F401
+    DocumentApprovalSignature,
+    DocumentIntegrityEvent,
+    FrozenDocument,
+    SigningCertificate,
+)

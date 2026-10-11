@@ -3,22 +3,8 @@ import { Navigate, Outlet, useLocation } from "react-router-dom";
 
 import LoadingState from "../components/ui/LoadingState";
 import { useI18n } from "../i18n/useI18n";
-import {
-  isApiError,
-  type ApiSuccess,
-  type PaginatedResponse,
-} from "../services/api/apiTypes";
-import {
-  listContractRatings,
-  type ContractRatingStatus,
-  type ContractRatingView,
-} from "../services/api/contractRatingsApi";
-
-/** Statuses in which the current manager still owes an evaluation. */
-const PENDING_FOR_MANAGER: ReadonlySet<ContractRatingStatus> = new Set([
-  "PENDING_RESPONSES",
-  "WAITING_MANAGER",
-]);
+import { isApiError } from "../services/api/apiTypes";
+import { getPendingContractRatingActions } from "../services/api/contractRatingsApi";
 
 type Check =
   | { state: "loading" }
@@ -38,35 +24,16 @@ export default function RequireCompletedManagerRating() {
 
   useEffect(() => {
     let cancelled = false;
-    // Each status is requested explicitly. The default list is paginated
-    // newest-first, so it cannot safely determine whether work is outstanding.
-    Promise.all(
-      [...PENDING_FOR_MANAGER].map((status) =>
-        listContractRatings({ status, page_size: 100 }),
-      ),
-    )
-      .then((responses) => {
+    getPendingContractRatingActions()
+      .then((response) => {
         if (cancelled) return;
-        const successfulResponses = responses.filter(
-          (
-            response,
-          ): response is ApiSuccess<PaginatedResponse<ContractRatingView>> =>
-            !isApiError(response),
-        );
-        if (successfulResponses.length !== responses.length) {
+        if (isApiError(response)) {
           setCheck({ state: "clear" });
           return;
         }
-        const pending = successfulResponses
-          .flatMap((response) => response.data.items ?? [])
-          .find(
-            (item: ContractRatingView) =>
-              item.viewer === "manager" && PENDING_FOR_MANAGER.has(item.status),
-          );
+        const pending = response.data.manager;
         setCheck(
-          pending
-            ? { state: "pending", id: pending.id }
-            : { state: "clear" },
+          pending ? { state: "pending", id: pending.id } : { state: "clear" },
         );
       })
       .catch(() => {

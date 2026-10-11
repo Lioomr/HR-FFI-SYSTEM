@@ -565,6 +565,20 @@ class LoanWorkflowTests(APITestCase):
         )
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
+    def test_accountant_cannot_list_or_decide_on_the_cfo_inbox(self):
+        request_obj = self._create_pending_hr_request()
+        self.client.force_authenticate(user=self.accountant)
+
+        listing = self.client.get(self.cfo_loan_requests_url)
+        decision = self.client.post(
+            f"{self.cfo_loan_requests_url}{request_obj.id}/approve/",
+            {"comment": "No access"},
+            format="json",
+        )
+
+        self.assertEqual(listing.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(decision.status_code, status.HTTP_403_FORBIDDEN)
+
     def test_hr_cannot_access_disbursement_actions(self):
         request_obj = self._create_pending_disbursement_request()
         self.client.force_authenticate(user=self.hr_user)

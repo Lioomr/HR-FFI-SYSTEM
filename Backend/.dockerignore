@@ -11,3 +11,6 @@ __pycache__
 .gitignore
 .env
 private_uploads
+signing_keys
+*.p12
+*.pfx

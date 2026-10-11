@@ -13,6 +13,7 @@ from dataclasses import dataclass, field
 from datetime import date, datetime
 
 from ..models import EmployeeDocument
+from .countries import country_name
 from .mrz import MrzResult, parse_td3
 
 ARABIC_INDIC_DIGITS = "٠١٢٣٤٥٦٧٨٩"
@@ -328,6 +329,36 @@ def _printed_name_with_words(text: str, name: str) -> str:
     return ""
 
 
+def _title_case_word(word: str) -> str:
+    # Capitalise each hyphen part ("AL-GHAMDI" -> "Al-Ghamdi").  After an
+    # apostrophe only a one-letter prefix starts a new capital ("O'BRIEN" ->
+    # "O'Brien"); a transliteration such as "MA'MOUN" stays "Ma'moun".
+    parts = []
+    for part in word.split("-"):
+        pieces = part.split("'")
+        lowered = [piece[:1].upper() + piece[1:].lower() for piece in pieces]
+        for index in range(1, len(lowered)):
+            if len(pieces[index - 1]) != 1:
+                lowered[index] = lowered[index].lower()
+        part = "'".join(lowered)
+        if len(part) > 3 and part.startswith("Mc"):
+            part = "Mc" + part[2].upper() + part[3:]
+        parts.append(part)
+    return "-".join(parts)
+
+
+def title_case_name(name: str) -> str:
+    """Title-case an ALL-CAPS Latin name, e.g. an MRZ name; leave anything else alone.
+
+    A name with any lowercase letter was printed in mixed case and is already
+    in its intended form, and non-Latin script has no case to fix.
+    """
+
+    if not re.search(r"[A-Z]", name or "") or re.search(r"[a-z]", name):
+        return name
+    return " ".join(_title_case_word(word) for word in name.split())
+
+
 def _fallback_nationality(text: str) -> str:
     if re.search(r"^\s*مصر\s*$", text, flags=re.MULTILINE):
         return "Egypt"
@@ -344,6 +375,17 @@ def parse_passport(text: str) -> ParseResult:
 
     for key, value in _common_identity_labels(text).items():
         fields.setdefault(key, value)
+    # The MRZ (and some printed pages) give the nationality as an ICAO code;
+    # the profile stores the English country name.  An unknown code is kept
+    # as read so HR sees exactly what the document says.
+    for key in ("nationality", "issuing_country"):
+        if fields.get(key):
+            fields[key], recognised = country_name(fields[key])
+            if not recognised and key == "nationality":
+                warnings.append(
+                    f"Passport nationality code {fields[key]} is not a recognised country; "
+                    "confirm the nationality by hand."
+                )
     printed_number = label_value(text, r"Passport\s*(?:Number|No\.?|#)|رقم\s*الجواز", r"[A-Z0-9< -]{5,20}")
     if printed_number and not fields.get("passport_number"):
         fields["passport_number"] = printed_number.replace(" ", "").replace("<", "")
@@ -373,6 +415,11 @@ def parse_passport(text: str) -> ParseResult:
         fallback = _fallback_latin_name(text)
         if fallback:
             fields["full_name"] = fallback
+    # Only after the word-order repair above, which matches words upper-cased:
+    # an ALL-CAPS name (the MRZ always is) is stored the way the profile stores
+    # names.  A printed mixed-case name is returned untouched.
+    if fields.get("full_name"):
+        fields["full_name"] = title_case_name(fields["full_name"])
 
     for key in ("date_of_birth", "issue_date", "expiry_date"):
         value = fields.get(key)

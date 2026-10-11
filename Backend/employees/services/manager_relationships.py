@@ -23,7 +23,6 @@ MANAGER_CAPABILITY_BY_REQUEST_MODEL = {
     "LeaveRequest": "leaves.approve",
     "LoanRequest": "loans.approve",
     "AttendanceRecord": "attendance.approve",
-    "AttendanceCorrectionRequest": "attendance.approve",
     "AssetReturnRequest": "assets.approve",
     "PermissionRequest": PERMISSION_REQUEST_APPROVAL_CAPABILITY,
 }
@@ -783,7 +782,6 @@ def fallback_invalid_manager_stage(instance, *, actor=None) -> bool:
         "LoanRequest": ("pending_manager", "pending_hr", "employee_profile"),
         "PermissionRequest": ("pending_manager", "pending_hr", "employee_profile"),
         "AttendanceRecord": ("PENDING_MGR", "PENDING_HR", "employee_profile"),
-        "AttendanceCorrectionRequest": ("PENDING_MANAGER", "PENDING_HR", "employee_profile"),
         "AssetReturnRequest": ("PENDING_MANAGER", "PENDING", "employee"),
     }
     config = mapping.get(instance.__class__.__name__)
@@ -832,7 +830,7 @@ def reroute_pending_manager_requests(profiles: EmployeeProfile | Iterable[Employ
         return 0
 
     from assets.models import AssetReturnRequest
-    from attendance.models import AttendanceCorrectionRequest, AttendanceRecord
+    from attendance.models import AttendanceRecord
     from leaves.models import LeaveRequest
     from loans.models import LoanRequest
     from permission_requests.models import PermissionRequest
@@ -853,10 +851,6 @@ def reroute_pending_manager_requests(profiles: EmployeeProfile | Iterable[Employ
         *AttendanceRecord.objects.filter(
             employee_profile_id__in=profile_ids,
             status=AttendanceRecord.Status.PENDING_MANAGER,
-        ),
-        *AttendanceCorrectionRequest.objects.filter(
-            employee_profile_id__in=profile_ids,
-            status=AttendanceCorrectionRequest.Status.PENDING_MANAGER,
         ),
         *AssetReturnRequest.objects.filter(
             employee_id__in=profile_ids,

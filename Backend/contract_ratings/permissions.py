@@ -13,8 +13,11 @@ def require_company_access(actor, rating):
 def viewer_role(actor, rating):
     if not actor or not actor.is_authenticated:
         return None
-    if rating.rating_mode == rating.RatingMode.RATE and rating.employee_profile.user_id == actor.id:
-        return "employee"
+    if rating.employee_profile.user_id == actor.id:
+        # The rated person is only ever the employee on their own rating, whatever
+        # other roles they hold (an HR or CEO approver included). Outside the
+        # "rate" routing they have no view at all, like any other employee.
+        return "employee" if rating.rating_mode == rating.RatingMode.RATE else None
     if rating.rating_mode == rating.RatingMode.RATE and manager_approval_actor_source(
         actor, rating.employee_profile, capability=CONTRACT_RATING_CAPABILITY
     ):

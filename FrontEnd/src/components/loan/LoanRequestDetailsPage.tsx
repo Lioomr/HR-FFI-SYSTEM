@@ -1,3 +1,4 @@
+import { shortEmployeeName } from "../../utils/employeeName";
 import BackButton from "../ui/BackButton";
 import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
@@ -13,7 +14,7 @@ import {
   Typography,
   notification,
 } from "antd";
-import { ReloadOutlined } from "@ant-design/icons";
+import { EyeOutlined, ReloadOutlined } from "@ant-design/icons";
 
 import PageHeader from "../ui/PageHeader";
 import LoadingState from "../ui/LoadingState";
@@ -28,12 +29,18 @@ import TeamMemberCell from "../manager/TeamMemberCell";
 import LoanApprovalMap from "../loans/LoanApprovalMap";
 import LoanDecisionTimeline from "./LoanDecisionTimeline";
 import LoanPdfDownloadButton from "./LoanPdfDownloadButton";
+import DocumentIntegrityPanel from "../documents/DocumentIntegrityPanel";
+import { isDocumentFinal } from "../documents/documentTypes";
+import { useFilePreview } from "../ui/useFilePreview";
 import { isApiError } from "../../services/api/apiTypes";
 import {
   getHttpErrorMessage,
   getHttpStatus,
 } from "../../services/api/httpErrors";
-import type { LoanRequest } from "../../services/api/loanApi";
+import {
+  getLoanRequestWorkpaperBlob,
+  type LoanRequest,
+} from "../../services/api/loanApi";
 import { formatNumber } from "../../utils/currency";
 import { formatDateOnly } from "../../utils/dateTime";
 import { requestAgeLabel } from "../../utils/requestAge";
@@ -63,6 +70,27 @@ type Props = {
    * otherwise show a button that can only answer 403.
    */
   showPdfDownload?: boolean;
+  /**
+   * HR/admin in-app preview of the PDF work paper (approval-trail page, times
+   * in the browser timezone). The Download button keeps serving the
+   * verifiable original.
+   */
+  showPdfPreview?: boolean;
+  /**
+   * Builds the employee's profile URL for this viewer's surface (HR/admin:
+   * `/hr/employees/:id`, the line manager: `/manager/team/:id`). Omitted for
+   * viewers without a profile destination (CFO, CEO, finance), whose name
+   * then renders as plain text.
+   */
+  employeeProfilePath?: (employeeProfileId: number) => string;
+  /**
+   * Document integrity card options. HR/admin pass `canRetrySeal` and a
+   * `profilePath`; other viewers get plain-text names.
+   */
+  integrity?: {
+    canRetrySeal?: boolean;
+    profilePath?: (profileId: number) => string;
+  };
   approveLabel?: string;
   rejectLabel?: string;
   approveSuccessMessage?: string;
@@ -117,6 +145,9 @@ export default function LoanRequestDetailsPage({
   extraAction,
   canActWhenStatus,
   showPdfDownload = false,
+  showPdfPreview = false,
+  employeeProfilePath: buildEmployeeProfilePath,
+  integrity,
   approveLabel,
   rejectLabel,
   approveSuccessMessage,
@@ -141,6 +172,7 @@ export default function LoanRequestDetailsPage({
   const [extraOpen, setExtraOpen] = useState(false);
   const [extraComment, setExtraComment] = useState("");
   const [extraError, setExtraError] = useState<string | null>(null);
+  const { openPreview, previewModal } = useFilePreview();
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -171,11 +203,13 @@ export default function LoanRequestDetailsPage({
     void load();
   }, [load]);
 
-  const employeeName =
-    item?.employee?.full_name || item?.employee?.email || "—";
-  const employeeProfilePath = item?.employee?.employee_profile_id
-    ? `/hr/employees/${item.employee.employee_profile_id}`
-    : undefined;
+  const employeeName = shortEmployeeName(
+    item?.employee?.full_name || item?.employee?.email || "—",
+  );
+  const employeeProfilePath =
+    item?.employee?.employee_profile_id && buildEmployeeProfilePath
+      ? buildEmployeeProfilePath(item.employee.employee_profile_id)
+      : undefined;
 
   const canAct = Array.isArray(canActWhenStatus)
     ? Boolean(item?.status) && canActWhenStatus.includes(item!.status)
@@ -306,13 +340,10 @@ export default function LoanRequestDetailsPage({
         title={title}
         subtitle={
           employeeProfilePath ? (
+            // Link colour comes from the theme (brand orange).
             <Link
               to={employeeProfilePath}
-              style={{
-                color: "#f97316",
-                fontWeight: 600,
-                textDecoration: "none",
-              }}
+              style={{ fontWeight: 600, textDecoration: "none" }}
             >
               {employeeName}
             </Link>
@@ -329,6 +360,21 @@ export default function LoanRequestDetailsPage({
         }
         actions={
           <Space wrap>
+            {showPdfPreview ? (
+              <Button
+                icon={<EyeOutlined aria-hidden />}
+                style={{ borderRadius: 10, minHeight: 40 }}
+                onClick={() =>
+                  openPreview({
+                    title: item.public_reference || `#${item.id}`,
+                    filename: `loan_request_${item.id}.pdf`,
+                    load: () => getLoanRequestWorkpaperBlob(item.id),
+                  })
+                }
+              >
+                {t("common.preview")}
+              </Button>
+            ) : null}
             {showPdfDownload ? (
               <LoanPdfDownloadButton loanId={item.id} />
             ) : null}
@@ -461,9 +507,19 @@ export default function LoanRequestDetailsPage({
             >
               <LoanDecisionTimeline entries={item.decision_history} t={t} />
             </DashboardPanel>
+
+            <DocumentIntegrityPanel
+              documentType="loan"
+              requestId={item.id}
+              isFinal={isDocumentFinal("loan", item.status)}
+              canRetrySeal={integrity?.canRetrySeal ?? false}
+              profilePath={integrity?.profilePath}
+            />
           </Space>
         </Col>
       </Row>
+
+      {previewModal}
 
       {canAct && (
         <StickyDecisionBar>

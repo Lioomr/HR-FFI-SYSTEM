@@ -16,6 +16,11 @@ export default function ManagerLoanRequestDetailsPage() {
       approve={approveManagerLoanRequest}
       reject={rejectManagerLoanRequest}
       canActWhenStatus="pending_manager"
+      // The manager loan endpoint only returns the manager's own team, the
+      // same rows the manager list links to /manager/team/:id.
+      employeeProfilePath={(employeeProfileId) =>
+        `/manager/team/${employeeProfileId}`
+      }
       approveLabel={t("loans.inbox.btnRecommendApprove")}
       rejectLabel={t("loans.inbox.btnRecommendReject")}
       approveSuccessMessage={t("loans.inbox.managerRecommendedApprove")}

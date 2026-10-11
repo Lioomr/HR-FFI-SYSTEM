@@ -7,9 +7,12 @@ the recorded actor (``manager_decision_by``, ``hr_signer_user``, ``approved_by``
 ``None``.
 
 Signatures come from ``EmployeeProfile.signature``, the single reusable image
-each employee uploads for themselves.  A signer with nothing stored yields
-``None``, the mapped box stays blank, and the renderer reports the gap.  This
-module never invents a signature and never substitutes a different signer.
+each employee uploads for themselves.  ``signature_for_*`` return ``None`` for a
+signer with nothing stored.  :func:`signer_signatures` - what the mapped forms
+use - then falls back to the recorded signer's *name* from their profile, which
+the renderer prints in the signature box (diagnostic state ``name_fallback``).
+A stage nobody completed still yields ``None`` and stays blank.  This module
+never invents a signature and never substitutes a different signer.
 """
 
 from __future__ import annotations
@@ -116,12 +119,52 @@ def signature_for_signer(signer: Any) -> SignatureAsset | None:
     return signature_for_user(signer)
 
 
+def profile_signer_name(signer: Any) -> str:
+    """The recorded signer's own name, taken from their employee profile first.
+
+    Unlike :func:`display_name` this never falls back to an email address: an
+    address printed in a signature box is not a name.
+    """
+
+    if signer is None:
+        return ""
+    is_profile = any(hasattr(signer, attr) for attr in SIGNATURE_SOURCE_ATTRS)
+    profile = signer if is_profile else profile_for_user(signer)
+    if profile is not None:
+        for attr in ("full_name_en", "full_name", "full_name_ar"):
+            value = str(getattr(profile, attr, "") or "").strip()
+            if value:
+                return value
+    if is_profile:
+        return ""
+    return str(getattr(signer, "full_name", "") or "").strip()
+
+
+def signature_or_name_for_signer(signer: Any) -> SignatureAsset | None:
+    """The signer's stored image, or their profile name when no image exists.
+
+    ``None`` only when there is no recorded signer or they have no usable name.
+    """
+
+    if signer is None:
+        return None
+    asset = signature_for_signer(signer)
+    if asset is not None:
+        return asset
+    name = profile_signer_name(signer)
+    if not name:
+        return None
+    return SignatureAsset(data=b"", signer_label=name, name_fallback=True)
+
+
 def signer_signatures(slots: dict[str, Any]) -> dict[str, SignatureAsset | None]:
     """Map ``{map_field_name: recorded_signer}`` onto signature assets.
 
-    Slots whose signer is ``None`` - a stage nobody has completed - stay in the
-    result as ``None`` so the renderer reports them as missing rather than
-    quietly dropping them.
+    A recorded signer without a stored image resolves to a name-fallback asset,
+    so the form prints their profile name instead of an empty box.  Slots whose
+    signer is ``None`` - a stage nobody has completed - stay in the result as
+    ``None`` so the renderer reports them as missing rather than quietly
+    dropping them.
     """
 
-    return {field: signature_for_signer(signer) for field, signer in slots.items()}
+    return {field: signature_or_name_for_signer(signer) for field, signer in slots.items()}

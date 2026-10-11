@@ -24,7 +24,7 @@ Optional : subtitle, subtitle_ar
   <tr>
     <td class="row-label"
       style="padding:14px 0;font-size:13px;line-height:1.6;border-bottom:1px solid #f0f0f2;vertical-align:top;color:#6b7280;width:46%;">
-      {{ row.label }}{% if row.label_ar %} <span style="color:#a4abb4;">/ {{ row.label_ar }}</span>{% endif %}</td>
+      {{ row.label }}</td>
     <td class="row-value"
       style="padding:14px 0;font-size:14px;line-height:1.6;border-bottom:1px solid #f0f0f2;vertical-align:top;color:{{ row.value_color|default:'#1c1f24' }};font-weight:600;text-align:left;">
       {% if row.value_html %}{{ row.value_html|safe }}{% else %}{{ row.value }}{% endif %}</td>

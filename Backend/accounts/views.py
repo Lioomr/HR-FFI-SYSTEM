@@ -7,6 +7,8 @@ from rest_framework_simplejwt.tokens import RefreshToken
 
 from audit.utils import audit
 from core.responses import error, success
+from core.services.messaging_providers import is_e164, normalize_phone_number
+from core.services.whatsapp_service import WhatsAppService
 from organization.services import (
     get_active_organization_for_request,
     get_default_organization_for_user,
@@ -17,15 +19,153 @@ from organization.services import (
 
 from .authentication import RefreshEndpointAuthentication
 from .password_policy import validate_password_against_policy
+from .password_reset_otp import consume_otp, issue_otp, mask_recovery_phone, verify_otp
 from .permissions import get_role
-from .security import blacklist_outstanding_refresh_tokens, consume_reset_token, verify_reset_token
+from .security import (
+    blacklist_outstanding_refresh_tokens,
+    consume_reset_token,
+    invalidate_reset_token,
+    verify_reset_token,
+)
 from .serializers import (
     ChangePasswordSerializer,
     LoginSerializer,
     PasswordResetConfirmSerializer,
+    PasswordResetOTPConfirmSerializer,
+    PasswordResetOTPRequestSerializer,
+    PasswordResetOTPVerifySerializer,
     VersionedTokenRefreshSerializer,
+    resolve_password_reset_user,
 )
-from .throttles import LoginRateThrottle, PasswordResetConfirmRateThrottle
+from .throttles import LoginRateThrottle, PasswordResetConfirmRateThrottle, PasswordResetRequestRateThrottle
+
+RECOVERY_MESSAGE = "If recovery is available, a code will arrive on WhatsApp. Otherwise contact HR."
+SAME_PASSWORD_MESSAGE = "New password must be different from your current password."
+
+
+class PasswordResetOTPRequestView(APIView):
+    authentication_classes = []
+    permission_classes = [AllowAny]
+    throttle_classes = [PasswordResetRequestRateThrottle]
+
+    def post(self, request):
+        serializer = PasswordResetOTPRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        response = success({"message": RECOVERY_MESSAGE})
+        account = resolve_password_reset_user(serializer.validated_data["identifier"])
+        if not account:
+            return response
+        with transaction.atomic():
+            user = get_user_model().objects.select_for_update().filter(pk=account.pk).first()
+            if not user:
+                return response
+            profile = getattr(user, "employee_profile", None)
+            phone = normalize_phone_number(profile.mobile if profile else "")
+            if not user.is_active or not is_e164(phone):
+                return response
+            try:
+                otp = issue_otp(user.pk, user.auth_token_version)
+                if not otp:
+                    return response
+                result = WhatsAppService().send_template_message(
+                    phone_number=phone,
+                    template_name="password_reset_otp",
+                    template_variables={"otp": otp},
+                    language="ar",
+                )
+                if not result.get("success"):
+                    consume_otp(user.pk)
+            except Exception:
+                # Recovery must fail closed without leaking codes/provider diagnostics.
+                try:
+                    consume_otp(user.pk)
+                except Exception:
+                    pass
+                return response
+            audit(
+                request,
+                action="password_reset_otp_requested",
+                entity="User",
+                entity_id=user.pk,
+                metadata={"channel": "whatsapp", "sent": bool(result.get("success"))},
+            )
+        return response
+
+
+class PasswordResetOTPVerifyView(APIView):
+    """Checks the code without consuming it so the UI can advance to the new-password step."""
+
+    authentication_classes = []
+    permission_classes = [AllowAny]
+    throttle_classes = [PasswordResetConfirmRateThrottle]
+
+    def post(self, request):
+        serializer = PasswordResetOTPVerifySerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        invalid = error("This code is invalid or has expired.", status=422)
+        account = resolve_password_reset_user(serializer.validated_data["identifier"])
+        if not account:
+            return invalid
+        with transaction.atomic():
+            user = get_user_model().objects.select_for_update().filter(pk=account.pk).first()
+            if not user or not user.is_active:
+                return invalid
+            try:
+                if not verify_otp(user.pk, serializer.validated_data["otp"], user.auth_token_version):
+                    return invalid
+            except Exception:
+                return invalid
+            profile = getattr(user, "employee_profile", None)
+            phone = normalize_phone_number(profile.mobile if profile else "")
+            data = {"masked_phone": mask_recovery_phone(phone)} if is_e164(phone) else {}
+        return success(data)
+
+
+class PasswordResetOTPConfirmView(APIView):
+    authentication_classes = []
+    permission_classes = [AllowAny]
+    throttle_classes = [PasswordResetConfirmRateThrottle]
+
+    def post(self, request):
+        serializer = PasswordResetOTPConfirmSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        invalid = error("This code is invalid or has expired.", status=422)
+        account = resolve_password_reset_user(serializer.validated_data["identifier"])
+        if not account:
+            return invalid
+        with transaction.atomic():
+            user = get_user_model().objects.select_for_update().filter(pk=account.pk).first()
+            if not user:
+                return invalid
+            try:
+                if not user.is_active or not verify_otp(
+                    user.pk, serializer.validated_data["otp"], user.auth_token_version
+                ):
+                    return invalid
+                if user.check_password(serializer.validated_data["new_password"]):
+                    return error("Validation error", {"new_password": [SAME_PASSWORD_MESSAGE]}, status=422)
+                try:
+                    validate_password_against_policy(serializer.validated_data["new_password"], user=user)
+                except DjangoValidationError as exc:
+                    return error("Validation error", {"new_password": list(exc.messages)}, status=422)
+                if not invalidate_reset_token(user.pk):
+                    return invalid
+                consume_otp(user.pk)
+            except Exception:
+                return invalid
+            user.set_password(serializer.validated_data["new_password"])
+            user.auth_token_version += 1
+            user.save(update_fields=["password", "auth_token_version"])
+            blacklist_outstanding_refresh_tokens(user)
+            audit(
+                request,
+                action="password_reset_completed",
+                entity="User",
+                entity_id=user.pk,
+                metadata={"channel": "whatsapp", "revoked_all_sessions": True},
+                actor=user,
+            )
+        return success({})
 
 
 class LoginView(APIView):
@@ -90,6 +230,9 @@ class ChangePasswordView(APIView):
             if not user.check_password(s.validated_data["current_password"]):
                 return error("Invalid current password", status=422)
 
+            if s.validated_data["new_password"] == s.validated_data["current_password"]:
+                return error("Validation error", {"new_password": [SAME_PASSWORD_MESSAGE]}, status=422)
+
             try:
                 validate_password_against_policy(s.validated_data["new_password"], user=user)
             except DjangoValidationError as e:
@@ -149,6 +292,13 @@ class PasswordResetConfirmView(APIView):
             user.auth_token_version += 1
             user.save(update_fields=["password", "auth_token_version"])
             blacklist_outstanding_refresh_tokens(user)
+
+            # The version change already rejects this OTP; cleanup is best effort
+            # because email recovery must work even without a pending OTP.
+            try:
+                consume_otp(user.pk)
+            except Exception:
+                pass
 
         audit(
             request,

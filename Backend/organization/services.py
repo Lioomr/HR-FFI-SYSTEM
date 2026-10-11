@@ -198,8 +198,28 @@ def user_has_all_company_access(user) -> bool:
     return bool(accessible) and accessible == all_companies
 
 
+_ACTIVE_ORGANIZATION_CACHE_ATTR = "_active_organization_cache"
+
+
 def get_active_organization_for_request(request):
+    """Resolve the request's active organization, once per request.
+
+    Every company-scoped queryset filter calls this, and resolving it seeds the
+    default nodes and reads the user's access rows. A list endpoint filtering
+    several models re-ran that dozens of queries for an answer that cannot
+    change within one request, so the result is kept on the request object.
+    """
     requested_id = _get_requested_organization_id(request)
+    cache_key = (getattr(request.user, "pk", None), requested_id)
+    cached = getattr(request, _ACTIVE_ORGANIZATION_CACHE_ATTR, None)
+    if cached is not None and cached[0] == cache_key:
+        return cached[1]
+    organization = _resolve_active_organization(request, requested_id)
+    setattr(request, _ACTIVE_ORGANIZATION_CACHE_ATTR, (cache_key, organization))
+    return organization
+
+
+def _resolve_active_organization(request, requested_id):
     accessible = get_user_accessible_organizations(request.user)
     if not accessible:
         if requested_id is not None:

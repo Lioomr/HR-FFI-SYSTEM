@@ -12,6 +12,10 @@ reportlab==5.0.1
 pypdf==6.19.0
 PyMuPDF==1.28.2
 pypdfium2==5.12.1
+# PAdES signing/validation for tamper-evident approved documents (core/document_integrity).
+pyHanko==0.37.0
+pyhanko-certvalidator==0.32.1
+cryptography==50.0.2
 # Employee document OCR runs on self-hosted PaddleOCR; see requirements-ocr.txt,
 # installed separately in Backend/Dockerfile (Linux / CPython 3.12 wheels only).
 arabic-reshaper==3.0.1

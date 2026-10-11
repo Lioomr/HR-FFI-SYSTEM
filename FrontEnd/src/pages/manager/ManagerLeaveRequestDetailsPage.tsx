@@ -1,3 +1,4 @@
+import { shortEmployeeName } from "../../utils/employeeName";
 import BackButton from "../../components/ui/BackButton";
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
@@ -5,6 +6,7 @@ import {
   Alert,
   Button,
   Col,
+  Dropdown,
   Grid,
   Modal,
   Row,
@@ -15,6 +17,7 @@ import {
 import {
   CalendarOutlined,
   DownloadOutlined,
+  DownOutlined,
   EyeOutlined,
   FilePdfOutlined,
   ReloadOutlined,
@@ -33,6 +36,8 @@ import { approvalStatusLabel } from "../../components/ceo/approvalStatusLabel";
 import TeamMemberCell from "../../components/manager/TeamMemberCell";
 import LeaveApprovalMap from "../../components/leaves/LeaveApprovalMap";
 import RequestObligationsPanel from "../../components/requests/RequestObligationsPanel";
+import DocumentIntegrityPanel from "../../components/documents/DocumentIntegrityPanel";
+import { isDocumentBlocked } from "../../components/documents/integrityPresentation";
 import { useFilePreview } from "../../components/ui/useFilePreview";
 import { downloadBlob } from "../../utils/download";
 import { isApiError } from "../../services/api/apiTypes";
@@ -133,10 +138,11 @@ export default function ManagerLeaveRequestDetailsPage() {
   // rejected anyway.
   const canAction = ACTIONABLE.has(String(request?.status || "").toLowerCase());
 
-  const employeeName =
+  const employeeName = shortEmployeeName(
     request?.employee?.full_name ||
-    request?.employee?.email ||
-    t("manager.requests.unknown");
+      request?.employee?.email ||
+      t("manager.requests.unknown"),
+  );
 
   const submitApprove = async () => {
     if (!request) return;
@@ -191,9 +197,18 @@ export default function ManagerLeaveRequestDetailsPage() {
   const previewDocument = () => {
     if (!request) return;
     openPreview({
-      title: t("common.document"),
+      title: t("leave.previewAttachment"),
       filename: `leave_request_${request.id}_document`,
       load: () => getManagerLeaveRequestDocumentBlob(request.id, false),
+    });
+  };
+
+  const previewPdf = () => {
+    if (!request) return;
+    openPreview({
+      title: t("leave.previewRequestPdf"),
+      filename: `leave_request_${request.id}.pdf`,
+      load: () => getManagerLeaveRequestPdfBlob(request.id, false),
     });
   };
 
@@ -221,10 +236,12 @@ export default function ManagerLeaveRequestDetailsPage() {
     try {
       const blob = await getManagerLeaveRequestPdfBlob(request.id, true);
       downloadBlob(blob, `leave_request_${request.id}.pdf`);
-    } catch {
+    } catch (err: unknown) {
       notification.error({
         message: t("common.error"),
-        description: t("leave.pdfDownloadFailed"),
+        description: isDocumentBlocked(err)
+          ? t("documentIntegrity.downloadBlocked")
+          : t("leave.pdfDownloadFailed"),
       });
     } finally {
       setPdfLoading(false);
@@ -274,14 +291,73 @@ export default function ManagerLeaveRequestDetailsPage() {
         }
         actions={
           <Space size={8} wrap>
-            <Button
-              icon={<FilePdfOutlined aria-hidden />}
-              onClick={downloadPdf}
-              loading={pdfLoading}
-              style={{ borderRadius: 10, minHeight: 40 }}
+            <Dropdown
+              trigger={["click"]}
+              menu={{
+                items: [
+                  {
+                    key: "pdf",
+                    label: t("leave.downloadRequestPdf"),
+                    icon: <FilePdfOutlined />,
+                    disabled: pdfLoading,
+                  },
+                  ...(request.document
+                    ? [
+                        {
+                          key: "document",
+                          label: t("leave.downloadAttachment"),
+                          icon: <DownloadOutlined />,
+                          disabled: documentLoading,
+                        },
+                      ]
+                    : []),
+                ],
+                onClick: ({ key }) => {
+                  if (key === "pdf") void downloadPdf();
+                  else void downloadDocument();
+                },
+              }}
             >
-              {t("leave.downloadRequestPdf")}
-            </Button>
+              <Button
+                icon={<DownloadOutlined aria-hidden />}
+                loading={pdfLoading || documentLoading}
+                style={{ borderRadius: 10, minHeight: 40 }}
+              >
+                {t("common.download")} <DownOutlined aria-hidden />
+              </Button>
+            </Dropdown>
+            <Dropdown
+              trigger={["click"]}
+              menu={{
+                items: [
+                  {
+                    key: "pdf",
+                    label: t("leave.previewRequestPdf"),
+                    icon: <FilePdfOutlined />,
+                  },
+                  ...(request.document
+                    ? [
+                        {
+                          key: "document",
+                          label: t("leave.previewAttachment"),
+                          icon: <EyeOutlined />,
+                        },
+                      ]
+                    : []),
+                ],
+                onClick: ({ key }) => {
+                  if (key === "pdf") previewPdf();
+                  else previewDocument();
+                },
+              }}
+            >
+              <Button
+                icon={<EyeOutlined aria-hidden />}
+                style={{ borderRadius: 10, minHeight: 40 }}
+              >
+                {t("common.preview")} <DownOutlined aria-hidden />
+              </Button>
+            </Dropdown>
             <Button
               icon={<ReloadOutlined aria-hidden />}
               onClick={loadData}
@@ -346,31 +422,6 @@ export default function ManagerLeaveRequestDetailsPage() {
                 <Field label={t("leave.days")}>
                   <span className="tabular-nums">{request.days ?? "—"}</span>
                 </Field>
-                <Field label={t("common.document")}>
-                  {request.document ? (
-                    <Space size={8} wrap>
-                      <Button
-                        size="small"
-                        icon={<EyeOutlined aria-hidden />}
-                        onClick={previewDocument}
-                        style={{ borderRadius: 8 }}
-                      >
-                        {t("common.preview")}
-                      </Button>
-                      <Button
-                        size="small"
-                        icon={<DownloadOutlined aria-hidden />}
-                        onClick={downloadDocument}
-                        loading={documentLoading}
-                        style={{ borderRadius: 8 }}
-                      >
-                        {t("common.download")}
-                      </Button>
-                    </Space>
-                  ) : (
-                    <span style={{ color: "#94a3b8" }}>—</span>
-                  )}
-                </Field>
               </div>
 
               <div style={{ marginTop: 18 }}>
@@ -412,6 +463,11 @@ export default function ManagerLeaveRequestDetailsPage() {
             >
               <LeaveApprovalMap request={request as any} t={t} />
             </DashboardPanel>
+
+            <DocumentIntegrityPanel
+              requestId={request.id}
+              isFinal={request.status === "approved"}
+            />
 
             <RequestObligationsPanel
               parentType="leave_request"

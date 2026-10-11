@@ -80,10 +80,12 @@
 <body class="font-latin"
   style="margin:0;padding:0;background-color:#f6f7f9;color:#1c1f24;font-family:'Segoe UI',-apple-system,BlinkMacSystemFont,Roboto,'Helvetica Neue',Arial,sans-serif;">
 
-  <div
+  {# Inbox preview: one short, English-first line (matches the English subject, avoids mixed-direction
+     text), then invisible padding so the visible header/body text never leaks into the preview. #}
+  <div lang="en" dir="ltr"
     style="display:none;max-height:0;overflow:hidden;mso-hide:all;font-size:1px;line-height:1px;color:#f6f7f9;opacity:0;">
-    {% if preheader_ar %}{{ preheader_ar }}{% elif preheader %}{{ preheader }}{% elif message_ar %}{{ message_ar }}{% else %}{{ message }}{% endif %}
-    &#8204;&nbsp;&#8204;&nbsp;&#8204;&nbsp;&#8204;&nbsp;&#8204;&nbsp;&#8204;&nbsp;&#8204;&nbsp;&#8204;&nbsp;
+    {% if preheader %}{{ preheader|truncatechars:110 }}{% else %}{{ message|truncatechars:110 }}{% endif %}
+    &#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;
   </div>
 
   <div class="email-wrapper" style="width:100%;background-color:#f6f7f9;padding:44px 16px 56px;">
@@ -132,8 +134,8 @@
           {% if subtitle_ar %}<p class="doc-subtitle"
             style="margin:0 0 18px;font-size:13px;color:#8b9099;line-height:1.6;">{{ subtitle_ar }}</p>{% endif %}
           <p class="doc-greeting doc-greeting-ar"
-            style="margin:0 0 14px;font-size:15px;color:#4a4f57;line-height:1.9;mso-line-height-rule:exactly;">عزيزي /
-            عزيزتي <strong style="color:#1c1f24;">{{ employee_name }}</strong>،</p>
+            style="margin:0 0 14px;font-size:15px;color:#4a4f57;line-height:1.9;mso-line-height-rule:exactly;">{% if not employee_name or employee_name == "Colleague / الزميل" %}<strong style="color:#1c1f24;">زميلنا العزيز</strong>،{% else %}عزيزي /
+            عزيزتي <strong style="color:#1c1f24;">{{ employee_name }}</strong>،{% endif %}</p>
           <p class="doc-message doc-message-ar"
             style="margin:0 0 24px;font-size:15px;color:#4a4f57;line-height:1.95;mso-line-height-rule:exactly;">
             {% if message_ar %}{{ message_ar }}{% else %}{{ message }}{% endif %}</p>
@@ -181,7 +183,7 @@
             style="margin:0 0 18px;font-size:13px;color:#8b9099;line-height:1.6;">{{ subtitle }}</p>{% endif %}
           <p class="doc-greeting"
             style="margin:0 0 14px;font-size:15px;color:#4a4f57;line-height:1.6;">Dear <strong
-              style="color:#1c1f24;">{{ employee_name }}</strong>,</p>
+              style="color:#1c1f24;">{% if not employee_name or employee_name == "Colleague / الزميل" %}Colleague{% else %}{{ employee_name }}{% endif %}</strong>,</p>
           <p class="doc-message doc-message-en"
             style="margin:0 0 24px;font-size:15px;color:#4a4f57;line-height:1.75;">{{ message }}</p>
 

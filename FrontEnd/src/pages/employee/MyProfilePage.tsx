@@ -1,4 +1,10 @@
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { useLocation } from "react-router-dom";
 import {
   Card,
@@ -26,6 +32,7 @@ import {
   CopyOutlined,
   MailOutlined,
   EditOutlined,
+  HistoryOutlined,
 } from "@ant-design/icons";
 import { isSaudiEmployee } from "../../utils/countries";
 import NationalityFlag from "../../components/ui/NationalityFlag";
@@ -33,9 +40,15 @@ import EmployeeSignatureCard from "../../components/employees/EmployeeSignatureC
 import ProfileChangeRequestForm, {
   type ProfileChangeFocus,
 } from "../../components/employees/ProfileChangeRequestForm";
-import ProfileChangeRequestStatus from "../../components/employees/ProfileChangeRequestStatus";
+import ProfileChangeRequestStatus, {
+  ProfileChangeStatusTag,
+} from "../../components/employees/ProfileChangeRequestStatus";
+import ProfileChangeRequestHistory from "../../components/employees/ProfileChangeRequestHistory";
 import {
   getMyProfileChangeRequests,
+  readDismissedProfileChangeIds,
+  shouldShowProfileChangeStatus,
+  writeDismissedProfileChangeIds,
   type ProfileChangeRequest,
 } from "../../services/api/employeeProfileChangeRequestsApi";
 import LoadingState from "../../components/ui/LoadingState";
@@ -146,6 +159,7 @@ function DocCard({
 }
 
 const { Title, Text } = Typography;
+const CHANGE_REQUESTS_PAGE_SIZE = 20;
 
 export default function MyProfilePage() {
   const { t } = useI18n();
@@ -179,25 +193,71 @@ export default function MyProfilePage() {
   const [changeRequests, setChangeRequests] = useState<ProfileChangeRequest[]>(
     [],
   );
+  const [changePage, setChangePage] = useState({ page: 1, totalPages: 1 });
+  const [changeRequestsLoaded, setChangeRequestsLoaded] = useState(false);
+  const [loadingMoreChanges, setLoadingMoreChanges] = useState(false);
   const loadChangeRequests = useCallback(async () => {
     try {
-      const response = await getMyProfileChangeRequests({ page_size: 20 });
-      if (!isApiError(response)) setChangeRequests(response.data.items ?? []);
+      const response = await getMyProfileChangeRequests({
+        page_size: CHANGE_REQUESTS_PAGE_SIZE,
+      });
+      if (!isApiError(response)) {
+        setChangeRequests(response.data.items ?? []);
+        setChangePage({ page: 1, totalPages: response.data.total_pages ?? 1 });
+      }
     } catch {
       // Keep the last known state; the request form still works.
+    } finally {
+      setChangeRequestsLoaded(true);
     }
   }, []);
   useEffect(() => {
     void loadChangeRequests();
   }, [loadChangeRequests]);
+  const loadOlderChangeRequests = async () => {
+    const next = changePage.page + 1;
+    setLoadingMoreChanges(true);
+    try {
+      const response = await getMyProfileChangeRequests({
+        page: next,
+        page_size: CHANGE_REQUESTS_PAGE_SIZE,
+      });
+      if (!isApiError(response)) {
+        const seen = new Set(changeRequests.map((item) => item.id));
+        setChangeRequests([
+          ...changeRequests,
+          ...(response.data.items ?? []).filter((item) => !seen.has(item.id)),
+        ]);
+        setChangePage({
+          page: next,
+          totalPages: response.data.total_pages ?? next,
+        });
+      } else {
+        message.error(t("profileChange.historyLoadFailed"));
+      }
+    } catch {
+      message.error(t("profileChange.historyLoadFailed"));
+    } finally {
+      setLoadingMoreChanges(false);
+    }
+  };
   const latestRequest = [...changeRequests].sort(
     (a, b) =>
       (b.submitted_at ?? "").localeCompare(a.submitted_at ?? "") || b.id - a.id,
   )[0];
   const hasPending = latestRequest?.status === "PENDING_HR";
-  const showStatus = Boolean(
-    latestRequest && latestRequest.status !== "CANCELLED",
+  // Decided requests stay visible for a short window and can be dismissed.
+  const [dismissedIds, setDismissedIds] = useState<number[]>(
+    readDismissedProfileChangeIds,
   );
+  const showStatus = shouldShowProfileChangeStatus(latestRequest, dismissedIds);
+  const dismissLatest = () => {
+    if (!latestRequest) return;
+    const next = [...dismissedIds, latestRequest.id];
+    setDismissedIds(next);
+    writeDismissedProfileChangeIds(next);
+  };
+  const [historyOpen, setHistoryOpen] = useState(false);
   // undefined = closed, null = opened without a section focus.
   const [formFocus, setFormFocus] = useState<
     ProfileChangeFocus | null | undefined
@@ -216,11 +276,27 @@ export default function MyProfilePage() {
 
   // The dashboard's Current Requests links here with #profile-change.
   const location = useLocation();
+  // When the request no longer shows on the page, open its history instead.
+  const historyOpenedFromLink = useRef(false);
   useEffect(() => {
-    if (!loading && location.hash === "#profile-change") {
+    if (loading || location.hash !== "#profile-change") return;
+    if (showStatus) {
       document.getElementById("profile-change")?.scrollIntoView?.();
+    } else if (
+      changeRequestsLoaded &&
+      changeRequests.length > 0 &&
+      !historyOpenedFromLink.current
+    ) {
+      historyOpenedFromLink.current = true;
+      setHistoryOpen(true);
     }
-  }, [loading, location.hash, showStatus]);
+  }, [
+    loading,
+    location.hash,
+    showStatus,
+    changeRequestsLoaded,
+    changeRequests.length,
+  ]);
 
   if (loading) return <LoadingState title={t("loading.generic")} />;
 
@@ -344,6 +420,13 @@ export default function MyProfilePage() {
             >
               {t("profileChange.requestChange")}
             </Button>
+            <Button
+              icon={<HistoryOutlined />}
+              aria-haspopup="dialog"
+              onClick={() => setHistoryOpen(true)}
+            >
+              {t("profileChange.history")}
+            </Button>
             <Button icon={<ReloadOutlined />} onClick={loadProfile}>
               {t("profile.refresh")}
             </Button>
@@ -351,10 +434,11 @@ export default function MyProfilePage() {
         </div>
       </Card>
 
-      {showStatus && latestRequest ? (
+      {showStatus && latestRequest && hasPending ? (
         <Card
           id="profile-change"
           title={t("profileChange.statusTitle")}
+          extra={<ProfileChangeStatusTag status={latestRequest.status} />}
           style={{
             borderRadius: 16,
             border: "none",
@@ -368,6 +452,24 @@ export default function MyProfilePage() {
           />
         </Card>
       ) : null}
+      {showStatus && latestRequest && !hasPending ? (
+        <div id="profile-change" style={{ marginBottom: 24 }}>
+          <ProfileChangeRequestStatus
+            request={latestRequest}
+            onChanged={() => void loadChangeRequests()}
+            onDismiss={dismissLatest}
+          />
+        </div>
+      ) : null}
+
+      <ProfileChangeRequestHistory
+        open={historyOpen}
+        onClose={() => setHistoryOpen(false)}
+        requests={changeRequests}
+        hasMore={changePage.page < changePage.totalPages}
+        loadingMore={loadingMoreChanges}
+        onLoadMore={() => void loadOlderChangeRequests()}
+      />
 
       <ProfileChangeRequestForm
         open={formFocus !== undefined}
@@ -426,6 +528,7 @@ export default function MyProfilePage() {
                           {formatValue((employee as any).employee_number)}
                           <Tooltip title={t("common.copy")}>
                             <Button
+                              aria-label={t("common.copy")}
                               type="text"
                               size="small"
                               icon={<CopyOutlined />}

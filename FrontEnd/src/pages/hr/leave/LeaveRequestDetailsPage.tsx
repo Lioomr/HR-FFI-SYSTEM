@@ -1,3 +1,4 @@
+import { shortEmployeeName } from "../../../utils/employeeName";
 import BackButton from "../../../components/ui/BackButton";
 import { useCallback, useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
@@ -5,10 +6,13 @@ import {
   Button,
   Card,
   Descriptions,
+  Dropdown,
   Alert,
   Tag,
   Modal,
   Input,
+  Form,
+  Upload,
   Space,
   Typography,
   notification,
@@ -18,9 +22,12 @@ import {
   CloseCircleOutlined,
   EyeOutlined,
   DownloadOutlined,
+  DownOutlined,
   ExportOutlined,
   FilePdfOutlined,
+  UploadOutlined,
 } from "@ant-design/icons";
+import type { UploadFile } from "antd/es/upload/interface";
 
 import PageHeader from "../../../components/ui/PageHeader";
 import LoadingState from "../../../components/ui/LoadingState";
@@ -30,6 +37,7 @@ import {
   approveLeaveRequest,
   rejectLeaveRequest,
   sendLeaveRequestToCEO,
+  completeLeaveRequest,
   hrCancelLeaveRequest,
   getCEOLeaveRequest,
   approveCEOLeaveRequest,
@@ -44,6 +52,8 @@ import { isApiError } from "../../../services/api/apiTypes";
 import { useI18n } from "../../../i18n/useI18n";
 import LeaveApprovalMap from "../../../components/leaves/LeaveApprovalMap";
 import RequestObligationsPanel from "../../../components/requests/RequestObligationsPanel";
+import DocumentIntegrityPanel from "../../../components/documents/DocumentIntegrityPanel";
+import { isDocumentBlocked } from "../../../components/documents/integrityPresentation";
 import ApprovalActions from "../../../components/ceo/ApprovalActions";
 import RejectReasonModal from "../../../components/ceo/RejectReasonModal";
 import StickyDecisionBar from "../../../components/ceo/StickyDecisionBar";
@@ -92,6 +102,11 @@ export default function LeaveRequestDetailsPage({
   const [waiverReason, setWaiverReason] = useState("");
   const [waiverError, setWaiverError] = useState<string | null>(null);
   const [ceoRejectOpen, setCeoRejectOpen] = useState(false);
+  const [completionOpen, setCompletionOpen] = useState(false);
+  const [completionComment, setCompletionComment] = useState("");
+  const [visaFile, setVisaFile] = useState<File | null>(null);
+  const [visaFileList, setVisaFileList] = useState<UploadFile[]>([]);
+  const [completionError, setCompletionError] = useState<string | null>(null);
   const { openPreview, previewModal } = useFilePreview();
 
   const loadData = useCallback(async () => {
@@ -226,10 +241,12 @@ export default function LeaveRequestDetailsPage({
         ? await getCEOLeaveRequestPdfBlob(request.id, true)
         : await getLeaveRequestPdfBlob(request.id, true);
       downloadBlob(blob, `leave_request_${request.id}.pdf`);
-    } catch {
+    } catch (err: unknown) {
       notification.error({
         message: t("common.error"),
-        description: t("leave.pdfDownloadFailed"),
+        description: isDocumentBlocked(err)
+          ? t("documentIntegrity.downloadBlocked")
+          : t("leave.pdfDownloadFailed"),
       });
     } finally {
       setPdfLoading(false);
@@ -244,7 +261,7 @@ export default function LeaveRequestDetailsPage({
       load: () =>
         isCEO
           ? getCEOLeaveRequestPdfBlob(request.id, false)
-          : getLeaveRequestPdfBlob(request.id, false),
+          : getLeaveRequestPdfBlob(request.id, false, { workpaper: true }),
     });
   };
 
@@ -393,6 +410,41 @@ export default function LeaveRequestDetailsPage({
     }
   };
 
+  const submitCompletion = async () => {
+    if (!request) return;
+    if (request.visa_upload_required && !visaFile) {
+      setCompletionError(t("leave.visaRequired"));
+      return;
+    }
+    setProcessing(true);
+    setCompletionError(null);
+    try {
+      const res = await completeLeaveRequest(request.id, {
+        comment: completionComment.trim() || undefined,
+        visa_document: visaFile || undefined,
+      });
+      if (isApiError(res)) {
+        setCompletionError(res.message);
+        return;
+      }
+      notification.success({
+        message: t("leave.completeSuccess"),
+        description: res.data.warning_messages?.join(" ") || undefined,
+      });
+      setCompletionOpen(false);
+      setCompletionComment("");
+      setVisaFile(null);
+      setVisaFileList([]);
+      await loadData();
+    } catch (err: unknown) {
+      setCompletionError(
+        err instanceof Error ? err.message : t("leave.completeFail"),
+      );
+    } finally {
+      setProcessing(false);
+    }
+  };
+
   if (loading) return <LoadingState title={t("leave.loadingDetails")} />;
   if (error)
     return (
@@ -417,8 +469,14 @@ export default function LeaveRequestDetailsPage({
     ["submitted", "pending_hr"].includes(request.status?.toLowerCase() ?? "");
   const canSendToCEO = !isCEO && canAction;
   const canCeoDecide = isCEO && request.status?.toLowerCase() === "pending_ceo";
-  const employeeName =
-    request.employee?.full_name || `ID: ${request.employee?.id}`;
+  const canHrComplete =
+    !isCEO && request.status?.toLowerCase() === "pending_hr_completion";
+  const hrCompletionActionText = request.visa_upload_required
+    ? t("leave.uploadVisaToApprove")
+    : t("leave.completeBtn");
+  const employeeName = shortEmployeeName(
+    request.employee?.full_name || `ID: ${request.employee?.id}`,
+  );
   // Employees cannot cancel their own leave; HR cancels any request in progress or already approved.
   const canHrCancel =
     [
@@ -446,7 +504,7 @@ export default function LeaveRequestDetailsPage({
     if (s === "approved") return "green";
     if (s === "rejected") return "red";
     if (s === "pending_ceo") return "volcano";
-    if (s === "pending_hr") return "purple";
+    if (s === "pending_hr" || s === "pending_hr_completion") return "purple";
     if (s === "pending_delegate") return "gold";
     if (s === "pending_manager") return "orange";
     return "blue";
@@ -459,16 +517,69 @@ export default function LeaveRequestDetailsPage({
         tags={<Tag color={statusColor()}>{statusLabel}</Tag>}
         actions={
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <Button icon={<EyeOutlined />} onClick={previewPdf}>
-              {t("common.preview")}
-            </Button>
-            <Button
-              icon={<FilePdfOutlined />}
-              onClick={downloadPdf}
-              loading={pdfLoading}
+            <Dropdown
+              trigger={["click"]}
+              menu={{
+                items: [
+                  {
+                    key: "pdf",
+                    label: t("leave.downloadRequestPdf"),
+                    icon: <FilePdfOutlined />,
+                    disabled: pdfLoading,
+                  },
+                  ...(request.document
+                    ? [
+                        {
+                          key: "document",
+                          label: t("leave.downloadAttachment"),
+                          icon: <DownloadOutlined />,
+                          disabled: documentLoading,
+                        },
+                      ]
+                    : []),
+                ],
+                onClick: ({ key }) => {
+                  if (key === "pdf") void downloadPdf();
+                  else void downloadDocument();
+                },
+              }}
             >
-              {t("leave.downloadRequestPdf")}
-            </Button>
+              <Button
+                icon={<DownloadOutlined aria-hidden />}
+                loading={pdfLoading || documentLoading}
+              >
+                {t("common.download")} <DownOutlined aria-hidden />
+              </Button>
+            </Dropdown>
+            <Dropdown
+              trigger={["click"]}
+              menu={{
+                items: [
+                  {
+                    key: "pdf",
+                    label: t("leave.previewRequestPdf"),
+                    icon: <FilePdfOutlined />,
+                  },
+                  ...(request.document
+                    ? [
+                        {
+                          key: "document",
+                          label: t("leave.previewAttachment"),
+                          icon: <EyeOutlined />,
+                        },
+                      ]
+                    : []),
+                ],
+                onClick: ({ key }) => {
+                  if (key === "pdf") previewPdf();
+                  else previewDocument();
+                },
+              }}
+            >
+              <Button icon={<EyeOutlined aria-hidden />}>
+                {t("common.preview")} <DownOutlined aria-hidden />
+              </Button>
+            </Dropdown>
             <BackButton
               onClick={() =>
                 navigate(isCEO ? "/ceo/leave/requests" : "/hr/leave/requests")
@@ -512,24 +623,17 @@ export default function LeaveRequestDetailsPage({
             <Descriptions.Item label={t("common.reason")}>
               {request.reason}
             </Descriptions.Item>
-            <Descriptions.Item label={t("common.document")}>
-              {request.document ? (
-                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                  <Button icon={<EyeOutlined />} onClick={previewDocument}>
-                    {t("common.preview")}
-                  </Button>
-                  <Button
-                    icon={<DownloadOutlined />}
-                    onClick={downloadDocument}
-                    loading={documentLoading}
-                  >
-                    {t("common.download")}
-                  </Button>
-                </div>
-              ) : (
-                "-"
+            {request.source !== "hr_manual" && (
+              <Descriptions.Item label={t("leave.willTravel")}>
+                {t(request.will_travel ? "common.yes" : "common.no")}
+              </Descriptions.Item>
+            )}
+            {request.requires_hr_completion_visa &&
+              request.will_require_visa != null && (
+                <Descriptions.Item label={t("leave.willRequireVisa")}>
+                  {t(request.will_require_visa ? "common.yes" : "common.no")}
+                </Descriptions.Item>
               )}
-            </Descriptions.Item>
             <Descriptions.Item label={t("common.submittedOn")}>
               {request.created_at
                 ? new Date(request.created_at).toLocaleDateString()
@@ -574,6 +678,15 @@ export default function LeaveRequestDetailsPage({
             )}
           </Descriptions>
         </Card>
+
+        <DocumentIntegrityPanel
+          requestId={request.id}
+          isFinal={request.status === "approved"}
+          canRetrySeal={!isCEO}
+          profilePath={
+            isCEO ? undefined : (profileId) => `/hr/employees/${profileId}`
+          }
+        />
       </div>
 
       {canCeoDecide && (
@@ -611,6 +724,16 @@ export default function LeaveRequestDetailsPage({
                 {t("leave.sendToCeoBtn")}
               </Button>
             )}
+            {canHrComplete && (
+              <Button
+                type="primary"
+                icon={<CheckCircleOutlined />}
+                onClick={() => setCompletionOpen(true)}
+                disabled={processing}
+              >
+                {hrCompletionActionText}
+              </Button>
+            )}
             {canAction && (
               <>
                 <Button
@@ -636,6 +759,77 @@ export default function LeaveRequestDetailsPage({
       )}
 
       {previewModal}
+
+      <Modal
+        title={t("leave.hrCompletionRequired")}
+        open={completionOpen}
+        onOk={submitCompletion}
+        onCancel={() => {
+          if (processing) return;
+          setCompletionOpen(false);
+          setCompletionError(null);
+          setCompletionComment("");
+          setVisaFile(null);
+          setVisaFileList([]);
+        }}
+        okText={hrCompletionActionText}
+        okButtonProps={{ loading: processing }}
+        destroyOnHidden
+      >
+        <Space orientation="vertical" style={{ width: "100%" }}>
+          <Typography.Text>{t("leave.hrCompletionDesc")}</Typography.Text>
+          {request.visa_upload_required && (
+            <Form.Item
+              label={t("leave.uploadVisa")}
+              required
+              style={{ marginBottom: 0 }}
+            >
+              <Upload
+                accept="application/pdf,.pdf"
+                maxCount={1}
+                disabled={processing}
+                fileList={visaFileList}
+                beforeUpload={(file) => {
+                  if (
+                    file.type !== "application/pdf" &&
+                    !file.name.toLowerCase().endsWith(".pdf")
+                  ) {
+                    setCompletionError(t("leave.visaPdfOnly"));
+                    return Upload.LIST_IGNORE;
+                  }
+                  setVisaFile(file);
+                  setVisaFileList([
+                    { uid: file.uid, name: file.name, status: "done" },
+                  ]);
+                  setCompletionError(null);
+                  return false;
+                }}
+                onRemove={() => {
+                  setVisaFile(null);
+                  setVisaFileList([]);
+                }}
+              >
+                <Button
+                  icon={<UploadOutlined aria-hidden />}
+                  disabled={processing}
+                >
+                  {t("leave.uploadVisa")}
+                </Button>
+              </Upload>
+            </Form.Item>
+          )}
+          <TextArea
+            rows={3}
+            placeholder={t("leave.completionComment")}
+            aria-label={t("leave.completionComment")}
+            value={completionComment}
+            onChange={(event) => setCompletionComment(event.target.value)}
+          />
+          {completionError && (
+            <Alert type="error" title={completionError} showIcon />
+          )}
+        </Space>
+      </Modal>
 
       {/* CEO approve — carries the blocking-obligation waiver when required */}
       <Modal

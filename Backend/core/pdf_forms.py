@@ -54,19 +54,26 @@ SIGNATURE_MISSING = "missing"
 SIGNATURE_INVALID = "invalid"
 SIGNATURE_UNPLACEABLE = "unplaceable"
 SIGNATURE_UNMAPPED = "unmapped"
+#: The signer has no stored image, so their profile name was printed instead.
+SIGNATURE_NAME_FALLBACK = "name_fallback"
 
 
 @dataclass(frozen=True)
 class SignatureAsset:
     """A signer's stored signature image, already read into memory.
 
-    ``signer_label`` is a human name for diagnostics only. The originating
-    storage path is deliberately absent so it can never reach a log line, an
-    audit row, or an API response.
+    ``signer_label`` is the signer's human name. The originating storage path is
+    deliberately absent so it can never reach a log line, an audit row, or an
+    API response.
+
+    ``name_fallback`` marks a recorded signer who has no stored image: the
+    renderer prints ``signer_label`` (their profile name) in the signature box
+    instead of leaving it blank.  ``data`` is empty in that case.
     """
 
     data: bytes
     signer_label: str = ""
+    name_fallback: bool = False
 
     def is_supported_image(self) -> bool:
         return bool(self.data) and self.data.startswith(_IMAGE_MAGIC) and len(self.data) <= MAX_SIGNATURE_BYTES
@@ -145,7 +152,9 @@ def load_form_assets(
             if template_path:
                 break
         if not template_path:
-            logger.error("pdf_form.company_template_unresolved", extra={"template": template_filename, "company": safe_code})
+            logger.error(
+                "pdf_form.company_template_unresolved", extra={"template": template_filename, "company": safe_code}
+            )
             raise FileNotFoundError(
                 f"No complete company-specific template pair for {safe_code}: {template_filename} and {map_filename}."
             )
@@ -393,6 +402,34 @@ def draw_signature_image(
     return SIGNATURE_PLACED
 
 
+def draw_signature_name(
+    pdf: canvas.Canvas,
+    spec: Mapping[str, Any],
+    name: str,
+    *,
+    font: str,
+    blockers: Iterable[tuple[float, float, float, float]] = (),
+) -> str:
+    """Print a signer's name inside their signature box, within its free band."""
+
+    if not _clean(name):
+        return SIGNATURE_MISSING
+    band = _largest_free_band(_rect(spec), blockers)
+    if band is None or band[1] - band[0] < MIN_FONT_SIZE + 2:
+        return SIGNATURE_UNPLACEABLE
+    height = band[1] - band[0]
+    text_spec = {
+        "x": float(spec["x"]),
+        "y": band[0],
+        "width": float(spec["width"]),
+        "height": height,
+        "font_size": min(11.0, max(MIN_FONT_SIZE, height * 0.4)),
+        "padding": float(spec.get("padding", 2)),
+    }
+    draw_text_field(pdf, text_spec, name, font=font)
+    return SIGNATURE_NAME_FALLBACK
+
+
 def _page_number(spec: Mapping[str, Any]) -> int:
     try:
         return max(1, int(spec.get("page", 1)))
@@ -418,7 +455,7 @@ def superseded_text_fields(
 
     superseded = set()
     for key, asset in signatures.items():
-        if asset is None or not key.endswith(IMAGE_FIELD_SUFFIX):
+        if asset is None or getattr(asset, "name_fallback", False) or not key.endswith(IMAGE_FIELD_SUFFIX):
             continue
         twin = key[: -len(IMAGE_FIELD_SUFFIX)]
         if twin in fields and fields[twin].get("kind") != "image":
@@ -494,7 +531,17 @@ def render_mapped_form(
                 continue
             if asset is None or _page_number(spec) != index:
                 continue
-            state = draw_signature_image(pdf, spec, asset, blockers=occupied.get(index, []))
+            if asset.name_fallback:
+                twin = key[: -len(IMAGE_FIELD_SUFFIX)] if key.endswith(IMAGE_FIELD_SUFFIX) else ""
+                if twin and twin in assets.fields and _clean(values.get(twin)):
+                    # The form's own typed-name twin already shows who signed.
+                    state = SIGNATURE_NAME_FALLBACK
+                else:
+                    state = draw_signature_name(
+                        pdf, spec, asset.signer_label, font=regular_font, blockers=occupied.get(index, [])
+                    )
+            else:
+                state = draw_signature_image(pdf, spec, asset, blockers=occupied.get(index, []))
             diagnostics.append({"field": key, "state": state, "signer": asset.signer_label})
 
         # An overlay with nothing on it must still be a one-page document, or
@@ -515,6 +562,9 @@ def render_mapped_form(
 
 def log_signature_diagnostics(form_key: str, entity_id: Any, diagnostics: Iterable[Mapping[str, str]]) -> None:
     """Record unfilled signature slots so a missing signature is observable.
+
+    A slot that printed the signer's name because they have no stored image is
+    reported too (state ``name_fallback``), so the gap stays visible.
 
     Only field names, states, and signer display names are emitted - never image
     bytes, storage paths, or tokens.

@@ -38,6 +38,15 @@ const leavesApi = {
           end_date: string;
           reason?: string;
           document?: File;
+          will_travel: boolean;
+          will_require_visa?: boolean;
+          date_of_rejoin?: string;
+          po_box?: string;
+          full_address?: string;
+          airplane_ticket_payer?: "company" | "employee" | "";
+          airplane_ticket_address?: string;
+          delegated_to?: number;
+          delegation_note?: string;
         }
       | FormData,
   ): Promise<ApiResponse<any>> => {

@@ -13,9 +13,15 @@ import { NotificationPollingManager } from "../services/notifications/notificati
  * - performs the initial fetch (recent list + unread count),
  * - owns a single polling lifecycle while realtime delivery is deferred,
  * - refetches when the UI language changes (the API renders text per language),
- * - tears everything down when the user logs out or the scope changes.
+ * - tears everything down when the user logs out or the scope changes,
+ * - stays idle while `paused` (the page is about to reload).
  */
-export function useNotificationsRuntime(): void {
+export function useNotificationsRuntime(
+  options: { paused?: boolean } = {},
+): void {
+  // Paused while the shell is about to reload (a company switch): polling the
+  // new scope would only fetch data the reload throws away.
+  const paused = options.paused ?? false;
   const user = useAuthStore((s) => s.user);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const language = useI18nStore((s) => s.language);
@@ -31,7 +37,7 @@ export function useNotificationsRuntime(): void {
   useEffect(() => {
     const store = useNotificationStore.getState();
 
-    if (!isAuthenticated || !userId || isHeadOffice) {
+    if (!isAuthenticated || !userId || isHeadOffice || paused) {
       managerRef.current?.stop();
       managerRef.current = null;
       store.reset();
@@ -59,7 +65,7 @@ export function useNotificationsRuntime(): void {
     };
     // Re-run only when identity or active company changes — NOT on every render,
     // which prevents duplicate polling lifecycles. Store actions are accessed via getState().
-  }, [isAuthenticated, userId, companyId, isHeadOffice]);
+  }, [isAuthenticated, userId, companyId, isHeadOffice, paused]);
 
   useEffect(() => {
     if (languageRef.current === language) return;

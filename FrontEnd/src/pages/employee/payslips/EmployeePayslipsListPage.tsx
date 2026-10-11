@@ -130,6 +130,7 @@ export default function EmployeePayslipsListPage() {
         <div style={{ display: "flex", gap: 8, justifyContent: "center" }}>
           <Tooltip title={t("payslips.list.viewDetails")}>
             <Button
+              aria-label={t("common.view")}
               icon={<EyeOutlined />}
               onClick={() => navigate(`/employee/payslips/${record.id}`)}
               size="small"
@@ -137,6 +138,7 @@ export default function EmployeePayslipsListPage() {
           </Tooltip>
           <Tooltip title={t("payslips.list.downloadPdf")}>
             <Button
+              aria-label={t("common.download")}
               icon={<DownloadOutlined />}
               onClick={() => handleDownload(record)}
               loading={downloadingId === record.id}
@@ -149,7 +151,7 @@ export default function EmployeePayslipsListPage() {
   ];
 
   return (
-    <div style={{ maxWidth: 1000, margin: "0 auto" }}>
+    <div style={{ width: "100%", minWidth: 0 }}>
       <PageHeader
         title={t("payslips.list.title")}
         subtitle={t("payslips.list.subtitle")}
@@ -163,7 +165,8 @@ export default function EmployeePayslipsListPage() {
           rowKey="id"
           loading={loading}
           size="small"
-          scroll={{ x: "max-content" }}
+          tableLayout="fixed"
+          scroll={{ x: 660 }}
           pagination={{
             current: page,
             pageSize,

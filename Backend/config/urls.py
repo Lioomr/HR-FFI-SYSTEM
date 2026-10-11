@@ -46,6 +46,7 @@ urlpatterns = [
     path("api/", include("permission_requests.urls")),
     path("api/", include("announcements.urls")),
     path("api/core/", include("core.urls")),
+    path("api/documents/", include("core.document_integrity.urls")),
     path("api/notifications/", include("in_app_notifications.urls")),
     path("api/agent-memory/", include("agent_memory.urls")),
     path("api/integrations/whatsapp/status/", WhatsAppIntegrationStatusView.as_view()),

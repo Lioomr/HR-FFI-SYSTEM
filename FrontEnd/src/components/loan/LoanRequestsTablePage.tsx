@@ -1,3 +1,4 @@
+import { shortEmployeeName } from "../../utils/employeeName";
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button, Input, Select, Space, Tag } from "antd";
@@ -126,9 +127,11 @@ export default function LoanRequestsTablePage({
   }, [load, page]);
 
   const employeeName = (record: LoanRequest) =>
-    record.employee?.full_name ||
-    record.employee?.email ||
-    t("manager.requests.unknown");
+    shortEmployeeName(
+      record.employee?.full_name ||
+        record.employee?.email ||
+        t("manager.requests.unknown"),
+    );
 
   const columns: ColumnsType<LoanRequest> = [
     {
@@ -265,22 +268,22 @@ export default function LoanRequestsTablePage({
               setPage(1);
             }}
           />
-        <Select
-          className="ffi-toolbar__field"
-          style={{ maxWidth: 320 }}
-          allowClear
-          placeholder={t("loans.inbox.allStatuses")}
-          aria-label={t("loans.list.colStatus")}
-          value={statusFilter}
-          onChange={(value) => {
-            setStatusFilter(value);
-            setPage(1);
-          }}
-          options={STATUS_OPTIONS.map((status) => ({
-            label: approvalStatusLabel(status, t),
-            value: status,
-          }))}
-        />
+          <Select
+            className="ffi-toolbar__field"
+            style={{ maxWidth: 320 }}
+            allowClear
+            placeholder={t("loans.inbox.allStatuses")}
+            aria-label={t("loans.list.colStatus")}
+            value={statusFilter}
+            onChange={(value) => {
+              setStatusFilter(value);
+              setPage(1);
+            }}
+            options={STATUS_OPTIONS.map((status) => ({
+              label: approvalStatusLabel(status, t),
+              value: status,
+            }))}
+          />
         </Space>
       }
     >

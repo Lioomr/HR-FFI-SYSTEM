@@ -79,7 +79,7 @@ export default function PageHeader({
               style={{ marginBottom: subtitle || secondarySubtitle ? 0 : 0 }}
             >
               <Typography.Title
-                level={3}
+                level={2}
                 style={{
                   margin: 0,
                   fontSize: 24,

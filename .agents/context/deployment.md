@@ -21,6 +21,10 @@ The root Compose file also defines `cognee` and `cognee-db` under the opt-in `me
 
 See `reliability_and_perf_fixes.md` for why the worker/beat split and the gzip config exist — both were reliability/perf fixes and should not be reverted.
 
+**Frontend security headers.** `FrontEnd/security-headers.conf` (copied to `/etc/nginx/snippets/` by the Dockerfile) sets the CSP (including `frame-ancestors 'none'`), `X-Frame-Options`, `X-Content-Type-Options`, `Referrer-Policy` and `Permissions-Policy`. nginx drops inherited `add_header` as soon as a location declares its own, so every static location in `nginx.conf` must `include` the snippet; the proxied API locations deliberately do not (Django sends its own). A CSP `<meta>` tag in `index.html` cannot enforce `frame-ancestors`, so do not move the policy back. Check with `nginx -t` and `curl -I` on `/`, an asset, and an asset 404.
+
+**Frontend bundle.** Keep antd out of `manualChunks` in `vite.config.ts` (a catch-all antd chunk put every lazy page's components in the initial download), keep flag-icons SVGs out of the CSS inline limit, and keep one language per translation chunk. Initial load is about 430 KB gzip for JS plus CSS; re-measure after adding eager imports to `main.tsx`, `BaseLayout` or `routes.tsx`.
+
 ## Required Environment Variables
 
 **Core Django** (Backend/.env):

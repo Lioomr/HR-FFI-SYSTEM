@@ -1,3 +1,4 @@
+import { shortEmployeeName } from "../../utils/employeeName";
 import { useEffect, useMemo, useState } from "react";
 import { listEmployees } from "../../services/api/employeesApi";
 import type { Employee } from "../../services/api/employeesApi";
@@ -68,8 +69,8 @@ export function useEmployeeOptions({
         return {
           value: employee.id,
           label: withCode
-            ? `${employee.employee_number || employee.employee_id} - ${name}`
-            : name,
+            ? `${employee.employee_number || employee.employee_id} - ${shortEmployeeName(name)}`
+            : shortEmployeeName(name),
         };
       }),
     [employees, language, withCode],

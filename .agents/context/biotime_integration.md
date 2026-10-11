@@ -46,5 +46,5 @@ The attendance module integrates with **ZKTeco BioTime 8.5** to sync employee at
 - `BioTimeConfig` is a singleton — there should never be more than one row. Use `get_or_create` with a fixed `pk=1` or similar pattern.
 - Never expose BioTime credentials in API responses — exclude `password` from serializer output.
 - Sync failures must be logged (to audit or at least Django logger) — never silently swallow errors.
-- BioTime-sourced `AttendanceRecord` rows have `source=SYSTEM`; manual corrections have `source=MANUAL`. Do not overwrite MANUAL records with SYSTEM sync data for the same date.
+- Attendance punches come only from BioTime. Attendance correction pages, APIs, dashboard links and mobile approval consumers were removed on 2026-10-08. Retired correction storage remains only for historical migration compatibility.
 - When mapping employees, confirm `BioTimeEmployeeMap` exists before syncing — unmatched BioTime IDs should be logged/skipped, not crash the sync.

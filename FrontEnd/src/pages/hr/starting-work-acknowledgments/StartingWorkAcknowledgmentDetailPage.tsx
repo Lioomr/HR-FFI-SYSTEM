@@ -23,6 +23,9 @@ import StartingWorkWorkflowHistory from "../../../components/hr/StartingWorkWork
 import ApprovalActions from "../../../components/ceo/ApprovalActions";
 import StickyDecisionBar from "../../../components/ceo/StickyDecisionBar";
 import ApprovalFlowMap from "../../../components/requests/ApprovalFlowMap";
+import DocumentIntegrityPanel from "../../../components/documents/DocumentIntegrityPanel";
+import { isDocumentFinal } from "../../../components/documents/documentTypes";
+import { isDocumentBlocked } from "../../../components/documents/integrityPresentation";
 import { buildStagesFromWorkflow } from "../../../components/requests/workflowPresentation";
 import Unauthorized403Page from "../../Unauthorized403Page";
 
@@ -298,7 +301,11 @@ export default function StartingWorkAcknowledgmentDetailPage() {
       triggerBlobDownload(blob, acknowledgmentPdfFilename(record));
       messageApi.success(t("startingWork.pdf.success"));
     } catch (err: unknown) {
-      messageApi.error(reportActionError(err, "startingWork.pdf.failed"));
+      // 409 here is not a stale view: the frozen approved copy is missing or
+      // fails its hash, and the backend never re-renders it.
+      if (isDocumentBlocked(err))
+        messageApi.error(t("documentIntegrity.downloadBlocked"));
+      else messageApi.error(reportActionError(err, "startingWork.pdf.failed"));
     } finally {
       setDownloading(false);
     }
@@ -534,6 +541,17 @@ export default function StartingWorkAcknowledgmentDetailPage() {
             )}
             <StartingWorkWorkflowHistory history={record.workflow?.history} />
           </Surface>
+        </Col>
+
+        <Col xs={24}>
+          {/* HR-only page: frozen at HR approval. */}
+          <DocumentIntegrityPanel
+            documentType="starting_work"
+            requestId={record.id}
+            isFinal={isDocumentFinal("starting_work", record.status)}
+            canRetrySeal
+            profilePath={(profileId) => `/hr/employees/${profileId}`}
+          />
         </Col>
       </Row>
 

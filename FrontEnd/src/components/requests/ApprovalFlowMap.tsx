@@ -93,6 +93,7 @@ export default function ApprovalFlowMap({
       : t(`workflow.role.${stage.key}`, stage.title);
 
   const activeStages = stages.filter((stage) => stage.state !== "skipped");
+  const skippedCount = stages.length - activeStages.length;
   const completedStages = activeStages.filter(
     (stage) => stage.state === "completed",
   ).length;
@@ -125,6 +126,15 @@ export default function ApprovalFlowMap({
 
   const renderStageCard = (stage: ApprovalFlowStage, index: number) => {
     const colors = getStageColor(stage.state);
+    // An undated stage only says "Awaiting action" while it is the one being
+    // waited on; a finished, skipped or closed stage must not claim that.
+    const footerText = stage.at
+      ? `${t("workflow.updated")} ${formatDateTime(stage.at)}`
+      : stage.state === "current"
+        ? t("leave.approvalMap.noDate")
+        : stage.state === "upcoming"
+          ? t("leave.approvalMap.notReached")
+          : "";
     return (
       <div
         key={stage.key}
@@ -142,19 +152,6 @@ export default function ApprovalFlowMap({
         }}
         aria-current={stage.state === "current" ? "step" : undefined}
       >
-        {!isMobile && index < stages.length - 1 ? (
-          <div
-            style={{
-              position: "absolute",
-              top: 28,
-              right: -10,
-              width: 20,
-              height: 2,
-              background:
-                "linear-gradient(90deg, rgba(249,115,22,0.35), rgba(148,163,184,0.25))",
-            }}
-          />
-        ) : null}
         <Space direction="vertical" size={10} style={{ width: "100%" }}>
           <div
             style={{
@@ -247,16 +244,235 @@ export default function ApprovalFlowMap({
           >
             {stage.note}
           </Paragraph>
-          <Space size={5}>
-            <ClockCircleOutlined style={{ color: "#94a3b8", fontSize: 12 }} />
-            <Text type="secondary" style={{ fontSize: 12 }}>
-              {stage.at
-                ? `${t("workflow.updated")} ${formatDateTime(stage.at)}`
-                : t("leave.approvalMap.noDate")}
-            </Text>
-          </Space>
+          {footerText ? (
+            <Space size={5}>
+              <ClockCircleOutlined style={{ color: "#94a3b8", fontSize: 12 }} />
+              <Text type="secondary" style={{ fontSize: 12 }}>
+                {footerText}
+              </Text>
+            </Space>
+          ) : null}
         </Space>
       </div>
+    );
+  };
+
+  // Desktop and expanded phone view: one vertical trail. A rail of nodes joins
+  // the steps in order; each node and the line leaving it carry the step state,
+  // so the path reads top to bottom without relying on grid wrapping.
+  const renderTrailStep = (
+    stage: ApprovalFlowStage,
+    index: number,
+    isLast: boolean,
+  ) => {
+    const colors = getStageColor(stage.state);
+    const skipped = stage.state === "skipped";
+    const filled = stage.state === "completed" || stage.state === "rejected";
+    const current = stage.state === "current";
+    const footerText = stage.at
+      ? `${t("workflow.updated")} ${formatDateTime(stage.at)}`
+      : current
+        ? t("leave.approvalMap.noDate")
+        : stage.state === "upcoming"
+          ? t("leave.approvalMap.notReached")
+          : "";
+    const nodeSize = skipped ? 22 : 36;
+
+    return (
+      <li
+        key={stage.key}
+        aria-current={current ? "step" : undefined}
+        style={{
+          display: "grid",
+          gridTemplateColumns: "36px minmax(0, 1fr)",
+          columnGap: 14,
+          listStyle: "none",
+        }}
+      >
+        <div
+          aria-hidden="true"
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+          }}
+        >
+          <div
+            style={{
+              width: nodeSize,
+              height: nodeSize,
+              marginTop: skipped ? 7 : 0,
+              flexShrink: 0,
+              borderRadius: 999,
+              display: "grid",
+              placeItems: "center",
+              fontSize: skipped ? 12 : 16,
+              background: filled ? colors.accent : "#fff",
+              color: filled ? "#fff" : colors.accent,
+              boxShadow: current
+                ? `inset 0 0 0 2px ${colors.accent}, 0 0 0 5px rgba(249, 115, 22, 0.14)`
+                : filled
+                  ? `0 4px 10px ${colors.accent}33`
+                  : `inset 0 0 0 1.5px ${colors.border}`,
+            }}
+          >
+            {getStageIcon(stage.state)}
+          </div>
+          {isLast ? null : (
+            <div
+              style={{
+                flex: 1,
+                width: 2,
+                minHeight: 14,
+                margin: "4px 0",
+                borderRadius: 2,
+                background:
+                  stage.state === "completed"
+                    ? colors.accent
+                    : "repeating-linear-gradient(to bottom, #cbd5e1 0 4px, transparent 4px 8px)",
+              }}
+            />
+          )}
+        </div>
+
+        <div style={{ paddingBottom: isLast ? 0 : 14, minWidth: 0 }}>
+          {skipped ? (
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                minHeight: 36,
+              }}
+            >
+              <Text
+                style={{
+                  fontSize: 12,
+                  fontWeight: 700,
+                  letterSpacing: "0.02em",
+                  textTransform: "uppercase",
+                  color: "#94a3b8",
+                }}
+              >
+                {getStageLabel(stage)}
+              </Text>
+              <Text style={{ fontSize: 12, color: "#94a3b8" }}>
+                · {getStateLabel(stage.state)}
+              </Text>
+            </div>
+          ) : (
+            <div
+              style={{
+                padding: "12px 16px",
+                borderRadius: 14,
+                background: colors.surface,
+                boxShadow: `0 0 0 1px ${colors.border}, 0 1px 2px rgba(15, 23, 42, 0.04)`,
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  flexWrap: "wrap",
+                  gap: 8,
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "baseline",
+                    gap: 8,
+                    minWidth: 0,
+                  }}
+                >
+                  <Text
+                    type="secondary"
+                    style={{
+                      fontSize: 11,
+                      fontWeight: 700,
+                      fontVariantNumeric: "tabular-nums",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {t("workflow.step", { number: index + 1 })}
+                  </Text>
+                  <Text
+                    style={{
+                      fontSize: 15,
+                      fontWeight: 800,
+                      color: "#0f172a",
+                      letterSpacing: "0.02em",
+                      textTransform: "uppercase",
+                    }}
+                  >
+                    {getStageLabel(stage)}
+                  </Text>
+                </div>
+                <Tag
+                  style={{ marginInlineEnd: 0 }}
+                  color={
+                    stage.state === "cancelled"
+                      ? "default"
+                      : stage.state === "rejected"
+                        ? "red"
+                        : stage.state === "completed"
+                          ? "green"
+                          : "orange"
+                  }
+                >
+                  {getStateLabel(stage.state)}
+                </Tag>
+              </div>
+              {stage.detail ? (
+                <Text
+                  style={{
+                    display: "block",
+                    marginTop: 4,
+                    color: "#0f172a",
+                    fontSize: 13,
+                    fontWeight: 600,
+                    overflowWrap: "anywhere",
+                  }}
+                >
+                  {stage.detail}
+                </Text>
+              ) : null}
+              {stage.note ? (
+                <Paragraph
+                  style={{
+                    margin: "8px 0 0",
+                    padding: "8px 12px",
+                    borderRadius: 8,
+                    background: "rgba(255, 255, 255, 0.7)",
+                    color: "#475569",
+                    fontSize: 13,
+                    textWrap: "pretty",
+                  }}
+                >
+                  {stage.note}
+                </Paragraph>
+              ) : null}
+              {footerText ? (
+                <Space size={5} style={{ marginTop: 8 }}>
+                  <ClockCircleOutlined
+                    style={{ color: "#94a3b8", fontSize: 12 }}
+                  />
+                  <Text
+                    type="secondary"
+                    style={{
+                      fontSize: 12,
+                      fontVariantNumeric: "tabular-nums",
+                    }}
+                  >
+                    {footerText}
+                  </Text>
+                </Space>
+              ) : null}
+            </div>
+          )}
+        </div>
+      </li>
     );
   };
 
@@ -373,6 +589,7 @@ export default function ApprovalFlowMap({
             color: terminalStage ? "#dc2626" : "#ea580c",
             fontWeight: 800,
             fontSize: 13,
+            fontVariantNumeric: "tabular-nums",
           }}
         >
           {completedStages}/{activeStages.length}
@@ -386,6 +603,9 @@ export default function ApprovalFlowMap({
               completed: completedStages,
               total: activeStages.length,
             })}
+            {skippedCount > 0
+              ? ` · ${t("workflow.progressSkipped", { count: skippedCount })}`
+              : ""}
           </Text>
           <div
             aria-hidden="true"
@@ -448,15 +668,11 @@ export default function ApprovalFlowMap({
           )}
         </div>
       ) : (
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))",
-            gap: 14,
-          }}
-        >
-          {stages.map((stage, index) => renderStageCard(stage, index))}
-        </div>
+        <ol style={{ margin: 0, padding: 0 }}>
+          {stages.map((stage, index) =>
+            renderTrailStep(stage, index, index === stages.length - 1),
+          )}
+        </ol>
       )}
       {isMobile && (
         <Button

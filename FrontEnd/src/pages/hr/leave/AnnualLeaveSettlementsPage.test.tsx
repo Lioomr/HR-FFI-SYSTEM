@@ -30,6 +30,10 @@ vi.mock("../../../services/api/employeesApi", () => ({
   }),
 }));
 
+vi.mock("../../../components/documents/DocumentIntegrityPanel", async () => ({
+  default: (await import("../../../test/integrityPanelStub")).default,
+}));
+
 import AnnualLeaveSettlementsPage from "./AnnualLeaveSettlementsPage";
 import { listEmployees } from "../../../services/api/employeesApi";
 import * as annualApi from "../../../services/api/annualLeavePaymentsApi";
@@ -590,5 +594,41 @@ describe("HR Annual Leave settlements queue", () => {
     expect(
       screen.queryByRole("region", { name: "Decision actions" }),
     ).not.toBeInTheDocument();
+  });
+});
+
+describe("HR Annual Leave settlement document integrity", () => {
+  it("shows a not-yet-final card on a pending deep-linked settlement", async () => {
+    renderPage("/hr/annual-leave-payments/9");
+    const panel = await screen.findByTestId("integrity-panel", {}, FIND);
+    expect(panel).toHaveAttribute("data-type", "annual_entitlement");
+    expect(panel).toHaveAttribute("data-id", "9");
+    expect(panel).toHaveAttribute("data-final", "false");
+  });
+
+  it.each(["approved", "carried_forward"] as const)(
+    "treats a %s settlement as final for HR in its expanded row",
+    async (status) => {
+      getAnnualLeavePaymentRequests.mockResolvedValue(
+        listResponse([makeSettlement({ status })]),
+      );
+      renderPage();
+      fireEvent.click(
+        await screen.findByRole("button", { name: /Show more/ }, FIND),
+      );
+      const panel = await screen.findByTestId("integrity-panel", {}, FIND);
+      expect(panel).toHaveAttribute("data-final", "true");
+      expect(panel).toHaveAttribute("data-retry", "true");
+      expect(panel).toHaveAttribute("data-profile", "/hr/employees/9");
+    },
+  );
+
+  it("keeps the integrity card out of a pending settlement's expanded row", async () => {
+    renderPage();
+    fireEvent.click(
+      await screen.findByRole("button", { name: /Show more/ }, FIND),
+    );
+    await screen.findAllByText("Please process my unused Annual Leave.");
+    expect(screen.queryByTestId("integrity-panel")).not.toBeInTheDocument();
   });
 });

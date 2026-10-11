@@ -134,16 +134,13 @@ describe("ManagerTeamRequestsPage", () => {
     useAuthStore.setState({ isAuthenticated: false, user: null });
   });
 
-  it.each(["attendance", "attendance-corrections"])(
-    "redirects legacy %s links",
-    async (tab) => {
-      renderPage(`/manager/team-requests?tab=${tab}`);
-      expect(
-        await screen.findByText("Attendance destination"),
-      ).toBeInTheDocument();
-      expect(mockedLeave).not.toHaveBeenCalled();
-    },
-  );
+  it.each(["attendance"])("redirects legacy %s links", async (tab) => {
+    renderPage(`/manager/team-requests?tab=${tab}`);
+    expect(
+      await screen.findByText("Attendance destination"),
+    ).toBeInTheDocument();
+    expect(mockedLeave).not.toHaveBeenCalled();
+  });
 
   it.each([
     ["loans", mockedLoans, "Loan Requests"],

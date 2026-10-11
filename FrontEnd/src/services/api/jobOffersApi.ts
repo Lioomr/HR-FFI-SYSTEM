@@ -1,4 +1,5 @@
 import { api } from "./apiClient";
+import { workpaperParams } from "./documentIntegrityApi";
 import type {
   ApiResponse,
   LastDeliveryStatus,
@@ -476,6 +477,21 @@ export async function sendJobOffer(id: number | string) {
 
 export async function downloadJobOfferPdf(id: number | string): Promise<Blob> {
   const response = await api.get(`/job-offers/${id}/pdf/`, {
+    responseType: "blob",
+  });
+  return response.data;
+}
+
+/**
+ * HR in-app preview of the offer PDF: once sent (frozen) the backend returns
+ * the work paper with the approval-trail page in this browser's timezone. Not
+ * the verifiable original — `downloadJobOfferPdf` keeps returning that.
+ */
+export async function getJobOfferWorkpaperBlob(
+  id: number | string,
+): Promise<Blob> {
+  const response = await api.get(`/job-offers/${id}/pdf/`, {
+    params: workpaperParams(),
     responseType: "blob",
   });
   return response.data;

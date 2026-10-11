@@ -27,6 +27,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from audit.utils import audit
+from core.document_integrity.hash_records import record_issued_hash
 from core.pdf_forms import (
     MAX_SIGNATURE_BYTES,
     SIGNATURE_PLACED,
@@ -368,7 +369,8 @@ def issue_late_notice_for_new_violation(violation: AttendanceLateViolation) -> A
             )
             logo_state = logo_state or rendered_logo_state
             notice.document.save(notice_filename(notice), ContentFile(pdf_bytes), save=False)
-            notice.save(update_fields=["document"])
+            # Hash the exact bytes stored here; downloads and the WhatsApp attachment serve this file.
+            notice.save(update_fields=["document", *record_issued_hash(notice, pdf_bytes)])
     except Exception as exc:
         # The exception text can name private storage locations, so only its type is logged.
         logger.error(
@@ -398,6 +400,7 @@ def issue_late_notice_for_new_violation(violation: AttendanceLateViolation) -> A
             "template_version": notice.template_version,
             "company_logo_configured": notice.company_logo_configured,
             "company_logo_state": logo_state,
+            "document_sha256": notice.document_sha256,
         },
     )
     _deliver(notice)

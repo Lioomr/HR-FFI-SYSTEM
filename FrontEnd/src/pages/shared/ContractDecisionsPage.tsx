@@ -30,7 +30,6 @@ import {
 import ResponsiveTable from "../../components/ui/ResponsiveTable";
 import ErrorState from "../../components/ui/ErrorState";
 import LoadingState from "../../components/ui/LoadingState";
-import ApprovalTimeline from "../../components/requests/ApprovalTimeline";
 import ApprovalFlowMap from "../../components/requests/ApprovalFlowMap";
 import { buildStagesFromWorkflow } from "../../components/requests/workflowPresentation";
 import ApprovalActions from "../../components/ceo/ApprovalActions";
@@ -783,16 +782,6 @@ export default function ContractDecisionsPage() {
             />
           </div>
         ) : null}
-
-        <Card title={t("contractDecisions.history")} style={{ marginTop: 20 }}>
-          {item.workflow?.history?.length ? (
-            <ApprovalTimeline workflow={item.workflow} />
-          ) : (
-            <Typography.Text type="secondary">
-              {t("contractDecisions.historyEmpty")}
-            </Typography.Text>
-          )}
-        </Card>
         {renderHrModal()}
         {renderCeoModal()}
         {canSubmit ? (

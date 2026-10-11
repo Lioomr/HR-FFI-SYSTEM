@@ -68,6 +68,9 @@ For AWS production deployment, Docker service layout, real server paths, and pro
 
 Default to the smallest correct change after understanding the real flow (`.agents/rules/ponytail.md`): reuse existing helpers and components, fix shared root causes, and avoid unrequested abstractions. Treat it as a strong default, not a limit. Use a larger change when the problem calls for it, and say why. It never overrides task requirements, security, API, workflow, testing, or deployment guidance.
 
+## Frontend Quality Baseline (mandatory)
+Before editing `FrontEnd/` (including nginx, Vite, i18n, layout, API clients or request pages), read `.agents/rules/frontend_quality_baseline.md`. It protects the security headers, the initial-load budget, shared fetching (`getEmployee("me")`, notifications, company scope), the one-`<h1>`/aria-label/44 px accessibility rules, and server-side permission checks. Do not undo or work around them; if a task needs to, stop and report why.
+
 ## Understand Connected Features Before Changing Them
 Before editing a feature, trace what it touches: screens, API clients and routes, backend models/serializers/services, permissions and company scope, workflow history and delegation, notifications and audit, feature flags or runtime toggles, translations, and tests. Check each relevant toggle's default and consumers, and do not flip a toggle unless the task asks.
 

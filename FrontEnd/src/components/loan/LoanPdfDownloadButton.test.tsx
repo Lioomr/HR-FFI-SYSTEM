@@ -79,6 +79,20 @@ describe("LoanPdfDownloadButton", () => {
     expect(saveMock).not.toHaveBeenCalled();
   });
 
+  it("explains a 409 when the approved copy failed its integrity check", async () => {
+    downloadMock.mockRejectedValue(httpError(409));
+
+    render(<LoanPdfDownloadButton loanId={42} />);
+    fireEvent.click(screen.getByRole("button", { name: /Download PDF/ }));
+
+    expect(
+      await screen.findByText(/failed its integrity check/, undefined, {
+        timeout: 5000,
+      }),
+    ).toBeInTheDocument();
+    expect(saveMock).not.toHaveBeenCalled();
+  });
+
   it("explains a 401 without leaking the raw error", async () => {
     downloadMock.mockRejectedValue(httpError(401));
 

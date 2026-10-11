@@ -246,6 +246,40 @@ def test_passport_ocr_suggests_only_changed_whitelist_fields(world):
     assert isinstance(data["confidence"], float)
 
 
+def test_passport_mrz_nationality_and_name_match_the_profile_format(world):
+    # The profile says "Egypt"; an EGY passport must not suggest overwriting it with the code.
+    attachment = _attachment(world)
+    _run_ocr(attachment, build_mrz(nationality="EGY"))
+    data = client_for(world["employee"], world["company"]).get(f"{UPLOAD_URL}{attachment.pk}/").data["data"]
+    assert "nationality" not in data["suggested"]
+    assert data["suggested"]["full_name"] == "Sample Employee Testcase"
+
+
+def test_ocr_read_passport_values_submit_with_ocr_source_and_apply_normalised(world, notifications, ocr):
+    attachment = _attachment(world)
+    _run_ocr(attachment, build_mrz(nationality="SAU"))
+    suggested = (
+        client_for(world["employee"], world["company"]).get(f"{UPLOAD_URL}{attachment.pk}/").data["data"]["suggested"]
+    )
+    assert suggested["nationality"] == "Saudi Arabia"
+    assert suggested["full_name"] == "Sample Employee Testcase"
+
+    instance = _submitted(
+        world,
+        items={"full_name": suggested["full_name"], "nationality": suggested["nationality"]},
+        attachment_ids=[attachment.pk],
+    )
+    by_field = {item["field"]: item for item in instance.items}
+    assert (by_field["full_name"]["new"], by_field["full_name"]["source"]) == ("Sample Employee Testcase", "ocr")
+    assert (by_field["nationality"]["new"], by_field["nationality"]["source"]) == ("Saudi Arabia", "ocr")
+
+    response = _decide(world, instance, _approve_all(instance))
+    assert response.status_code == 200, response.data
+    profile = _profile(world["employee"])
+    assert (profile.full_name, profile.full_name_en) == ("Sample Employee Testcase", "Sample Employee Testcase")
+    assert (profile.nationality, profile.nationality_en) == ("Saudi Arabia", "Saudi Arabia")
+
+
 def test_national_id_ocr_maps_number_and_expiry(world):
     attachment = _attachment(world, document_type="SAUDI_ID")
     _run_ocr(attachment, SAUDI_ID_TEXT)

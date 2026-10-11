@@ -141,6 +141,7 @@ const ImportHistoryPage: React.FC = () => {
         record.status?.toLowerCase() === "failed" ? (
           <Tooltip title={t("import.history.downloadError")}>
             <Button
+              aria-label={t("common.download")}
               type="link"
               danger
               icon={<DownloadOutlined />}

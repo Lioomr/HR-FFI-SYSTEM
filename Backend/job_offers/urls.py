@@ -5,6 +5,7 @@ from .views import (
     JobOfferCancelView,
     JobOfferCvView,
     JobOfferDetailView,
+    JobOfferIntegrityViewSet,
     JobOfferListCreateView,
     JobOfferPdfView,
     JobOfferRejectView,
@@ -14,11 +15,31 @@ from .views import (
     JobOfferSubmitView,
     StartingWorkAcknowledgmentApproveView,
     StartingWorkAcknowledgmentDetailView,
+    StartingWorkAcknowledgmentIntegrityViewSet,
     StartingWorkAcknowledgmentListView,
     StartingWorkAcknowledgmentPdfView,
     StartingWorkAcknowledgmentRejectView,
     StartingWorkAcknowledgmentVoidView,
 )
+
+
+def _integrity_routes(prefix: str, viewset, name: str) -> list:
+    """GET integrity/, POST integrity/verify/, POST integrity/retry-seal/ (document integrity)."""
+
+    return [
+        path(f"{prefix}/<int:pk>/integrity/", viewset.as_view({"get": "integrity"}), name=f"{name}-integrity"),
+        path(
+            f"{prefix}/<int:pk>/integrity/verify/",
+            viewset.as_view({"post": "integrity_verify"}),
+            name=f"{name}-integrity-verify",
+        ),
+        path(
+            f"{prefix}/<int:pk>/integrity/retry-seal/",
+            viewset.as_view({"post": "integrity_retry_seal"}),
+            name=f"{name}-integrity-retry-seal",
+        ),
+    ]
+
 
 urlpatterns = [
     path("job-offers/", JobOfferListCreateView.as_view(), name="job-offer-list-create"),
@@ -67,3 +88,7 @@ urlpatterns = [
         name="starting-work-acknowledgment-void",
     ),
 ]
+urlpatterns += _integrity_routes("job-offers", JobOfferIntegrityViewSet, "job-offer")
+urlpatterns += _integrity_routes(
+    "starting-work-acknowledgments", StartingWorkAcknowledgmentIntegrityViewSet, "starting-work-acknowledgment"
+)

@@ -1,3 +1,4 @@
+import { shortEmployeeName } from "../../utils/employeeName";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Navigate, useNavigate, useSearchParams } from "react-router-dom";
 import {
@@ -113,15 +114,12 @@ export default function ManagerTeamRequestsPage() {
     );
   };
 
-  if (
-    requestedTab === "attendance" ||
-    requestedTab === "attendance-corrections"
-  ) {
+  if (requestedTab === "attendance") {
     return <Navigate to="/manager/attendance" replace />;
   }
 
   return (
-    <div style={{ maxWidth: 1600, margin: "0 auto", paddingBottom: 24 }}>
+    <div style={{ width: "100%", minWidth: 0, paddingBottom: 24 }}>
       <PageHeader
         title={t("manager.requests.title")}
         subtitle={t("manager.requests.subtitle")}
@@ -328,9 +326,11 @@ function LeaveRequestsTab({
   }, [data, query]);
 
   const employeeName = (row: ManagerLeaveRequest) =>
-    row.employee?.full_name ||
-    row.employee?.email ||
-    t("manager.requests.unknown");
+    shortEmployeeName(
+      row.employee?.full_name ||
+        row.employee?.email ||
+        t("manager.requests.unknown"),
+    );
 
   const approve = async (row: ManagerLeaveRequest) => {
     setProcessingId(row.id);
@@ -624,7 +624,9 @@ function AssetReturnRequestsTab({
   }, [data, query]);
 
   const employeeName = (row: AssetReturnRequest) =>
-    row.employee_name || row.employee_email || t("manager.requests.unknown");
+    shortEmployeeName(
+      row.employee_name || row.employee_email || t("manager.requests.unknown"),
+    );
 
   const approve = async (row: AssetReturnRequest) => {
     setProcessingId(row.id);

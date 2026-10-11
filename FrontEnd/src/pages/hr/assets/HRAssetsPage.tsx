@@ -83,8 +83,12 @@ import {
 
 import { useI18n } from "../../../i18n/useI18n";
 import AssetReturnApprovalMap from "../../../components/assets/AssetReturnApprovalMap";
+import DocumentIntegrityPanel from "../../../components/documents/DocumentIntegrityPanel";
+import { isDocumentFinal } from "../../../components/documents/documentTypes";
 import { useAuthStore } from "../../../auth/authStore";
 import { isHeadOfficeOrganization } from "../../../utils/organizationContext";
+
+const hrProfilePath = (profileId: number) => `/hr/employees/${profileId}`;
 
 const statusColorMap: Record<string, string> = {
   AVAILABLE: "green",
@@ -1503,6 +1507,23 @@ export default function HRAssetsPage() {
                       pagination={false}
                       size="small"
                       scroll={{ x: "max-content" }}
+                      // A CEO-approved report has a frozen form.
+                      expandable={{
+                        rowExpandable: (record) =>
+                          isDocumentFinal("asset_damage", record.status),
+                        expandedRowRender: (record) => (
+                          <DocumentIntegrityPanel
+                            documentType="asset_damage"
+                            requestId={record.id}
+                            isFinal={isDocumentFinal(
+                              "asset_damage",
+                              record.status,
+                            )}
+                            canRetrySeal
+                            profilePath={hrProfilePath}
+                          />
+                        ),
+                      }}
                       locale={{
                         emptyText: t(
                           "hr.assets.noDamageReports",
@@ -1529,9 +1550,26 @@ export default function HRAssetsPage() {
                       size="small"
                       scroll={{ x: "max-content" }}
                       expandable={{
-                        expandedRowRender: (record) => (
-                          <AssetReturnApprovalMap request={record} t={t} />
-                        ),
+                        expandedRowRender: (record) =>
+                          // Frozen once HR processed the return.
+                          isDocumentFinal("asset_return", record.status) ? (
+                            <Space
+                              direction="vertical"
+                              size={16}
+                              style={{ width: "100%" }}
+                            >
+                              <AssetReturnApprovalMap request={record} t={t} />
+                              <DocumentIntegrityPanel
+                                documentType="asset_return"
+                                requestId={record.id}
+                                isFinal
+                                canRetrySeal
+                                profilePath={hrProfilePath}
+                              />
+                            </Space>
+                          ) : (
+                            <AssetReturnApprovalMap request={record} t={t} />
+                          ),
                       }}
                       locale={{
                         emptyText: t(

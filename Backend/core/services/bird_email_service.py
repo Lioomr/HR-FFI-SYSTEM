@@ -1,6 +1,7 @@
 import base64
 import logging
 import os
+import re
 from typing import Any
 
 import requests
@@ -341,6 +342,46 @@ _STATUS_COLORS = {
 }
 
 
+_ARABIC_LETTERS = re.compile(r"[؀-ۿ]")
+
+
+def _arabic_count(number: int, *, one: str, two: str, few: str, many: str) -> str:
+    """Arabic counted noun: 1 -> "يوم واحد", 2 -> "يومان", 3-10 -> "N أيام", 11+ -> "N يومًا"."""
+    if number == 1:
+        return one
+    if number == 2:
+        return two
+    if 3 <= number <= 10:
+        return f"{number} {few}"
+    return f"{number} {many}"
+
+
+def _single_language_messages(text: str, *, noun: str, noun_ar: str) -> tuple[str, str]:
+    """(English, Arabic) body for user-authored text that exists in only one language.
+
+    The text is shown in the section that matches its script; the other section
+    gets a short localized pointer instead of a copy in the wrong language.
+    """
+    text = text or ""
+    if not text.strip():
+        return ("", "")
+    if _ARABIC_LETTERS.search(text):
+        return (f"This {noun} is written in Arabic. Please see the Arabic section above.", text)
+    return (text, f"نص {noun_ar} مكتوب بالإنجليزية. يرجى الاطلاع على القسم الإنجليزي أدناه.")
+
+
+def _leave_type_ar(leave_type: str) -> str:
+    from in_app_notifications.i18n import leave_type_label
+
+    return leave_type_label(leave_type)["ar"]
+
+
+def _document_type_ar(document_type: str) -> str:
+    from in_app_notifications.i18n import document_label
+
+    return document_label(document_type, document_type)["ar"]
+
+
 def _row(
     label: str,
     label_ar: str,
@@ -407,10 +448,11 @@ def send_leave_request_submitted_email(
         message="Your leave request has been submitted successfully and is pending approval.",
         message_ar="تم تقديم طلب الإجازة الخاص بك بنجاح وهو الآن بانتظار الاعتماد.",
         action_url=action_url,
+        action_text="View Request",
         action_text_ar="عرض الطلب",
     )
     rows = [
-        _row("Leave type", "نوع الإجازة", leave_type),
+        _row("Leave type", "نوع الإجازة", leave_type, value_ar=_leave_type_ar(leave_type)),
         _row("Start date", "تاريخ البداية", start_date),
         _row("End date", "تاريخ النهاية", end_date),
         _row("Total days", "إجمالي الأيام", total_days),
@@ -453,12 +495,13 @@ def send_leave_approved_email(
         message="Your leave request has been approved.",
         message_ar="تمت الموافقة على طلب الإجازة الخاص بك.",
         action_url=action_url,
+        action_text="View Request",
         action_text_ar="عرض الطلب",
     )
     context.update(
         _details(
             [
-                _row("Leave type", "نوع الإجازة", leave_type),
+                _row("Leave type", "نوع الإجازة", leave_type, value_ar=_leave_type_ar(leave_type)),
                 _row("Approved from", "بداية الإجازة المعتمدة", start_date),
                 _row("Approved to", "نهاية الإجازة المعتمدة", end_date),
                 _row("Total days", "إجمالي الأيام", total_days),
@@ -496,10 +539,11 @@ def send_leave_rejected_email(
         message="Your leave request was reviewed and could not be approved.",
         message_ar="تمت مراجعة طلب الإجازة الخاص بك ولم تتم الموافقة عليه.",
         action_url=action_url,
+        action_text="Submit New Request",
         action_text_ar="تقديم طلب جديد",
     )
     rows = [
-        _row("Leave type", "نوع الإجازة", leave_type),
+        _row("Leave type", "نوع الإجازة", leave_type, value_ar=_leave_type_ar(leave_type)),
         _row("Requested from", "بداية الإجازة المطلوبة", start_date),
         _row("Requested to", "نهاية الإجازة المطلوبة", end_date),
     ]
@@ -552,7 +596,7 @@ def send_document_expiry_reminder_email(
         action_text_ar="تحديث المستند",
     )
     rows = [
-        _row("Document", "المستند", document_type),
+        _row("Document", "المستند", document_type, value_ar=_document_type_ar(document_type)),
         _row("Expiry date", "تاريخ الانتهاء", expiry_date, value_color="#b42318"),
     ]
     if days_remaining is not None:
@@ -561,8 +605,8 @@ def send_document_expiry_reminder_email(
             _row(
                 "Days remaining",
                 "الأيام المتبقية",
-                f"{days_remaining} days",
-                value_ar=f"{days_remaining} يوم",
+                f"{days_remaining} days" if days_remaining != 1 else "1 day",
+                value_ar=_arabic_count(days_remaining, one="يوم واحد", two="يومان", few="أيام", many="يومًا"),
                 value_color="#b42318" if urgent else "#15803d",
             )
         )
@@ -607,12 +651,14 @@ def send_announcement_notification_email(
     attachments: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     service = BirdEmailService()
+    if not message_ar:
+        message, message_ar = _single_language_messages(message, noun="announcement", noun_ar="الإعلان")
     context = _base_email_context(
         title="New Company Announcement",
         title_ar="إعلان جديد من الشركة",
         employee_name=employee_name,
         message=message,
-        message_ar=message_ar or message,
+        message_ar=message_ar,
         action_url=action_url,
         action_text="Read Announcement",
         action_text_ar="قراءة الإعلان",
@@ -653,12 +699,13 @@ def send_meeting_notification_email(
     action_url: str | None = None,
 ) -> dict[str, Any]:
     service = BirdEmailService()
+    message_en, message_ar = _single_language_messages(meeting_message, noun="invitation", noun_ar="الدعوة")
     context = _base_email_context(
         title="Meeting Invitation",
         title_ar="دعوة اجتماع",
         employee_name=employee_name,
-        message=meeting_message,
-        message_ar=meeting_message,
+        message=message_en,
+        message_ar=message_ar,
         action_url=next(
             (
                 safe_email_url(url)
@@ -673,10 +720,19 @@ def send_meeting_notification_email(
     rows = [
         _row("Title", "العنوان", meeting_title),
         _row("Organizer", "المنظّم", organizer_name),
-        _row("Date &amp; time", "التاريخ والوقت", f"{meeting_date} &middot; {meeting_time}"),
+        _row("Date & time", "التاريخ والوقت", f"{meeting_date} · {meeting_time}"),
     ]
     if duration_minutes:
-        rows.append(_row("Duration", "المدة", f"{duration_minutes} minutes", value_ar=f"{duration_minutes} دقيقة"))
+        rows.append(
+            _row(
+                "Duration",
+                "المدة",
+                f"{duration_minutes} minutes",
+                value_ar=_arabic_count(
+                    duration_minutes, one="دقيقة واحدة", two="دقيقتان", few="دقائق", many="دقيقة"
+                ),
+            )
+        )
     if location:
         rows.append(_row("Location", "المكان", location))
     if agenda:
@@ -684,17 +740,18 @@ def send_meeting_notification_email(
 
         rows.append(_row("Agenda", "جدول الأعمال", agenda, value_html=_esc(str(agenda)).replace("\n", "<br>")))
 
-    def _join_links() -> str:
-        links = []
-        for url, name in (
-            (google_meet_url, "Google Meet"),
-            (microsoft_teams_url, "Microsoft Teams"),
-            (zoom_url, "Zoom"),
-        ):
-            links.append(email_button(url, f"Join {name}"))
-        return "".join(links) if links else ""
+    def _join_links(label_template: str) -> str:
+        return "".join(
+            email_button(url, label_template.format(name=name))
+            for url, name in (
+                (google_meet_url, "Google Meet"),
+                (microsoft_teams_url, "Microsoft Teams"),
+                (zoom_url, "Zoom"),
+            )
+        )
 
-    join_html = _join_links()
+    join_html = _join_links("Join {name}")
+    join_html_ar = _join_links("انضم عبر {name}")
     context.update(
         _details(
             rows,
@@ -704,7 +761,7 @@ def send_meeting_notification_email(
             title="Meeting details",
             title_ar="تفاصيل الاجتماع",
             next_steps_html=join_html or None,
-            next_steps_html_ar=join_html or None,
+            next_steps_html_ar=join_html_ar or None,
         )
     )
     return service.send_template_email(
@@ -812,12 +869,12 @@ def send_delegation_notification_email(
         title = "You have been assigned as an alternative employee"
         title_ar = "تم تعيينك كموظف بديل لصلاحية الموافقة"
         message = f"{from_user_name} has assigned you as an alternative employee for the specified period."
-        message_ar = "قام المستخدم الأصلي بإسناد مسؤوليات الموافقة إليك كموظف بديل خلال الفترة المحددة."
+        message_ar = f"قام {from_user_name} بإسناد مسؤوليات الموافقة إليك كموظف بديل خلال الفترة المحددة."
     else:
         title = "Your alternative employee option is active"
         title_ar = "تم تفعيل خيار الموظف البديل الخاص بك"
         message = f"Your approval responsibilities have been assigned to {to_user_name} for the specified period."
-        message_ar = "تم إسناد مسؤوليات الموافقة الخاصة بك إلى الموظف البديل خلال الفترة المحددة."
+        message_ar = f"تم إسناد مسؤوليات الموافقة الخاصة بك إلى {to_user_name} كموظف بديل خلال الفترة المحددة."
 
     context = _base_email_context(
         title=title,
@@ -827,25 +884,25 @@ def send_delegation_notification_email(
         message_ar=message_ar,
         action_url=action_url,
         action_text="View Details",
-        action_text_ar="عرض الموظف البديل",
+        action_text_ar="عرض التفاصيل",
     )
     context.update(
         _details(
             [
-                _row("From", "من", from_user_name),
-                _row("To", "إلى", to_user_name),
+                _row("Original approver", "المعتمد الأصلي", from_user_name),
+                _row("Alternative employee", "الموظف البديل", to_user_name),
                 _row("Start", "تاريخ البدء", start_at),
                 _row("End", "تاريخ الانتهاء", end_at or "No end date", value_ar=end_at or "بدون تاريخ انتهاء"),
                 _row("Reason", "السبب", reason or "Not provided", value_ar=reason or "غير محدد"),
             ],
-            status="Deputy approver",
-            status_ar="نائب المعتمد",
+            status="Alternative employee",
+            status_ar="موظف بديل",
             status_tone="info",
             title="Delegation details",
             title_ar="تفاصيل التفويض",
         )
     )
-    subject = f"Deputy approver active: {from_user_name} -> {to_user_name}"
+    subject = f"Alternative employee active: {from_user_name} -> {to_user_name}"
     return service.send_template_email(
         to_email=to_email,
         subject=subject,

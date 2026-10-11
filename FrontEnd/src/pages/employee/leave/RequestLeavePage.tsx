@@ -13,6 +13,7 @@ import {
   Upload,
   Row,
   Col,
+  Radio,
 } from "antd";
 import { SendOutlined } from "@ant-design/icons";
 import type { UploadFile } from "antd/es/upload/interface";
@@ -27,6 +28,7 @@ import {
   type LeaveBalance,
 } from "../../../services/api/leaveApi";
 import {
+  getEmployee,
   listDelegationCandidates,
   type DelegationCandidate,
 } from "../../../services/api/employeesApi";
@@ -42,10 +44,20 @@ import {
   validateAnnualLeaveDays,
 } from "./leaveRequestValidation";
 import { formatDelegationCandidateLabel } from "../../../utils/delegationCandidates";
+import { isSaudiEmployee } from "../../../utils/countries";
 
 const { Option } = Select;
 const { TextArea } = Input;
 const { RangePicker } = DatePicker;
+const travelDetailFields = [
+  "date_of_rejoin",
+  "po_box",
+  "full_address",
+  "airplane_ticket_payer",
+  "airplane_ticket_address",
+  "delegated_to",
+  "delegation_note",
+];
 
 export function LeaveSubmissionError({ message }: { message: string | null }) {
   if (!message) return null;
@@ -90,6 +102,8 @@ export default function RequestLeavePage() {
   const [delegationCandidates, setDelegationCandidates] = useState<
     DelegationCandidate[]
   >([]);
+  const [isSaudi, setIsSaudi] = useState<boolean | null>(null);
+  const willTravel = Form.useWatch("will_travel", form);
 
   // Annual Leave is limited by requestable_days, which the backend already
   // reduced by pending reservations and the sub-day remainder. Every other
@@ -144,12 +158,22 @@ export default function RequestLeavePage() {
 
         await loadBalances();
 
-        const employeesRes = await listDelegationCandidates();
-        if (!isApiError(employeesRes)) {
-          setDelegationCandidates(employeesRes.data || []);
+        const profileRes = await getEmployee("me");
+        if (isApiError(profileRes)) throw new Error(profileRes.message);
+        setIsSaudi(isSaudiEmployee(profileRes.data));
+        try {
+          const employeesRes = await listDelegationCandidates();
+          if (isApiError(employeesRes)) {
+            notification.warning({ message: t("leave.alternatesUnavailable") });
+          } else {
+            setDelegationCandidates(employeesRes.data || []);
+          }
+        } catch {
+          notification.warning({ message: t("leave.alternatesUnavailable") });
         }
       } catch (e) {
         console.error(e);
+        setSubmitError(getLeavePageLoadErrorMessage(e));
         notification.error({
           message: t("common.error"),
           description: getLeavePageLoadErrorMessage(e),
@@ -162,6 +186,13 @@ export default function RequestLeavePage() {
   }, [t, loadBalances]);
 
   const handleValuesChange = (changedValues: any, allValues: any) => {
+    if (
+      Object.hasOwn(changedValues, "will_travel") &&
+      !changedValues.will_travel
+    ) {
+      form.setFieldValue("will_require_visa", undefined);
+      form.setFields(travelDetailFields.map((name) => ({ name, errors: [] })));
+    }
     if (changedValues.leave_type) {
       const typeObj = leaveTypes.find((t) => t.id === changedValues.leave_type);
       setIsOtherSelected(typeObj?.code === "OTHER");
@@ -206,6 +237,7 @@ export default function RequestLeavePage() {
   };
 
   const handleFinish = async (values: any) => {
+    if (isSaudi === null) return;
     if (balanceError) {
       notification.error({
         message: t("common.error"),
@@ -222,6 +254,13 @@ export default function RequestLeavePage() {
       payload.append("start_date", values.dates[0].format("YYYY-MM-DD"));
       payload.append("end_date", values.dates[1].format("YYYY-MM-DD"));
       payload.append("reason", values.reason || "");
+      payload.append("will_travel", String(values.will_travel === true));
+      if (!isSaudi && values.will_travel === true) {
+        payload.append(
+          "will_require_visa",
+          String(values.will_require_visa === true),
+        );
+      }
 
       const fileList = (values.document || []) as UploadFile[];
       const file = fileList[0]?.originFileObj;
@@ -391,6 +430,30 @@ export default function RequestLeavePage() {
           )}
 
           <Form.Item
+            label={t("leave.willTravel")}
+            name="will_travel"
+            rules={[{ required: true, message: t("common.required") }]}
+          >
+            <Radio.Group optionType="button" buttonStyle="solid">
+              <Radio.Button value={true}>{t("common.yes")}</Radio.Button>
+              <Radio.Button value={false}>{t("common.no")}</Radio.Button>
+            </Radio.Group>
+          </Form.Item>
+
+          {willTravel === true && isSaudi === false && (
+            <Form.Item
+              label={t("leave.willRequireVisa")}
+              name="will_require_visa"
+              rules={[{ required: true, message: t("common.required") }]}
+            >
+              <Radio.Group optionType="button" buttonStyle="solid">
+                <Radio.Button value={true}>{t("common.yes")}</Radio.Button>
+                <Radio.Button value={false}>{t("common.no")}</Radio.Button>
+              </Radio.Group>
+            </Form.Item>
+          )}
+
+          <Form.Item
             label={
               isOtherSelected
                 ? t("leave.reasonRequired")
@@ -444,18 +507,47 @@ export default function RequestLeavePage() {
 
           <Row gutter={16}>
             <Col xs={24} sm={12}>
-              <Form.Item label={t("leave.dateOfRejoin")} name="date_of_rejoin">
+              <Form.Item
+                label={t("leave.dateOfRejoin")}
+                name="date_of_rejoin"
+                rules={[
+                  {
+                    required: willTravel === true,
+                    message: t("leave.travelDetailRequired"),
+                  },
+                ]}
+              >
                 <DatePicker style={{ width: "100%" }} />
               </Form.Item>
             </Col>
             <Col xs={24} sm={12}>
-              <Form.Item label={t("leave.poBox")} name="po_box">
+              <Form.Item
+                label={t("leave.poBox")}
+                name="po_box"
+                rules={[
+                  {
+                    required: willTravel === true,
+                    whitespace: true,
+                    message: t("leave.travelDetailRequired"),
+                  },
+                ]}
+              >
                 <Input />
               </Form.Item>
             </Col>
           </Row>
 
-          <Form.Item label={t("leave.fullAddress")} name="full_address">
+          <Form.Item
+            label={t("leave.fullAddress")}
+            name="full_address"
+            rules={[
+              {
+                required: willTravel === true,
+                whitespace: true,
+                message: t("leave.travelDetailRequired"),
+              },
+            ]}
+          >
             <Input />
           </Form.Item>
 
@@ -464,6 +556,12 @@ export default function RequestLeavePage() {
               <Form.Item
                 label={t("leave.airplaneTicketPayer")}
                 name="airplane_ticket_payer"
+                rules={[
+                  {
+                    required: willTravel === true,
+                    message: t("leave.travelDetailRequired"),
+                  },
+                ]}
               >
                 <Select allowClear placeholder="-">
                   <Option value="company">
@@ -479,13 +577,29 @@ export default function RequestLeavePage() {
               <Form.Item
                 label={t("leave.airplaneTicketAddress")}
                 name="airplane_ticket_address"
+                rules={[
+                  {
+                    required: willTravel === true,
+                    whitespace: true,
+                    message: t("leave.travelDetailRequired"),
+                  },
+                ]}
               >
                 <Input />
               </Form.Item>
             </Col>
           </Row>
 
-          <Form.Item label={t("leave.delegatedTo")} name="delegated_to">
+          <Form.Item
+            label={t("leave.delegatedTo")}
+            name="delegated_to"
+            rules={[
+              {
+                required: willTravel === true,
+                message: t("leave.travelDetailRequired"),
+              },
+            ]}
+          >
             <Select
               showSearch
               allowClear
@@ -498,7 +612,17 @@ export default function RequestLeavePage() {
             />
           </Form.Item>
 
-          <Form.Item label={t("leave.delegationNote")} name="delegation_note">
+          <Form.Item
+            label={t("leave.delegationNote")}
+            name="delegation_note"
+            rules={[
+              {
+                required: willTravel === true,
+                whitespace: true,
+                message: t("leave.travelDetailRequired"),
+              },
+            ]}
+          >
             <TextArea rows={3} />
           </Form.Item>
 
@@ -509,7 +633,7 @@ export default function RequestLeavePage() {
             block
             size="large"
             loading={submitting}
-            disabled={!!balanceError}
+            disabled={!!balanceError || isSaudi === null}
           >
             {t("leave.submitRequest")}
           </Button>

@@ -322,3 +322,80 @@ def deliver_email_notification(
 @shared_task
 def cleanup_expired_notifications(days: int = 90):
     call_command("cleanup_notifications", days=max(1, int(days)))
+
+
+# related_object_type -> (English, Arabic) plural label for the digest line.
+_DIGEST_LABELS = {
+    "contract_ratings.contractrating": ("contract ratings", "تقييمات العقود"),
+    "employees.contractdecision": ("contract decisions", "قرارات العقود"),
+    "leave_request": ("leave requests", "طلبات الإجازة"),
+    "loan_request": ("loan requests", "طلبات القروض"),
+    "employee_archive": ("employee archive requests", "طلبات أرشفة الموظفين"),
+    "profile_change_request": ("profile change requests", "طلبات تعديل البيانات"),
+    "permission_request": ("permission requests", "طلبات الاستئذان"),
+    "exit_permission": ("permission requests", "طلبات الاستئذان"),
+    "late_permission": ("permission requests", "طلبات الاستئذان"),
+    "during_shift_permission": ("permission requests", "طلبات الاستئذان"),
+}
+_DIGEST_OTHER = ("other items", "عناصر أخرى")
+
+
+@shared_task
+def send_executive_digest():
+    """Send each executive ONE WhatsApp/email summarising what their policy held back."""
+    from collections import OrderedDict
+
+    from django.contrib.auth import get_user_model
+    from django.utils import timezone
+
+    from .dispatcher import dispatch_notification_channels
+    from .executive_policy import DIGEST_EVENT_KEY, HELD_DIGESTED, HELD_FOR_DIGEST
+    from .i18n import notification_text, pair
+
+    held = NotificationDelivery.objects.filter(
+        channel=NotificationDelivery.Channel.WHATSAPP,
+        status=NotificationDelivery.Status.SKIPPED,
+        error_message=HELD_FOR_DIGEST,
+    )
+    users = get_user_model().objects.filter(is_active=True, id__in=held.values("recipient_id")).distinct()
+    today = timezone.localdate().isoformat()
+    sent = 0
+    for user in users:
+        # Items the executive already opened need no summary line.
+        items = (
+            Notification.objects.filter(
+                recipient=user,
+                read_at__isnull=True,
+                deliveries__in=held.filter(recipient=user),
+            )
+            .order_by()  # the model's default ordering would defeat distinct()
+            .values_list("related_object_type", "related_object_id")
+            .distinct()
+        )
+        counts: OrderedDict[tuple[str, str], int] = OrderedDict()
+        for object_type, _object_id in items:
+            label = _DIGEST_LABELS.get(object_type, _DIGEST_OTHER)
+            counts[label] = counts.get(label, 0) + 1
+        if counts:
+            summary = pair(
+                ", ".join(f"{n} {en}" for (en, _ar), n in counts.items()),
+                "، ".join(f"{n} {ar}" for (_en, ar), n in counts.items()),
+            )
+            is_ceo = user.groups.filter(name="CEO").exists()
+            try:
+                result = dispatch_notification_channels(
+                    recipient=user,
+                    event_key=DIGEST_EVENT_KEY,
+                    **notification_text("executive.digest", count=sum(counts.values()), summary=summary),
+                    category=Notification.Category.SYSTEM,
+                    action_url="/ceo/" if is_ceo else "/employee/",
+                    deduplication_key=f"{DIGEST_EVENT_KEY}:{user.id}:{today}",
+                )
+            except Exception:
+                logger.exception("executive_digest_failed", extra={"recipient_id": user.id})
+                continue
+            if result.get("notification") is None:
+                continue
+            sent += 1
+        held.filter(recipient=user).update(error_message=HELD_DIGESTED)
+    return {"recipients": sent}

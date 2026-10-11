@@ -1,3 +1,4 @@
+import { shortEmployeeName } from "../../utils/employeeName";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Avatar,
@@ -170,7 +171,7 @@ export default function PendingInboxPage() {
               navigateToNotification(record.review_path);
             }}
           >
-            {record.name}
+            {shortEmployeeName(record.name)}
           </Button>
         </div>
       ),

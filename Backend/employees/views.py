@@ -41,8 +41,10 @@ from core.services import (
     notify_users_for_pending_status,
     sync_workflow,
 )
+from core.services.request_references import public_reference_for
 from in_app_notifications.models import Notification
-from leaves.models import LeaveRequest
+from leaves.models import AnnualLeavePaymentRequest, LeaveRequest
+from loans.models import LoanRequest
 from organization.models import UserOrganizationAccess
 from organization.services import (
     ensure_company_write_allowed,
@@ -55,6 +57,7 @@ from organization.services import (
     get_scope_company_ids,
     get_user_accessible_company_ids,
 )
+from permission_requests.models import PermissionRequest
 
 from .archive_request_services import (
     ArchiveRequestError,
@@ -472,7 +475,7 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
     def get_permissions(self):
         if self.action == "import_excel":
             permission_classes = [IsAuthenticated, IsHRManagerOnly]
-        elif self.action in ["list", "manager_access", "manager_team", "delegation_candidates"]:
+        elif self.action in ["list", "manager_access", "manager_team", "delegation_candidates", "current_requests"]:
             permission_classes = [IsAuthenticated]
         elif self.action == "retrieve":
             # get_queryset is the object-level authorization boundary.  A separate
@@ -675,7 +678,31 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
 
         position = params.get("position")
         if position:
-            qs = qs.filter(position_ref__code__iexact=position)
+            qs = qs.filter(
+                Q(position_ref__code__iexact=position)
+                | Q(position_ref__name__iexact=position)
+                | Q(job_title__iexact=position)
+            )
+
+        manager = params.get("manager")
+        if manager:
+            direct_manager = (
+                Q(manager_profile__full_name__iexact=manager)
+                | Q(manager_profile__full_name_en__iexact=manager)
+                | Q(manager_profile__full_name_ar__iexact=manager)
+                | Q(manager__full_name__iexact=manager)
+            )
+            cross_company_manager = (
+                Q(cross_company_manager_assignments__manager_profile__full_name__iexact=manager)
+                | Q(cross_company_manager_assignments__manager_profile__full_name_en__iexact=manager)
+                | Q(cross_company_manager_assignments__manager_profile__full_name_ar__iexact=manager)
+            ) & Q(
+                cross_company_manager_assignments__is_active=True,
+                cross_company_manager_assignments__revoked_at__isnull=True,
+                cross_company_manager_assignments__start_at__lte=timezone.now(),
+                cross_company_manager_assignments__scope__is_active=True,
+            )
+            qs = qs.filter(direct_manager | cross_company_manager).distinct()
 
         task_group = params.get("task_group")
         if task_group:
@@ -806,6 +833,129 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
         instance = self.get_object()
         serializer_class = self._retrieve_serializer_class(instance)
         return success(serializer_class(instance, context=self.get_serializer_context()).data)
+
+    @action(detail=False, methods=["get"], url_path="me/current-requests")
+    def current_requests(self, request):
+        """Compact employee dashboard feed without serializing five full lists."""
+
+        company = get_active_company_for_request(request)
+        if company is None:
+            # Head-office context: `company=None` would match NULL-company rows.
+            return success({"requests": []})
+        profile = (
+            EmployeeProfile.objects.filter(
+                user=request.user,
+                company=company,
+                is_archived=False,
+            )
+            .only("id", "user_id", "company_id")
+            .first()
+        )
+        if profile is None:
+            return success({"requests": []})
+
+        requests = []
+        leave_statuses = [
+            LeaveRequest.RequestStatus.SUBMITTED,
+            LeaveRequest.RequestStatus.PENDING_DELEGATE,
+            LeaveRequest.RequestStatus.PENDING_MANAGER,
+            LeaveRequest.RequestStatus.PENDING_HR,
+            LeaveRequest.RequestStatus.PENDING_CEO,
+            LeaveRequest.RequestStatus.PENDING_HR_COMPLETION,
+        ]
+        for row in LeaveRequest.objects.filter(
+            employee_profile=profile,
+            company=company,
+            status__in=leave_statuses,
+        ).only("id", "status", "created_at", "reference_no"):
+            requests.append(
+                {
+                    "id": row.id,
+                    "kind": "leave",
+                    "status": row.status,
+                    "createdAt": row.created_at,
+                    "reference": row.reference_no or f"#{row.id}",
+                    "path": f"/employee/leave/requests/{row.id}",
+                }
+            )
+
+        for row in PermissionRequest.objects.filter(
+            employee_profile=profile,
+            company=company,
+            status__in=[PermissionRequest.Status.PENDING_MANAGER, PermissionRequest.Status.PENDING_HR],
+        ).only("id", "status", "created_at", "reference_no"):
+            requests.append(
+                {
+                    "id": row.id,
+                    "kind": "permission",
+                    "status": row.status,
+                    "createdAt": row.created_at,
+                    "reference": row.reference_no or f"#{row.id}",
+                    "path": f"/employee/permission-requests/{row.id}",
+                }
+            )
+
+        loan_statuses = [
+            LoanRequest.RequestStatus.SUBMITTED,
+            LoanRequest.RequestStatus.PENDING_MANAGER,
+            LoanRequest.RequestStatus.PENDING_HR,
+            LoanRequest.RequestStatus.PENDING_FINANCE,
+            LoanRequest.RequestStatus.PENDING_CFO,
+            LoanRequest.RequestStatus.PENDING_CEO,
+            LoanRequest.RequestStatus.PENDING_DISBURSEMENT,
+        ]
+        for row in LoanRequest.objects.filter(
+            employee_profile=profile,
+            company=company,
+            status__in=loan_statuses,
+        ).only("id", "status", "created_at"):
+            requests.append(
+                {
+                    "id": row.id,
+                    "kind": "loan",
+                    "status": row.status,
+                    "createdAt": row.created_at,
+                    "reference": public_reference_for(row) or f"#{row.id}",
+                    "path": f"/employee/loans/{row.id}",
+                }
+            )
+
+        for row in AnnualLeavePaymentRequest.objects.filter(
+            employee_profile=profile,
+            company=company,
+            status__in=[AnnualLeavePaymentRequest.Status.PENDING_HR, AnnualLeavePaymentRequest.Status.PENDING_CEO],
+        ).only("id", "status", "submitted_at", "cycle_start", "cycle_end", "employee_preference"):
+            requests.append(
+                {
+                    "id": row.id,
+                    "kind": "settlement",
+                    "status": row.status,
+                    "createdAt": row.submitted_at,
+                    "reference": public_reference_for(row) or f"#{row.id}",
+                    "path": "/employee/leave/balance",
+                    "cycle": {"start": row.cycle_start, "end": row.cycle_end},
+                    "preference": row.employee_preference,
+                }
+            )
+
+        for row in ProfileChangeRequest.objects.filter(
+            employee_profile=profile,
+            company=company,
+            status=ProfileChangeRequest.Status.PENDING_HR,
+        ).only("id", "status", "created_at"):
+            requests.append(
+                {
+                    "id": row.id,
+                    "kind": "profile",
+                    "status": row.status.lower(),
+                    "createdAt": row.created_at,
+                    "reference": public_reference_for(row) or f"#{row.id}",
+                    "path": "/employee/profile#profile-change",
+                }
+            )
+
+        requests.sort(key=lambda item: (item["createdAt"], item["id"]), reverse=True)
+        return success({"requests": requests})
 
     def _retrieve_serializer_class(self, instance):
         """A manager reading a report gets the company-free scoped shape.

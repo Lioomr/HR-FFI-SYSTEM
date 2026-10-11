@@ -1,3 +1,4 @@
+import { shortEmployeeName } from "../../utils/employeeName";
 import { ClockCircleOutlined } from "@ant-design/icons";
 import { Card, Space, Tag, Typography } from "antd";
 
@@ -60,7 +61,7 @@ export default function ApprovalTimeline({
               </Space>
               <div style={{ marginTop: 4 }}>
                 <Text strong>
-                  {item.actor?.full_name ||
+                  {shortEmployeeName(item.actor?.full_name) ||
                     item.actor?.email ||
                     t("workflow.systemActor")}
                 </Text>

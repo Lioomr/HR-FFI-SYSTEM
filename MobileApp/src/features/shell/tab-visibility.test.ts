@@ -25,15 +25,8 @@ describe('tabsForRole', () => {
     ]);
   });
 
-  it('gives managers an approvals tab for their attendance-correction stage', () => {
-    expect(names('Manager')).toEqual([
-      'home',
-      'attendance',
-      'leave',
-      'approvals',
-      'notifications',
-      'more',
-    ]);
+  it('keeps managers on self-service tabs after correction approvals are removed', () => {
+    expect(names('Manager')).toEqual(['home', 'attendance', 'leave', 'notifications', 'more']);
   });
 
   it('gives approver-only roles approvals, notifications, and more', () => {

@@ -14,7 +14,6 @@ class FrontendReviewPathsTests(SimpleTestCase):
         for workflow, role, expected in [
             ("leave_request", "ceo", "/ceo/leave/requests"),
             ("attendance_request", "manager", "/manager/attendance"),
-            ("attendance_correction_request", "manager", "/manager/attendance"),
         ]:
             with self.subTest(workflow=workflow):
                 self.assertEqual(_build_action_url_path(workflow, role, 123), expected)

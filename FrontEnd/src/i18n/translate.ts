@@ -1,5 +1,5 @@
 import { useI18nStore } from "./i18nStore";
-import { translations } from "./translations";
+import { getTranslations } from "./translationLoader";
 import type { AppLanguage } from "./types";
 
 export type TranslateParams = Record<string, any> | string;
@@ -13,7 +13,7 @@ export function resolveTranslation(
   const actualFallback = typeof params === "string" ? params : fallback;
   const actualParams = typeof params === "object" ? params : undefined;
 
-  let translated = translations[language]?.[key] ?? actualFallback ?? key;
+  let translated = getTranslations(language)?.[key] ?? actualFallback ?? key;
 
   if (actualParams) {
     Object.entries(actualParams).forEach(([k, v]) => {

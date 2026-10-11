@@ -27,6 +27,10 @@ vi.mock(
   }),
 );
 
+vi.mock("../../../components/documents/DocumentIntegrityPanel", async () => ({
+  default: (await import("../../../test/integrityPanelStub")).default,
+}));
+
 vi.mock("../../../services/api/downloads", () => ({
   triggerBlobDownload: vi.fn(),
 }));
@@ -432,5 +436,41 @@ describe("StartingWorkAcknowledgmentDetailPage error handling", () => {
     render(<StartingWorkAcknowledgmentDetailPage />);
 
     expect(await screen.findByText("403")).toBeInTheDocument();
+  });
+});
+
+describe("StartingWorkAcknowledgmentDetailPage document integrity", () => {
+  it("is not final while HR verification is pending", async () => {
+    render(<StartingWorkAcknowledgmentDetailPage />);
+    const panel = await screen.findByTestId("integrity-panel");
+    expect(panel).toHaveAttribute("data-type", "starting_work");
+    expect(panel).toHaveAttribute("data-final", "false");
+  });
+
+  it("gives HR the frozen card with seal retry once approved", async () => {
+    getAcknowledgment.mockResolvedValue(
+      ok(makeAcknowledgment({ status: "approved" })),
+    );
+    render(<StartingWorkAcknowledgmentDetailPage />);
+    const panel = await screen.findByTestId("integrity-panel");
+    expect(panel).toHaveAttribute("data-final", "true");
+    expect(panel).toHaveAttribute("data-retry", "true");
+    expect(panel).toHaveAttribute("data-profile", "/hr/employees/9");
+  });
+
+  it("explains a blocked (409) download without reloading the record", async () => {
+    downloadPdf.mockRejectedValue({
+      response: { status: 409, data: new Blob(["{}"]) },
+    });
+    render(<StartingWorkAcknowledgmentDetailPage />);
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Download Acknowledgment" }),
+    );
+    expect(
+      await screen.findByText(
+        "This approved document failed its integrity check, so it cannot be downloaded. Contact HR.",
+      ),
+    ).toBeInTheDocument();
+    expect(getAcknowledgment).toHaveBeenCalledTimes(1);
   });
 });

@@ -150,7 +150,7 @@ export default function RegisterInvitePage() {
       }}
     >
       <Card style={{ width: "100%", maxWidth: 520, borderRadius: 16 }}>
-        <Typography.Title level={3} style={{ marginTop: 0 }}>
+        <Typography.Title level={1} style={{ marginTop: 0, fontSize: 24 }}>
           {t("auth.invite.title")}
         </Typography.Title>
 

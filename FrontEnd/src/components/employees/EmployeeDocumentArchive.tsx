@@ -1440,6 +1440,7 @@ export default function EmployeeDocumentArchive({
           </Tooltip>
           <Tooltip title={t("common.download")}>
             <Button
+              aria-label={t("common.download")}
               size="small"
               icon={<DownloadOutlined />}
               loading={downloadingId === r.id}

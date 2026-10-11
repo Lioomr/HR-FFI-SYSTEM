@@ -43,6 +43,9 @@ import JobOfferDocumentSection, {
 } from "../../../components/jobOffers/JobOfferDocumentSection";
 import StickyDecisionBar from "../../../components/ceo/StickyDecisionBar";
 import { useFilePreview } from "../../../components/ui/useFilePreview";
+import DocumentIntegrityPanel from "../../../components/documents/DocumentIntegrityPanel";
+import { isDocumentFinal } from "../../../components/documents/documentTypes";
+import { isDocumentBlocked } from "../../../components/documents/integrityPresentation";
 import Unauthorized403Page from "../../Unauthorized403Page";
 
 import { isApiError } from "../../../services/api/apiTypes";
@@ -62,6 +65,7 @@ import {
   cancelJobOffer,
   downloadJobOfferCv,
   downloadJobOfferPdf,
+  getJobOfferWorkpaperBlob,
   getJobOffer,
   sendJobOffer,
   submitJobOffer,
@@ -473,18 +477,28 @@ export default function JobOfferDetailPage() {
       triggerBlobDownload(blob, `job_offer_${id}.pdf`);
       messageApi.success(t("jobOffers.pdf.success"));
     } catch (err: unknown) {
-      messageApi.error((err as Error)?.message || t("jobOffers.pdf.failed"));
+      // 409: the frozen sent copy is missing or fails its hash; the backend
+      // never replaces it with a live render.
+      messageApi.error(
+        isDocumentBlocked(err)
+          ? t("documentIntegrity.downloadBlocked")
+          : (err as Error)?.message || t("jobOffers.pdf.failed"),
+      );
     } finally {
       setActing(null);
     }
   }, [id, messageApi, t]);
 
-  /** Shows the offer PDF in-app for a quick look instead of saving it. */
+  /**
+   * Shows the offer PDF in-app. HR gets the work paper (frozen form plus the
+   * approval-trail page) once the offer was sent; Download keeps serving the
+   * verifiable original.
+   */
   const handlePdfPreview = () =>
     openPreview({
       title: t("jobOffers.action.previewPdf"),
-      filename: `job_offer_${id}.pdf`,
-      load: () => downloadJobOfferPdf(id!),
+      filename: `job_offer_${id}_workpaper.pdf`,
+      load: () => getJobOfferWorkpaperBlob(id!),
     });
 
   const translateWarning = useCallback(
@@ -1268,6 +1282,20 @@ export default function JobOfferDetailPage() {
               )}
             </Space>
           </Surface>
+
+          {/* Frozen at send (v1) and again at the candidate's answer (v2). */}
+          <div style={{ marginTop: 16 }}>
+            <DocumentIntegrityPanel
+              documentType="job_offer"
+              requestId={offer.id}
+              isFinal={
+                isDocumentFinal("job_offer", offer.status) &&
+                Boolean(offer.sent_at)
+              }
+              canRetrySeal
+              profilePath={(profileId) => `/hr/employees/${profileId}`}
+            />
+          </div>
         </Col>
       </Row>
 

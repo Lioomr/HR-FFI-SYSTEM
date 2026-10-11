@@ -14,6 +14,7 @@ from core.services.request_references import has_sequential_employee_id, next_re
 from core.services.workflow_engine import begin_recorded_transition, record_workflow_transition
 from employees.models import EmployeeDocument, EmployeeProfile
 
+from .document_integrity import on_starting_work_approved
 from .models import JobOffer, StartingWorkAcknowledgment
 from .notifications import notify_starting_work_acknowledgment_ready
 from .starting_work_pdf import StartingWorkAcknowledgmentData, build_starting_work_acknowledgment_pdf
@@ -280,6 +281,9 @@ def approve_starting_work_acknowledgment(
         record_workflow_transition(
             acknowledgment, start, action=WorkflowAction.Action.APPROVE, actor=approver, approver_role="hr"
         )
+        # After commit, never undoing the approval: freeze the bytes written above
+        # and write the frozen copy back into the stored EmployeeDocument.
+        on_starting_work_approved(acknowledgment, actor=approver, at=approved_at)
     return acknowledgment
 
 

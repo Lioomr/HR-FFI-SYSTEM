@@ -1,3 +1,4 @@
+import { shortEmployeeName } from "../../../utils/employeeName";
 import { useCallback, useEffect, useState } from "react";
 import { useI18n } from "../../../i18n/useI18n";
 import { useNavigate, useParams } from "react-router-dom";
@@ -54,6 +55,9 @@ import {
   type PermissionStatus,
   type PermissionType,
 } from "../../../services/api/permissionRequestsApi";
+import DocumentIntegrityPanel from "../../../components/documents/DocumentIntegrityPanel";
+import { isDocumentFinal } from "../../../components/documents/documentTypes";
+import { isDocumentBlocked } from "../../../components/documents/integrityPresentation";
 import EvidencePicker, { type EvidenceItem } from "./EvidencePicker";
 import PermissionAttachmentsSection from "./PermissionAttachmentsSection";
 import {
@@ -643,7 +647,12 @@ function RequestList({
           : inbox === "manager"
             ? getManagerPermissionRequests
             : getHrPermissionRequests;
-      const response = await fetcher({ status, search: search || undefined, page, page_size: 10 });
+      const response = await fetcher({
+        status,
+        search: search || undefined,
+        page,
+        page_size: 10,
+      });
       if (isApiError(response)) {
         notification.error({
           message: t("permissionRequests.error.load"),
@@ -810,7 +819,7 @@ function RequestList({
                     key: "employee",
                     title: t("permissionRequests.list.employee"),
                     render: (_: unknown, record: PermissionRequest) =>
-                      record.employee.full_name,
+                      shortEmployeeName(record.employee.full_name),
                   },
                 ]
               : []),
@@ -930,7 +939,7 @@ function ApprovalTrail({ request }: { request: PermissionRequest }) {
       labelKey: "permissionRequests.detail.submitted",
       state: "completed",
       note: t("permissionRequests.detail.submitted"),
-      detail: request.employee.full_name,
+      detail: shortEmployeeName(request.employee.full_name),
       at: request.created_at,
     },
     {
@@ -1067,7 +1076,11 @@ export function PermissionRequestDetailPage({
     } catch (failure) {
       notification.error({
         message: t("permissionRequests.error.pdf"),
-        description: errorText(t, failure, t("permissionRequests.error.pdf")),
+        // 409: the frozen approved copy is missing or fails its hash; the
+        // backend never re-renders it silently.
+        description: isDocumentBlocked(failure)
+          ? t("documentIntegrity.downloadBlocked")
+          : errorText(t, failure, t("permissionRequests.error.pdf")),
       });
     } finally {
       setPdfBusy(false);
@@ -1116,7 +1129,7 @@ export function PermissionRequestDetailPage({
       <Card>
         <Descriptions bordered column={1}>
           <Descriptions.Item label={t("permissionRequests.detail.employee")}>
-            {request.employee.full_name}
+            {shortEmployeeName(request.employee.full_name)}
           </Descriptions.Item>
           <Descriptions.Item
             label={t("permissionRequests.detail.permissionType")}
@@ -1209,6 +1222,21 @@ export function PermissionRequestDetailPage({
         />
       )}
       <ApprovalTrail request={request} />
+      <div style={{ marginTop: 16 }}>
+        <DocumentIntegrityPanel
+          documentType="permission"
+          requestId={request.id}
+          isFinal={isDocumentFinal("permission", request.status)}
+          // The /hr surface is HRManager/SystemAdmin only; employees and
+          // managers get a read-only card with plain-text names.
+          canRetrySeal={role === "hr"}
+          profilePath={
+            role === "hr"
+              ? (profileId) => `/hr/employees/${profileId}`
+              : undefined
+          }
+        />
+      </div>
       {(canDecide || request.workflow.can_cancel) && (
         // Only the owner's cancel is not a decision, so it shows no hint.
         <StickyDecisionBar hint={canDecide ? undefined : null}>
@@ -1216,7 +1244,7 @@ export function PermissionRequestDetailPage({
             {canDecide && (
               <ApprovalActions
                 size="large"
-                subjectLabel={request.employee.full_name}
+                subjectLabel={shortEmployeeName(request.employee.full_name)}
                 approveLabel={t("permissionRequests.detail.approve")}
                 rejectLabel={t("permissionRequests.detail.reject")}
                 disabled={busy}

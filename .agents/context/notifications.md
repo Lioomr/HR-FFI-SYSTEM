@@ -132,6 +132,20 @@ Default is `False` everywhere else — do not pass `known_new=True` unless you'v
 pre-check yourself, or you can create duplicate notifications on a redelivery. Full writeup in
 `reliability_and_perf_fixes.md`.
 
+## Executive Notification Policy (CEO / General Manager)
+
+`Backend/in_app_notifications/executive_policy.py`. Applies only to users in the `CEO` group or whose profile
+job title / position is "Chief Executive Officer" or "General Manager". SystemAdmin and everyone else are unaffected.
+
+- Reminders (`metadata.event == "ceo_reminder"` or `metadata.reminder is True`) and any item created during quiet
+  hours (default 22:00-07:00 `APP_TIME_ZONE`) are **held**: the bell entry is kept, the WhatsApp delivery row is
+  marked `skipped` with `HELD_FOR_DIGEST`, and no email fallback is queued.
+- `in_app_notifications.tasks.send_executive_digest` (beat, daily 07:00) sends ONE bilingual summary per executive
+  (counts per request type, items already read are omitted) and marks the held rows `HELD_DIGESTED`.
+- Contract-rating CEO reminders: first one 24 h after the rating reaches `PENDING_CEO`, then at most 2 in total.
+- Settings: `EXECUTIVE_NOTIFICATION_POLICY_ENABLED`, `EXECUTIVE_QUIET_HOURS_START/END`,
+  `EXECUTIVE_DIGEST_HOUR/MINUTE` (env). A General Manager only receives notifications once they have a user account.
+
 ## Rules for New Notifications
 
 - Call notification functions from views/services, not models or serializers.

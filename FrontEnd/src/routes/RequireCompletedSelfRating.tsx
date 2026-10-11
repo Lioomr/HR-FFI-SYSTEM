@@ -3,22 +3,8 @@ import { Navigate, Outlet, useLocation } from "react-router-dom";
 
 import LoadingState from "../components/ui/LoadingState";
 import { useI18n } from "../i18n/useI18n";
-import {
-  isApiError,
-  type ApiSuccess,
-  type PaginatedResponse,
-} from "../services/api/apiTypes";
-import {
-  listContractRatings,
-  type ContractRatingStatus,
-  type ContractRatingView,
-} from "../services/api/contractRatingsApi";
-
-/** Statuses in which the signed-in employee still owes their own self-rating. */
-const PENDING_FOR_EMPLOYEE: ReadonlySet<ContractRatingStatus> = new Set([
-  "PENDING_RESPONSES",
-  "WAITING_EMPLOYEE",
-]);
+import { isApiError } from "../services/api/apiTypes";
+import { getPendingContractRatingActions } from "../services/api/contractRatingsApi";
 
 type Check =
   | { state: "loading" }
@@ -43,37 +29,16 @@ export default function RequireCompletedSelfRating() {
 
   useEffect(() => {
     let cancelled = false;
-    // Request each actionable status explicitly.  A plain list is paginated
-    // newest-first, which could otherwise leave an older outstanding rating
-    // outside the first page and accidentally open the employee portal.
-    Promise.all(
-      [...PENDING_FOR_EMPLOYEE].map((status) =>
-        listContractRatings({ status, page_size: 100 }),
-      ),
-    )
-      .then((responses) => {
+    getPendingContractRatingActions()
+      .then((response) => {
         if (cancelled) return;
-        const successfulResponses = responses.filter(
-          (
-            response,
-          ): response is ApiSuccess<PaginatedResponse<ContractRatingView>> =>
-            !isApiError(response),
-        );
-        if (successfulResponses.length !== responses.length) {
+        if (isApiError(response)) {
           setCheck({ state: "clear" });
           return;
         }
-        const items = successfulResponses.flatMap(
-          (response) => response.data.items ?? [],
-        );
-        const pending = items.find(
-          (item: ContractRatingView) =>
-            item.viewer === "employee" && PENDING_FOR_EMPLOYEE.has(item.status),
-        );
+        const pending = response.data.employee;
         setCheck(
-          pending
-            ? { state: "pending", id: pending.id }
-            : { state: "clear" },
+          pending ? { state: "pending", id: pending.id } : { state: "clear" },
         );
       })
       .catch(() => {

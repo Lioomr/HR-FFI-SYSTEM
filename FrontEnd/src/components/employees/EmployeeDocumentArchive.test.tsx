@@ -378,7 +378,7 @@ describe("EmployeeDocumentArchive document preview", () => {
     expect(
       await screen.findByText("Could not load the document preview."),
     ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "download" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: /^download$/i })).toBeEnabled();
   });
 });
 

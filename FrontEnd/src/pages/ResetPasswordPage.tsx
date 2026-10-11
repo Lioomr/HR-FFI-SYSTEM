@@ -108,8 +108,13 @@ export default function ResetPasswordPage() {
             <LockOutlined style={{ fontSize: 32, color: "#fff" }} />
           </div>
           <Title
-            level={2}
-            style={{ color: "#fff", margin: 0, fontWeight: 700 }}
+            level={1}
+            style={{
+              color: "#fff",
+              margin: 0,
+              fontWeight: 700,
+              fontSize: 30,
+            }}
           >
             {t("resetPassword.title")}
           </Title>

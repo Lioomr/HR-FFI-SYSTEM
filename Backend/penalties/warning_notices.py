@@ -26,6 +26,7 @@ from attendance.late_notices import (
     render_notice_pdf,
 )
 from audit.utils import audit
+from core.document_integrity.hash_records import record_issued_hash
 from core.pdf_signers import display_name, signature_for_profile
 from in_app_notifications.dispatcher import dispatch_notification_channels
 from in_app_notifications.i18n import notification_text
@@ -108,7 +109,8 @@ def create_notice(record):
         hr_signature=signature_for_profile(getattr(company, "late_notice_signer", None)),
     )
     notice.document.save(notice_filename(notice), ContentFile(pdf_bytes), save=False)
-    notice.save(update_fields=["document"])
+    # Hash the exact bytes stored here; downloads and the WhatsApp attachment serve this file.
+    notice.save(update_fields=["document", *record_issued_hash(notice, pdf_bytes)])
     audit(
         None,
         "penalty_warning_notice_generated",
@@ -120,6 +122,7 @@ def create_notice(record):
             "template": notice.template_name,
             "template_version": notice.template_version,
             "company_logo_state": logo_state or rendered_logo_state,
+            "document_sha256": notice.document_sha256,
         },
     )
     return notice

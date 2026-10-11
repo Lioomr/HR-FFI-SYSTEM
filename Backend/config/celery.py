@@ -53,6 +53,14 @@ app.conf.beat_schedule = {
         ),
         "kwargs": {"days": int(os.environ.get("NOTIFICATION_RETENTION_DAYS", "90"))},
     },
+    # One WhatsApp summary for the CEO/GM instead of per-item reminders; runs as quiet hours end.
+    "send-executive-notification-digest-daily": {
+        "task": "in_app_notifications.tasks.send_executive_digest",
+        "schedule": crontab(
+            hour=int(os.environ.get("EXECUTIVE_DIGEST_HOUR", "7")),
+            minute=int(os.environ.get("EXECUTIVE_DIGEST_MINUTE", "0")),
+        ),
+    },
     "send-annual-leave-year-end-notifications-daily": {
         "task": "leaves.tasks.send_annual_leave_year_end_notifications",
         "schedule": crontab(

@@ -37,7 +37,7 @@
   color: var(--brand-primary-dark);
   margin-bottom: 8px;
 }
-.ed-welcome h1 {
+.ed-welcome h2 {
   font-size: clamp(24px, 3vw, 34px);
   font-weight: 750;
   letter-spacing: -0.025em;

@@ -56,7 +56,7 @@ class HRCompletionTests(APITestCase):
         )
         return user
 
-    def _leave(self, *, employee=None, status=Status.PENDING_HR_COMPLETION):
+    def _leave(self, *, employee=None, status=Status.PENDING_HR_COMPLETION, will_require_visa=None):
         employee = employee or self.traveller
         return LeaveRequest.objects.create(
             employee=employee,
@@ -67,13 +67,14 @@ class HRCompletionTests(APITestCase):
             end_date=date(2027, 4, 5),
             status=status,
             will_travel=True,
+            will_require_visa=will_require_visa,
         )
 
     # --- service ---
 
     @patch("leaves.services.extract_visa_fields", return_value=["Visa duration not found."])
     def test_traveller_completion_stores_visa_and_approves(self, _extract):
-        leave = self._leave()
+        leave = self._leave(will_require_visa=True)
 
         result = apply_hr_completion(leave, actor=self.hr_user, note="Visa checked", visa_file=_visa_upload())
 
@@ -94,7 +95,7 @@ class HRCompletionTests(APITestCase):
         )
 
     def test_traveller_without_visa_is_refused(self):
-        leave = self._leave()
+        leave = self._leave(will_require_visa=True)
 
         with self.assertRaisesMessage(LeaveTransitionError, VISA_REQUIRED_MESSAGE):
             apply_hr_completion(leave, actor=self.hr_user)
@@ -113,6 +114,27 @@ class HRCompletionTests(APITestCase):
         self.assertIs(result.visa_required, False)
         self.assertIsNone(result.document)
 
+    def test_traveller_who_does_not_require_visa_completes_without_upload(self):
+        leave = self._leave(will_require_visa=False)
+
+        result = apply_hr_completion(leave, actor=self.hr_user, note="Reviewed")
+
+        leave.refresh_from_db()
+        self.assertEqual(leave.status, Status.APPROVED)
+        self.assertIs(result.visa_required, False)
+        self.assertIsNone(result.document)
+
+    def test_existing_traveller_without_visa_answer_completes_without_upload(self):
+        leave = self._leave()
+
+        result = apply_hr_completion(leave, actor=self.hr_user, note="Reviewed")
+
+        leave.refresh_from_db()
+        self.assertEqual(leave.status, Status.APPROVED)
+        self.assertIsNone(leave.will_require_visa)
+        self.assertIs(result.visa_required, False)
+        self.assertIsNone(result.document)
+
     def test_completion_refuses_request_not_awaiting_completion(self):
         for current in (Status.PENDING_CEO, Status.APPROVED):
             with self.subTest(status=current):
@@ -122,7 +144,7 @@ class HRCompletionTests(APITestCase):
                 self.assertFalse(EmployeeDocument.objects.filter(leave_request=leave).exists())
 
     def test_failure_after_upload_deletes_stored_file_and_rolls_back(self):
-        leave = self._leave()
+        leave = self._leave(will_require_visa=True)
         stored = {}
 
         def fail_extraction(document):
@@ -145,7 +167,7 @@ class HRCompletionTests(APITestCase):
     @patch("leaves.services.notify_leave_approved")
     @patch("leaves.services.extract_visa_fields", return_value=[])
     def test_complete_endpoint_returns_document_and_notifies_employee(self, _extract, notify_approved):
-        leave = self._leave()
+        leave = self._leave(will_require_visa=True)
         self.client.force_authenticate(user=self.hr_user)
 
         response = self.client.post(
@@ -163,6 +185,17 @@ class HRCompletionTests(APITestCase):
         audit_log = AuditLog.objects.filter(action="complete_hr", entity_id=str(leave.id)).last()
         self.assertIs(audit_log.metadata["visa_required"], True)
         self.assertEqual(audit_log.metadata["visa_document_id"], document.id)
+
+        archive_response = self.client.get(f"/api/employees/{leave.employee_profile_id}/documents/")
+        self.assertEqual(archive_response.status_code, status.HTTP_200_OK, archive_response.data)
+        self.assertTrue(
+            any(
+                item["id"] == document.id
+                and item["document_type"] == EmployeeDocument.DocumentType.VISA
+                and item["leave_request"] == leave.id
+                for item in archive_response.data["data"]
+            )
+        )
 
     def test_state_error_is_reported_before_upload_validation(self):
         leave = self._leave(status=Status.APPROVED)

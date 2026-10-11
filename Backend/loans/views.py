@@ -4,7 +4,6 @@ import re
 from django.contrib.contenttypes.models import ContentType
 from django.db import transaction
 from django.db.models import Q
-from django.http import HttpResponse
 from django.utils import timezone
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters, status, viewsets
@@ -13,6 +12,12 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from audit.utils import audit
+from core.document_integrity.api import (
+    DocumentIntegrityActionsMixin,
+    frozen_pdf_response,
+    involved_q,
+    resolve_integrity_object,
+)
 from core.models import WorkflowInstance
 from core.pagination import StandardPagination
 from core.permissions import get_role
@@ -27,6 +32,7 @@ from core.services import (
     send_request_submission_email,
 )
 from core.services.request_references import public_reference_for
+from employees.permissions import IsHRManagerOrAdmin
 from employees.services.manager_relationships import get_valid_manager_user, manager_scope_q
 from organization.services import filter_queryset_by_accessible_companies, filter_queryset_by_company_scope
 
@@ -102,12 +108,33 @@ def _log_notification_failure(event_name, *, entity_id, notification_type, actor
     logger.exception(event_name, extra=extra)
 
 
-def _configure_sensitive_download(response, filename):
-    response["Content-Disposition"] = f'attachment; filename="{filename}"'
-    response["Content-Type"] = "application/octet-stream"
-    response["X-Content-Type-Options"] = "nosniff"
-    response["Cache-Control"] = "private, no-store"
-    return response
+def _next_approvers_after_manager(instance):
+    """Return the next audience after a recommendation, including covered later stages."""
+
+    if instance.status == LoanRequest.RequestStatus.PENDING_DISBURSEMENT:
+        return get_disbursement_approver_users(), f"/finance/loan-requests/{instance.id}"
+    if instance.status == LoanRequest.RequestStatus.PENDING_CFO:
+        return get_cfo_approver_users(), f"/cfo/loan-requests/{instance.id}"
+    return get_hr_approver_users(), f"/finance/loan-requests/{instance.id}"
+
+
+def _notify_after_recommendation(instance, recommendation_detail):
+    users, action_path = _next_approvers_after_manager(instance)
+    if instance.status == LoanRequest.RequestStatus.PENDING_DISBURSEMENT:
+        request_type = "Loan Disbursement"
+        details = [f"Approved Amount: {instance.approved_amount or instance.requested_amount}"]
+    else:
+        request_type = "Loan Request"
+        details = [f"Requested Amount: {instance.requested_amount}", recommendation_detail]
+    notify_users_for_pending_status(
+        users=users,
+        request_type=request_type,
+        request_id=instance.id,
+        requester_name=instance.employee.full_name or instance.employee.email,
+        status_label=instance.status,
+        details=details,
+        action_path=action_path,
+    )
 
 
 def _flatten_errors(error_dict):
@@ -565,7 +592,7 @@ def _build_loan_request_pdf(instance: LoanRequest) -> bytes:
     return build_loan_request_pdf(instance, fallback=_build_loan_request_pdf_fallback)
 
 
-class LoanRequestViewSet(viewsets.ModelViewSet):
+class LoanRequestViewSet(DocumentIntegrityActionsMixin, viewsets.ModelViewSet):
     serializer_class = LoanRequestReadSerializer
     permission_classes = [IsAuthenticated]
     pagination_class = StandardPagination
@@ -577,6 +604,10 @@ class LoanRequestViewSet(viewsets.ModelViewSet):
     def get_permissions(self):
         if self.action == "pdf":
             return [IsAuthenticated(), IsLoanOwnerOrHR()]
+        if self.action in ["integrity", "integrity_verify"]:
+            return [IsAuthenticated()]
+        if self.action == "integrity_retry_seal":
+            return [IsAuthenticated(), IsHRManagerOrAdmin()]
         if self.action == "create":
             return [IsAuthenticated(), IsEmployeeOnly()]
         if self.action in ["list", "retrieve", "approve", "reject"]:
@@ -758,15 +789,7 @@ class LoanRequestViewSet(viewsets.ModelViewSet):
             return exc.to_response()
         audit(request, "loan_request_recommended_hr_approve", entity="LoanRequest", entity_id=instance.id)
         try:
-            notify_users_for_pending_status(
-                users=get_cfo_approver_users(),
-                request_type="Loan Request",
-                request_id=instance.id,
-                requester_name=instance.employee.full_name or instance.employee.email,
-                status_label=instance.status,
-                details=[f"Requested Amount: {instance.requested_amount}", "HR recommendation: approve"],
-                action_path=f"/cfo/loan-requests/{instance.id}",
-            )
+            _notify_after_recommendation(instance, "HR recommendation: approve")
         except Exception:
             _log_notification_failure(
                 "loan_hr_approval_notification_failed",
@@ -796,15 +819,7 @@ class LoanRequestViewSet(viewsets.ModelViewSet):
             return exc.to_response()
         audit(request, "loan_request_recommended_hr_reject", entity="LoanRequest", entity_id=instance.id)
         try:
-            notify_users_for_pending_status(
-                users=get_cfo_approver_users(),
-                request_type="Loan Request",
-                request_id=instance.id,
-                requester_name=instance.employee.full_name or instance.employee.email,
-                status_label=instance.status,
-                details=[f"Requested Amount: {instance.requested_amount}", "HR recommendation: reject"],
-                action_path=f"/cfo/loan-requests/{instance.id}",
-            )
+            _notify_after_recommendation(instance, "HR recommendation: reject")
         except Exception:
             _log_notification_failure(
                 "loan_hr_rejection_notification_failed",
@@ -830,15 +845,37 @@ class LoanRequestViewSet(viewsets.ModelViewSet):
             return error("Not found", errors=["Not found."], status=404)
         self.check_object_permissions(request, instance)
 
-        pdf_bytes = _build_loan_request_pdf(instance)
-        audit(
+        # Frozen copy once disbursed (409 if it was altered), live render before that;
+        # HR may add ``?workpaper=1&tz=<IANA>`` for the approval-trail page.
+        response = frozen_pdf_response(
+            instance,
             request,
-            "loan_request_exported_pdf",
-            entity="LoanRequest",
-            entity_id=instance.id,
+            render_live=lambda: _build_loan_request_pdf(instance),
+            filename=f"loan_request_{instance.id}.pdf",
         )
-        filename = f"loan_request_{instance.id}.pdf"
-        return _configure_sensitive_download(HttpResponse(pdf_bytes, content_type="application/octet-stream"), filename)
+        if response.status_code == 200:
+            audit(
+                request,
+                "loan_request_exported_pdf",
+                entity="LoanRequest",
+                entity_id=instance.id,
+            )
+        return response
+
+    def get_integrity_object(self):
+        """Owner, recorded approvers, or HR in an accessible company (404 for anyone else)."""
+
+        from .document_integrity import INVOLVED_FIELDS, can_access_loan_document
+
+        user = self.request.user
+        base = LoanRequest.objects.filter(is_active=True).select_related(*LOAN_READ_SELECT_RELATED)
+        return resolve_integrity_object(
+            self.request,
+            self.kwargs.get(self.lookup_field),
+            hr_queryset=filter_queryset_by_accessible_companies(base, self.request),
+            involved_queryset=lambda: base.filter(involved_q(user, INVOLVED_FIELDS)),
+            can_access=can_access_loan_document,
+        )
 
 
 class EmployeeLoanRequestViewSet(viewsets.ReadOnlyModelViewSet):
@@ -920,15 +957,7 @@ class ManagerLoanRequestViewSet(viewsets.ReadOnlyModelViewSet):
             metadata={"actor_source": actor_source},
         )
         try:
-            notify_users_for_pending_status(
-                users=get_hr_approver_users(),
-                request_type="Loan Request",
-                request_id=instance.id,
-                requester_name=instance.employee.full_name or instance.employee.email,
-                status_label=instance.status,
-                details=[f"Requested Amount: {instance.requested_amount}", "Manager recommendation: approve"],
-                action_path=f"/finance/loan-requests/{instance.id}",
-            )
+            _notify_after_recommendation(instance, "Manager recommendation: approve")
         except Exception:
             _log_notification_failure(
                 "loan_manager_approval_notification_failed",
@@ -961,15 +990,7 @@ class ManagerLoanRequestViewSet(viewsets.ReadOnlyModelViewSet):
             metadata={"actor_source": actor_source},
         )
         try:
-            notify_users_for_pending_status(
-                users=get_hr_approver_users(),
-                request_type="Loan Request",
-                request_id=instance.id,
-                requester_name=instance.employee.full_name or instance.employee.email,
-                status_label=instance.status,
-                details=[f"Requested Amount: {instance.requested_amount}", "Manager recommendation: reject"],
-                action_path=f"/finance/loan-requests/{instance.id}",
-            )
+            _notify_after_recommendation(instance, "Manager recommendation: reject")
         except Exception:
             _log_notification_failure(
                 "loan_manager_rejection_notification_failed",

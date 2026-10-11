@@ -18,7 +18,6 @@ import { useLocalization } from '@/i18n';
 import { useAuth } from '@/providers';
 
 import {
-  attendanceCorrectionStatusPresentation,
   formatDateValue,
   hiringRequestStatusPresentation,
   loanRequestStatusPresentation,
@@ -29,26 +28,16 @@ import {
 } from '../shared';
 
 import { hasLeaveApprovalAccess, loadLeaveApprovals } from './approvals-api';
-import {
-  hasAttendanceCorrectionApprovalAccess,
-  loadAttendanceCorrectionApprovals,
-} from './attendance-corrections-api';
-import { AttendanceCorrectionDetail } from './AttendanceCorrectionDetail';
 import { DelegationRulesSheet } from './DelegationRulesSheet';
 import { LeaveApprovalDetail } from './LeaveApprovalDetail';
 import { HiringRequestDetail } from './HiringRequestDetail';
 import { LoanRequestDetail } from './LoanRequestDetail';
 import { hasHiringApprovalAccess, loadHiringApprovals } from './hiring-approvals-api';
 import { hasLoanApprovalAccess, loadLoanApprovals } from './loan-approvals-api';
-import type {
-  ApprovalLeaveRequest,
-  AttendanceCorrectionApproval,
-  HiringRequestApproval,
-  LoanRequestApproval,
-} from './types';
+import type { ApprovalLeaveRequest, HiringRequestApproval, LoanRequestApproval } from './types';
 
 /**
- * The approver home. Later domains (attendance corrections, hiring, loans) and
+ * The approver home. Later domains (hiring, loans) and
  * delegation become inner sections of this one screen — never new routes, so the
  * record-identifier-free URL surface stays intact.
  */
@@ -57,9 +46,6 @@ export function ApprovalsScreen() {
   const localization = useLocalization();
   const { t } = localization;
   const [selected, setSelected] = useState<ApprovalLeaveRequest | null>(null);
-  const [selectedCorrection, setSelectedCorrection] = useState<AttendanceCorrectionApproval | null>(
-    null,
-  );
   const [selectedHiringRequest, setSelectedHiringRequest] = useState<HiringRequestApproval | null>(
     null,
   );
@@ -68,22 +54,12 @@ export function ApprovalsScreen() {
 
   const approverRole = normalizeRole(user?.role);
   const canApproveLeave = hasLeaveApprovalAccess(approverRole);
-  const canApproveCorrections = hasAttendanceCorrectionApprovalAccess(approverRole);
   const canApproveHiring = hasHiringApprovalAccess(approverRole);
   const canApproveLoans = hasLoanApprovalAccess(approverRole);
-  const hasApprovalSurface =
-    canApproveLeave || canApproveCorrections || canApproveHiring || canApproveLoans;
+  const hasApprovalSurface = canApproveLeave || canApproveHiring || canApproveLoans;
 
   const { isRefreshing, refresh, resource, retry } = useResource<ApprovalLeaveRequest[]>(
     useCallback(() => loadLeaveApprovals(approverRole), [approverRole]),
-  );
-  const {
-    isRefreshing: isRefreshingCorrections,
-    refresh: refreshCorrections,
-    resource: corrections,
-    retry: retryCorrections,
-  } = useResource<AttendanceCorrectionApproval[]>(
-    useCallback(() => loadAttendanceCorrectionApprovals(approverRole), [approverRole]),
   );
   const {
     isRefreshing: isRefreshingHiring,
@@ -107,11 +83,6 @@ export function ApprovalsScreen() {
     await refresh();
   }, [refresh]);
 
-  const afterCorrectionDecision = useCallback(async () => {
-    setSelectedCorrection(null);
-    await refreshCorrections();
-  }, [refreshCorrections]);
-
   const afterHiringDecision = useCallback(async () => {
     setSelectedHiringRequest(null);
     await refreshHiring();
@@ -131,12 +102,8 @@ export function ApprovalsScreen() {
           <RefreshControl
             accessibilityLabel={t('common.refresh')}
             colors={[colors.text]}
-            onRefresh={() =>
-              void Promise.all([refresh(), refreshCorrections(), refreshHiring(), refreshLoans()])
-            }
-            refreshing={
-              isRefreshing || isRefreshingCorrections || isRefreshingHiring || isRefreshingLoans
-            }
+            onRefresh={() => void Promise.all([refresh(), refreshHiring(), refreshLoans()])}
+            refreshing={isRefreshing || isRefreshingHiring || isRefreshingLoans}
             tintColor={colors.text}
           />
         ),
@@ -230,75 +197,6 @@ export function ApprovalsScreen() {
           {delegationsOpen ? (
             <DelegationRulesSheet onClose={() => setDelegationsOpen(false)} />
           ) : null}
-        </View>
-      ) : null}
-
-      {canApproveCorrections && corrections.status === 'error' ? (
-        <ResourceFailure kind={corrections.kind} onRetry={() => void retryCorrections()} />
-      ) : null}
-
-      {canApproveCorrections && corrections.status === 'loading' ? (
-        <SkeletonList rows={3} testID="attendance-corrections-skeleton" />
-      ) : null}
-
-      {canApproveCorrections && corrections.status === 'ready' ? (
-        <View style={styles.section}>
-          <SectionHeader
-            hint={localizedCount(
-              localization,
-              'attendanceCorrections.pendingCount',
-              corrections.data.length,
-            )}
-            title={t('attendanceCorrections.sectionTitle')}
-          />
-          {corrections.data.length === 0 ? (
-            <EmptyState
-              compact
-              emoji="✅"
-              message={t('attendanceCorrections.empty')}
-              title={t('attendanceCorrections.sectionTitle')}
-            />
-          ) : (
-            <Card>
-              <View accessibilityRole="list" style={styles.list}>
-                {corrections.data.map((correction, index) => {
-                  const status = attendanceCorrectionStatusPresentation(correction.status);
-                  return (
-                    <View
-                      key={String(correction.id ?? `${correction.date ?? 'correction'}-${index}`)}
-                      style={index > 0 ? styles.separated : undefined}
-                    >
-                      <ListRow
-                        accessibilityHint={t('accessibility.opensDetailHint')}
-                        onPress={() => setSelectedCorrection(correction)}
-                        subtitle={formatDateValue(localization, correction.date)}
-                        testID={`attendance-correction-${correction.id ?? index}`}
-                        title={
-                          correction.employeeName ??
-                          correction.employeeEmail ??
-                          t('common.notAvailable')
-                        }
-                        trailing={
-                          status ? (
-                            <StatusBadge
-                              glyph={status.glyph}
-                              label={t(status.labelKey)}
-                              tone={status.tone}
-                            />
-                          ) : null
-                        }
-                      />
-                    </View>
-                  );
-                })}
-              </View>
-            </Card>
-          )}
-          <AttendanceCorrectionDetail
-            correction={selectedCorrection}
-            onClose={() => setSelectedCorrection(null)}
-            onDecided={() => void afterCorrectionDecision()}
-          />
         </View>
       ) : null}
 

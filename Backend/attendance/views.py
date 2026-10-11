@@ -1,4 +1,3 @@
-import logging
 from datetime import date as date_type
 from datetime import timedelta
 
@@ -22,7 +21,6 @@ from core.permissions import (
     IsManager,
     IsSystemAdmin,
     get_role,
-    is_hr_workflow_approver_user,
 )
 from core.responses import error, success
 from employees.models import EmployeeProfile
@@ -44,7 +42,6 @@ from .calculation import AttendanceCalculationService
 from .late_notices import notice_filename
 from .leave_resolution import filter_effective_status, with_leave_resolution
 from .models import (
-    AttendanceCorrectionRequest,
     AttendanceDailyResult,
     AttendanceLateNotice,
     AttendanceLateViolation,
@@ -53,16 +50,12 @@ from .models import (
 )
 from .permissions import IsAttendanceSelfServiceRole
 from .serializers import (
-    AttendanceCorrectionRequestSerializer,
     AttendanceDailyResultSerializer,
     AttendanceLateNoticeSerializer,
     AttendanceLateViolationSerializer,
     AttendanceRecordSerializer,
     WorkLocationSerializer,
 )
-
-logger = logging.getLogger(__name__)
-
 
 class TodayAttendanceSummaryView(APIView):
     permission_classes = [IsAuthenticated]
@@ -269,18 +262,6 @@ class AttendanceNoticeViewSet(viewsets.ReadOnlyModelViewSet):
             {"violation_id": notice.violation_id, "level": notice.level},
         )
         return response
-
-
-def _log_notification_failure(event_name, *, entity_id, notification_type, actor_id=None, channel=None):
-    extra = {"entity_id": entity_id, "notification_type": notification_type}
-    if actor_id is not None:
-        extra["actor_id"] = actor_id
-    if channel is not None:
-        extra["channel"] = channel
-    logger.exception(event_name, extra=extra)
-
-
-User = get_user_model()
 
 
 def _apply_employee_search(queryset, search_param):
@@ -575,74 +556,6 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
 
         serializer = self.get_serializer(queryset, many=True)
         return success(serializer.data)
-
-
-class AttendanceCorrectionRequestViewSet(viewsets.ModelViewSet):
-    serializer_class = AttendanceCorrectionRequestSerializer
-    permission_classes = [IsAuthenticated]
-    filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
-    filterset_fields = ["status", "date", "employee_profile"]
-    ordering_fields = ["date", "created_at", "updated_at"]
-    ordering = ["-created_at", "-id"]
-
-    def get_queryset(self):
-        user = self.request.user
-        role = get_role(user)
-        qs = AttendanceCorrectionRequest.objects.select_related(
-            "employee_profile__user",
-            "employee_profile__manager",
-            "employee_profile__manager_profile__user",
-            "attendance_record",
-        )
-        qs = _scope_attendance_queryset(qs, self.request)
-
-        if role in ["SystemAdmin", "HRManager"] or is_hr_workflow_approver_user(user):
-            return qs
-
-        employee_profile = getattr(user, "employee_profile", None)
-        owner_match = Q(employee_profile__user=user)
-        manager_match = _manager_scope_filter(user)
-        if employee_profile:
-            owner_match |= Q(employee_profile=employee_profile)
-        return qs.filter(owner_match | manager_match)
-
-    def list(self, request, *args, **kwargs):
-        response = super().list(request, *args, **kwargs)
-        if isinstance(response.data, dict) and response.data.get("status") == "success":
-            return response
-        return success(response.data)
-
-    def retrieve(self, request, *args, **kwargs):
-        response = super().retrieve(request, *args, **kwargs)
-        return success(response.data)
-
-    def create(self, request, *args, **kwargs):
-        return manual_attendance_gone()
-
-    def update(self, request, *args, **kwargs):
-        return manual_attendance_gone()
-
-    def partial_update(self, request, *args, **kwargs):
-        return manual_attendance_gone()
-
-    def destroy(self, request, *args, **kwargs):
-        return manual_attendance_gone()
-
-    @action(detail=True, methods=["post"])
-    def submit(self, request, pk=None):
-        return manual_attendance_gone()
-
-    @action(detail=True, methods=["post"])
-    def approve(self, request, pk=None):
-        return manual_attendance_gone()
-
-    @action(detail=True, methods=["post"])
-    def reject(self, request, pk=None):
-        return manual_attendance_gone()
-
-    @action(detail=True, methods=["post"])
-    def cancel(self, request, pk=None):
-        return manual_attendance_gone()
 
 
 class ManagerAttendanceViewSet(viewsets.ReadOnlyModelViewSet):

@@ -265,6 +265,11 @@ class EvolutionWhatsAppProvider:
         error: str | None = None,
     ) -> dict[str, Any]:
         latency_ms = int((time.monotonic() - started_at) * 1000)
+        if event == "password_reset_otp":
+            # A provider may echo submitted message text in its diagnostics.
+            error = "Password recovery delivery failed." if not success else None
+            message_id = None
+            provider_status = None
         _log_delivery(
             provider=self.provider,
             event=event,

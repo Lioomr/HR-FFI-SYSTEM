@@ -27,6 +27,8 @@ import LoadingState from "../../../components/ui/LoadingState";
 import PageHeader from "../../../components/ui/PageHeader";
 import { WorkspaceCard } from "../../../components/ui/workspace/Workspace";
 import ResponsiveTable from "../../../components/ui/ResponsiveTable";
+import DocumentIntegrityPanel from "../../../components/documents/DocumentIntegrityPanel";
+import { isDocumentFinal } from "../../../components/documents/documentTypes";
 import {
   listMyAssetDamageReports,
   listMyAssetReturnRequests,
@@ -647,6 +649,18 @@ export default function MyAssetsPage() {
           dataSource={damageReports}
           loading={requestLoading}
           scroll={{ x: "max-content" }}
+          // The owner's read-only view of the frozen form (CEO-approved).
+          expandable={{
+            rowExpandable: (record) =>
+              isDocumentFinal("asset_damage", record.status),
+            expandedRowRender: (record) => (
+              <DocumentIntegrityPanel
+                documentType="asset_damage"
+                requestId={record.id}
+                isFinal={isDocumentFinal("asset_damage", record.status)}
+              />
+            ),
+          }}
           pagination={{
             current: damagePage,
             pageSize: damagePageSize,
@@ -692,6 +706,18 @@ export default function MyAssetsPage() {
           dataSource={returnRequests}
           loading={requestLoading}
           scroll={{ x: "max-content" }}
+          // The owner's read-only view of the frozen form (processed returns).
+          expandable={{
+            rowExpandable: (record) =>
+              isDocumentFinal("asset_return", record.status),
+            expandedRowRender: (record) => (
+              <DocumentIntegrityPanel
+                documentType="asset_return"
+                requestId={record.id}
+                isFinal={isDocumentFinal("asset_return", record.status)}
+              />
+            ),
+          }}
           pagination={{
             current: returnPage,
             pageSize: returnPageSize,

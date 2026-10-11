@@ -157,3 +157,7 @@ class PenaltyWarningNotice(models.Model):
     delivery_status = models.CharField(max_length=16, choices=DeliveryStatus.choices, default=DeliveryStatus.SCHEDULED)
     delivery_message = models.CharField(max_length=255, blank=True)
     issued_at = models.DateTimeField(auto_now_add=True)
+    #: SHA-256 of the exact stored/delivered letter bytes, recorded once at issuance
+    #: (tamper evidence for ``POST /api/documents/verify-upload/``). Empty for older letters.
+    document_sha256 = models.CharField(max_length=64, blank=True, db_index=True)
+    document_hashed_at = models.DateTimeField(null=True, blank=True)

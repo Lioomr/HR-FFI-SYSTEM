@@ -1169,3 +1169,35 @@ html[dir="rtl"] .modern-sidebar .ant-menu-sub .ant-menu-item-selected::before {
     min-height: 44px;
   }
 }
+
+/* Touch and phone layouts: small controls (icon-only buttons, close and pager
+   controls, small selects) get a 44x44 hit area. Keyed on the input device as
+   well as the width, so a tablet gets it and a phone-sized desktop window does
+   too. */
+@media (pointer: coarse), (max-width: 767px) {
+  .ant-btn.ant-btn-icon-only,
+  .ant-modal-close,
+  .ant-drawer-close,
+  .ant-pagination-prev,
+  .ant-pagination-next,
+  .ant-pagination-jump-prev,
+  .ant-pagination-jump-next,
+  .ant-pagination-item {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .ant-pagination-item,
+  .ant-pagination-prev,
+  .ant-pagination-next {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .ant-pagination-options .ant-select-selector,
+  .ant-select-sm .ant-select-selector {
+    min-height: 44px;
+    align-items: center;
+  }
+}

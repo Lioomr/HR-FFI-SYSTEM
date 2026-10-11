@@ -68,7 +68,6 @@ REQUEST_TYPE_LABELS: dict[str, str] = {
     "Asset Damage Report": "تقرير ضرر أصل",
     "Asset Return Request": "طلب إعادة أصل",
     "Attendance Request": "طلب حضور",
-    "Attendance Correction": "طلب تصحيح حضور",
     "Employee Archive": "أرشفة موظف",
     "Employee Deletion": "حذف موظف",
     "Annual Leave Payment Request": "طلب صرف رصيد الإجازة السنوية",
@@ -141,6 +140,19 @@ DOCUMENT_TYPE_LABELS: dict[str, tuple[str, str]] = {
     "work_license": ("Work License", "رخصة العمل"),
 }
 
+#: Leave type name (normalized) -> Arabic. LeaveType rows only carry an English name.
+LEAVE_TYPE_LABELS: dict[str, str] = {
+    "annual_leave": "الإجازة السنوية",
+    "sick_leave": "الإجازة المرضية",
+    "emergency_leave": "الإجازة الاضطرارية",
+    "birth_leave": "إجازة مولود",
+    "maternity_leave": "إجازة الوضع",
+    "marriage_leave": "إجازة زواج",
+    "death_of_relative_leave": "إجازة وفاة قريب",
+    "unpaid_leave": "إجازة بدون راتب",
+    "business_trip": "مهمة عمل",
+}
+
 ROLE_LABELS: dict[str, tuple[str, str]] = {
     "employee": ("Employee", "موظف"),
     "manager": ("Manager", "مدير"),
@@ -206,6 +218,12 @@ def document_label(label: Any, document_type: Any = None) -> Localized:
     return pair(en, known[1] if known else ("مستند" if en == "Document" else en))
 
 
+def leave_type_label(value: Any) -> Localized:
+    """Keep the English leave type name; add the Arabic name when the type is known."""
+    text = str(value or "").strip()
+    return pair(text, LEAVE_TYPE_LABELS.get(_code_key(text)))
+
+
 def role_label(value: Any) -> Localized:
     known = ROLE_LABELS.get(_code_key(value).replace("_", ""))
     return pair(*known) if known else pair(value)
@@ -216,6 +234,35 @@ def contract_rating_event_label(value: Any) -> Localized:
     text = str(value or "").strip()
     known = CONTRACT_RATING_EVENT_LABELS.get(_code_key(text))
     return pair(*known) if known else pair(_code_key(text).replace("_", " ").capitalize() or text)
+
+
+_CONTRACT_FAILURE_REASONS_AR: dict[str, str] = {
+    "The employee's contract dates were changed outside this decision.": "تم تغيير تواريخ عقد الموظف خارج نطاق هذا القرار.",
+    "Original contract dates are required to calculate renewal duration.": "تواريخ العقد الأصلية مطلوبة لحساب مدة التجديد.",
+    "Original contract duration must be positive.": "يجب أن تكون مدة العقد الأصلية أكبر من صفر.",
+    "Proposed contract expiry must be on or after the proposed contract date.": (
+        "يجب أن يكون تاريخ انتهاء العقد المقترح في تاريخ العقد المقترح أو بعده."
+    ),
+}
+_CONTRACT_MISMATCH_PREFIX = "The employee record changed after this decision was created: "
+_CONTRACT_MISMATCH_FIELDS_AR = {
+    "contract date": "تاريخ العقد",
+    "contract expiry": "تاريخ انتهاء العقد",
+    "salary or allowance terms": "شروط الراتب أو البدلات",
+}
+
+
+def contract_failure_reason(value: Any) -> Localized:
+    """Arabic rendering of the English system reason stored on a contract decision."""
+    text = str(value or "").strip()
+    if text in _CONTRACT_FAILURE_REASONS_AR:
+        return pair(text, _CONTRACT_FAILURE_REASONS_AR[text])
+    if text.startswith(_CONTRACT_MISMATCH_PREFIX):
+        fields = [part.strip() for part in text.removeprefix(_CONTRACT_MISMATCH_PREFIX).rstrip(".").split(",")]
+        if fields and all(field in _CONTRACT_MISMATCH_FIELDS_AR for field in fields):
+            fields_ar = "، ".join(_CONTRACT_MISMATCH_FIELDS_AR[field] for field in fields)
+            return pair(text, f"تغيّر سجل الموظف بعد إنشاء هذا القرار: {fields_ar}.")
+    return pair(text)
 
 
 def contract_rating_message(value: Any) -> Localized:
@@ -422,6 +469,14 @@ MESSAGES: dict[str, dict[str, tuple[str, str]]] = {
         "message": ("Your leave request #{request_id} was cancelled.", "تم إلغاء طلب الإجازة رقم {request_id}."),
     },
     "leave.delegation_assigned": {
+        "title": ("Alternative employee assigned", "تم تعيينك موظفاً بديلاً"),
+        "message": (
+            "You were assigned as the alternative employee for {employee_name}.",
+            "تم تعيينك موظفاً بديلاً عن {employee_name}.",
+        ),
+    },
+    # Previous English wording, kept only so rows stored before the wording change still localize.
+    "leave.delegation_assigned_legacy": {
         "title": ("Leave delegation assigned", "تم تعيينك موظفاً بديلاً"),
         "message": ("You were assigned as delegate for {employee_name}.", "تم تعيينك موظفاً بديلاً عن {employee_name}."),
     },
@@ -639,11 +694,32 @@ MESSAGES: dict[str, dict[str, tuple[str, str]]] = {
         "title": ("Welcome to the FFI HR System", "مرحباً بك في نظام الموارد البشرية FFI"),
         "message": ("Your {role} account is ready.", "حسابك ({role}) جاهز."),
     },
+    "executive.digest": {
+        "title": ("Daily summary: items awaiting you", "ملخص يومي: عناصر بانتظارك"),
+        "message": (
+            "{count} item(s) need your attention: {summary}.",
+            "لديك {count} عنصر بحاجة إلى اهتمامك: {summary}.",
+        ),
+    },
     "delegation.assigned": {
-        "title": ("Workflow delegation updated", "تم تحديث تفويض سير العمل"),
+        "title": ("Alternative employee updated", "تم تحديث الموظف البديل"),
+        "message": (
+            "The alternative employee assignment from {from_user} to {to_user} is active.",
+            "تعيين الموظف البديل من {from_user} إلى {to_user} مفعّل.",
+        ),
+    },
+    "delegation.assigned_legacy": {
+        "title": ("Workflow delegation updated", "تم تحديث الموظف البديل"),
         "message": (
             "Delegation from {from_user} to {to_user} is active.",
-            "التفويض من {from_user} إلى {to_user} مفعّل.",
+            "تعيين الموظف البديل من {from_user} إلى {to_user} مفعّل.",
+        ),
+    },
+    "attendance.late_violation": {
+        "title": ("Late attendance recorded", "تم تسجيل تأخر في الحضور"),
+        "message": (
+            "A late attendance violation was recorded for {date}.",
+            "تم تسجيل مخالفة تأخر في الحضور بتاريخ {date}.",
         ),
     },
 }
@@ -733,6 +809,8 @@ LEGACY_EVENT_KEYS: dict[str, tuple[str, ...]] = {
         "contract.manual_resolution",
     ),
     "document.expiring": ("document.expiring", "document.work_license_expiring"),
+    "leave.delegation_assigned": ("leave.delegation_assigned", "leave.delegation_assigned_legacy"),
+    "delegation.assigned": ("delegation.assigned", "delegation.assigned_legacy"),
     "annual_leave.settlement_window_open": (
         "annual_leave.settlement_window_open_with_locked",
         "annual_leave.settlement_window_open",

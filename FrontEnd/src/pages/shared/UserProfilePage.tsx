@@ -345,6 +345,7 @@ export default function UserProfilePage() {
                             {formatValue((employee as any).employee_number)}
                             <Tooltip title={t("common.copy")}>
                               <Button
+                                aria-label={t("common.copy")}
                                 type="text"
                                 size="small"
                                 icon={<CopyOutlined />}

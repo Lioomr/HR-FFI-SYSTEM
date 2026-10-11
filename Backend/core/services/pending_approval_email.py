@@ -33,19 +33,27 @@ def _active_users_in_groups(group_names: list[str]):
 
 
 def _active_profile_users_by_position(position_ref_id: int):
-    return User.objects.filter(
-        is_active=True,
-        employee_profile__employment_status=EmployeeProfile.EmploymentStatus.ACTIVE,
-        employee_profile__position_ref_id=position_ref_id,
-    ).exclude(email="").distinct()
+    return (
+        User.objects.filter(
+            is_active=True,
+            employee_profile__employment_status=EmployeeProfile.EmploymentStatus.ACTIVE,
+            employee_profile__position_ref_id=position_ref_id,
+        )
+        .exclude(email="")
+        .distinct()
+    )
 
 
 def _active_profile_users_by_department(department_ref_id: int):
-    return User.objects.filter(
-        is_active=True,
-        employee_profile__employment_status=EmployeeProfile.EmploymentStatus.ACTIVE,
-        employee_profile__department_ref_id=department_ref_id,
-    ).exclude(email="").distinct()
+    return (
+        User.objects.filter(
+            is_active=True,
+            employee_profile__employment_status=EmployeeProfile.EmploymentStatus.ACTIVE,
+            employee_profile__department_ref_id=department_ref_id,
+        )
+        .exclude(email="")
+        .distinct()
+    )
 
 
 def get_direct_manager_user(employee_user):
@@ -88,16 +96,21 @@ def get_ceo_approver_users():
 
 
 def get_disbursement_approver_users():
+    """Finance staff who disburse loans. SystemAdmin only views, so it is never notified."""
+
     from loans.permissions import get_active_workflow_config
 
     config = get_active_workflow_config()
-    return User.objects.filter(
-        is_active=True,
-        email__isnull=False,
-        employee_profile__employment_status=EmployeeProfile.EmploymentStatus.ACTIVE,
-        employee_profile__department_ref_id=config.finance_department_id,
-        employee_profile__position_ref_id=config.finance_position_id,
-    ).exclude(email="") | _active_users_in_groups(["SystemAdmin"])
+    return (
+        User.objects.filter(
+            is_active=True,
+            employee_profile__employment_status=EmployeeProfile.EmploymentStatus.ACTIVE,
+            employee_profile__department_ref_id=config.finance_department_id,
+            employee_profile__position_ref_id=config.finance_position_id,
+        )
+        .exclude(email="")
+        .distinct()
+    )
 
 
 def send_pending_approval_email(
@@ -117,20 +130,40 @@ def send_pending_approval_email(
     from in_app_notifications.i18n import status_label as status_label_text
 
     action_url = _build_action_url(action_path)
-    subject = f"{request_type} pending approval - #{request_id}"
     # Never show a raw workflow code, and keep the Arabic half fully Arabic.
     status = status_label_text(status_label)
     status_label = status["en"]
     status_label_ar = status_label_ar or status["ar"]
     request_type_ar = request_type_ar or request_type_label(request_type)["ar"]
-    status_value = status_label if status_label_ar == status_label else f"{status_label} / {status_label_ar}"
 
-    message = f"A new {request_type} request from {requester_name} (#{request_id}) is pending your review."
-    message_ar = f"{request_type_ar} جديد من {requester_name} (رقم {request_id}) بانتظار مراجعتك."
+    hr_completion = request_type == "Leave Request" and status_label == "Pending HR Completion"
+    if hr_completion:
+        subject = f"Leave request awaiting HR completion - #{request_id}"
+        title = "Leave request awaiting HR completion"
+        title_ar = "طلب إجازة بانتظار استكمال الموارد البشرية"
+        message = (
+            f"{requester_name}'s leave request (#{request_id}) is awaiting HR completion. "
+            "Check whether a visa PDF is required, upload it when needed, then complete your review."
+        )
+        message_ar = (
+            f"طلب إجازة {requester_name} (رقم {request_id}) بانتظار استكمال الموارد البشرية. "
+            "تحقق مما إذا كانت وثيقة التأشيرة مطلوبة، ثم ارفعها عند الحاجة وأكمل المراجعة."
+        )
+        action_text = "Complete HR Review"
+        action_text_ar = "استكمال مراجعة الموارد البشرية"
+    else:
+        subject = f"{request_type} pending approval - #{request_id}"
+        title = f"{request_type} requires your review"
+        title_ar = f"{request_type_ar} بانتظار مراجعتك"
+        noun = request_type if request_type.lower().endswith("request") else f"{request_type} request"
+        message = f"A new {noun} from {requester_name} (#{request_id}) is pending your review."
+        message_ar = f"{request_type_ar} جديد من {requester_name} (رقم {request_id}) بانتظار مراجعتك."
+        action_text = "Review Request"
+        action_text_ar = "مراجعة الطلب"
     rows = [
         {"label": "Request ID", "label_ar": "رقم الطلب", "value": f"#{request_id}"},
         {"label": "Requested by", "label_ar": "مقدّم الطلب", "value": requester_name},
-        {"label": "Status", "label_ar": "الحالة", "value": status_value},
+        {"label": "Status", "label_ar": "الحالة", "value": status_label, "value_ar": status_label_ar},
     ]
     for item in details or []:
         rows.append({"label": "Detail", "label_ar": "تفصيل", "value": str(item)})
@@ -139,8 +172,8 @@ def send_pending_approval_email(
         "contact_email": getattr(settings, "EMAIL_CONTACT_EMAIL", "hr@fficontracting.com"),
         "contact_name": getattr(settings, "EMAIL_CONTACT_NAME", "") or "",
         "contact_phone": getattr(settings, "EMAIL_CONTACT_PHONE", "") or "",
-        "title": f"{request_type} requires your review",
-        "title_ar": f"{request_type_ar} بانتظار مراجعتك",
+        "title": title,
+        "title_ar": title_ar,
         "employee_name": approver_name,
         "message": message,
         "message_ar": message_ar,
@@ -149,23 +182,25 @@ def send_pending_approval_email(
         "rows": rows,
         "details_title": f"{request_type} details",
         "details_title_ar": "تفاصيل الطلب",
-        "status_label": "Action required",
-        "status_label_ar": "إجراء مطلوب",
+        "status_label": status_label if hr_completion else "Action required",
+        "status_label_ar": status_label_ar if hr_completion else "إجراء مطلوب",
         "status_color": "#C2410C",
         "action_url": action_url,
-        "action_text": "Review Request",
-        "action_text_ar": "مراجعة الطلب",
+        "action_text": action_text,
+        "action_text_ar": action_text_ar,
     }
 
     html = render_to_string("emails/generic_notification.html", context)
     details_list = [str(item) for item in (details or [])]
     details_text = "\n".join(f"- {item}" for item in details_list) if details_list else "-"
+    completion_instruction = f"{message}\n" if hr_completion else ""
 
     text = (
-        f"{request_type} requires your review.\n"
+        f"{title}.\n"
         f"Request ID: {request_id}\n"
         f"Requested by: {requester_name}\n"
         f"Status: {status_label}\n"
+        f"{completion_instruction}"
         f"{details_text}\n"
     )
     service = EmailService()

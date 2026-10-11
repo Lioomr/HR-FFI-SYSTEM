@@ -1,5 +1,11 @@
 import "@testing-library/jest-dom";
 import { vi } from "vitest";
+import { translations } from "../i18n/translations";
+import { registerTranslations } from "../i18n/translationLoader";
+
+// Production loads one language lazily; tests render synchronously with both.
+registerTranslations("en", translations.en);
+registerTranslations("ar", translations.ar);
 
 // ── jsdom polyfills required by Ant Design components ────────────────────────
 // antd's responsive observer, waves, and some overlays rely on browser APIs

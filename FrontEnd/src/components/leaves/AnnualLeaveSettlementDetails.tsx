@@ -1,3 +1,4 @@
+import { shortEmployeeName } from "../../utils/employeeName";
 import { Descriptions, Tag } from "antd";
 
 import { useI18n } from "../../i18n/useI18n";
@@ -39,7 +40,8 @@ export default function AnnualLeaveSettlementDetails({
                 key: "employee",
                 label: t("annualPayment.employee"),
                 children:
-                  request.employee_name || `#${request.employee_id ?? "—"}`,
+                  shortEmployeeName(request.employee_name) ||
+                  `#${request.employee_id ?? "—"}`,
                 span: 2,
               },
             ]

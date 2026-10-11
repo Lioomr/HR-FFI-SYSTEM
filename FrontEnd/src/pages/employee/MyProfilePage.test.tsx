@@ -1,5 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 
 // Mocked at the HTTP boundary so the employee route's request URLs are visible.
@@ -48,6 +54,7 @@ const envelope = (data: unknown) => ({ data: { status: "success", data } });
 
 beforeEach(() => {
   get.mockReset();
+  window.localStorage.clear();
   useI18nStore.getState().setLanguage("en");
   useAuthStore.setState({
     isAuthenticated: true,
@@ -211,43 +218,179 @@ describe("MyProfilePage profile change requests", () => {
     );
   });
 
-  it("shows each field's outcome and the HR reason after a partial decision", async () => {
+  const DAY = 24 * 60 * 60 * 1000;
+  const daysAgo = (days: number) =>
+    new Date(Date.now() - days * DAY).toISOString();
+  const partiallyApproved = (overrides: Record<string, unknown> = {}) =>
+    request({
+      status: "PARTIALLY_APPROVED",
+      decided_at: daysAgo(2),
+      decision_note: "Mobile could not be verified",
+      items: [
+        {
+          field: "passport_no",
+          old: "A1234567",
+          new: "B7654321",
+          source: "ocr",
+          decision: "approved",
+          note: "",
+        },
+        {
+          field: "mobile",
+          old: "0500000000",
+          new: "0511111111",
+          source: "manual",
+          decision: "rejected",
+          note: "Number is not registered to you",
+        },
+      ],
+      ...overrides,
+    });
+
+  it("shows a recent decision as a one-line banner with details on demand", async () => {
     withRequests([
       request({ id: 3, status: "CANCELLED", submitted_at: "2026-01-01" }),
-      request({
-        status: "PARTIALLY_APPROVED",
-        items: [
-          {
-            field: "passport_no",
-            old: "A1234567",
-            new: "B7654321",
-            source: "ocr",
-            decision: "approved",
-            note: "",
-          },
-          {
-            field: "mobile",
-            old: "0500000000",
-            new: "0511111111",
-            source: "manual",
-            decision: "rejected",
-            note: "Number is not registered to you",
-          },
-        ],
-      }),
+      partiallyApproved(),
     ]);
     renderPage();
     expect(
       await screen.findByText("HR approved some of your changes."),
     ).toBeInTheDocument();
-    expect(screen.getByText("Approved")).toBeInTheDocument();
-    expect(screen.getByText("Rejected")).toBeInTheDocument();
-    expect(
-      screen.getByText(/Number is not registered to you/),
-    ).toBeInTheDocument();
+    // Collapsed: no per-field list and no cancel on the page itself.
+    expect(screen.queryByText("0511111111")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Cancel request" })).toBeNull();
     expect(
       screen.getByRole("button", { name: /Request a change/ }),
     ).toBeEnabled();
+
+    fireEvent.click(screen.getByRole("button", { name: "View details" }));
+    const dialog = await screen.findByRole("dialog");
+    expect(
+      within(dialog).getByText("Change request details"),
+    ).toBeInTheDocument();
+    expect(within(dialog).getByText("Approved")).toBeInTheDocument();
+    expect(within(dialog).getByText("Rejected")).toBeInTheDocument();
+    expect(within(dialog).getByText("0511111111")).toBeInTheDocument();
+    expect(
+      within(dialog).getByText(/Number is not registered to you/),
+    ).toBeInTheDocument();
+    expect(
+      within(dialog).getByText("Mobile could not be verified"),
+    ).toBeInTheDocument();
+  });
+
+  it("hides a decision older than the display window", async () => {
+    withRequests([partiallyApproved({ decided_at: daysAgo(8) })]);
+    renderPage();
+    await screen.findByRole("button", { name: /Change request history/ });
+    await waitFor(() =>
+      expect(get).toHaveBeenCalledWith(CHANGE_URL, expect.anything()),
+    );
+    expect(screen.queryByText("HR approved some of your changes.")).toBeNull();
+    expect(screen.queryByText("My change request")).toBeNull();
+  });
+
+  it("remembers a dismissed decision across visits", async () => {
+    withRequests([partiallyApproved()]);
+    const { unmount } = renderPage();
+    await screen.findByText("HR approved some of your changes.");
+
+    fireEvent.click(screen.getByRole("button", { name: "Dismiss" }));
+    await waitFor(() =>
+      expect(
+        screen.queryByText("HR approved some of your changes."),
+      ).toBeNull(),
+    );
+    expect(
+      JSON.parse(
+        window.localStorage.getItem("ffi_profile_change_dismissed") || "[]",
+      ),
+    ).toEqual([5]);
+
+    unmount();
+    renderPage();
+    await screen.findByRole("button", { name: /Change request history/ });
+    await waitFor(() =>
+      expect(
+        get.mock.calls.filter((call) => call[0] === CHANGE_URL),
+      ).toHaveLength(2),
+    );
+    expect(screen.queryByText("HR approved some of your changes.")).toBeNull();
+  });
+
+  it("still works when browser storage is unavailable", async () => {
+    const getItem = vi
+      .spyOn(Storage.prototype, "getItem")
+      .mockImplementation(() => {
+        throw new Error("blocked");
+      });
+    const setItem = vi
+      .spyOn(Storage.prototype, "setItem")
+      .mockImplementation(() => {
+        throw new Error("blocked");
+      });
+    try {
+      withRequests([partiallyApproved()]);
+      renderPage();
+      await screen.findByText("HR approved some of your changes.");
+      fireEvent.click(screen.getByRole("button", { name: "Dismiss" }));
+      await waitFor(() =>
+        expect(
+          screen.queryByText("HR approved some of your changes."),
+        ).toBeNull(),
+      );
+    } finally {
+      getItem.mockRestore();
+      setItem.mockRestore();
+    }
+  });
+
+  it("lists every request newest first in the history drawer", async () => {
+    withRequests([
+      request({
+        id: 3,
+        reference_no: "PCR-0003",
+        status: "CANCELLED",
+        submitted_at: "2026-01-01T08:00:00Z",
+      }),
+      partiallyApproved({
+        id: 4,
+        reference_no: "PCR-0004",
+        submitted_at: "2026-03-01T08:00:00Z",
+        decided_at: "2026-03-02T08:00:00Z",
+      }),
+      request({
+        id: 2,
+        reference_no: "PCR-0002",
+        status: "REJECTED",
+        submitted_at: "2025-12-01T08:00:00Z",
+        decided_at: "2025-12-02T08:00:00Z",
+      }),
+    ]);
+    renderPage();
+    fireEvent.click(
+      await screen.findByRole("button", { name: /Change request history/ }),
+    );
+    const drawer = await screen.findByRole("dialog");
+    expect(within(drawer).getByText("My change requests")).toBeVisible();
+    const references = within(drawer)
+      .getAllByText(/^PCR-000\d$/)
+      .map((node) => node.textContent);
+    expect(references).toEqual(["PCR-0004", "PCR-0003", "PCR-0002"]);
+    expect(within(drawer).getByText("Partially approved")).toBeInTheDocument();
+    expect(within(drawer).getByText("Cancelled")).toBeInTheDocument();
+    expect(within(drawer).getAllByText("B7654321").length).toBe(3);
+  });
+
+  it("shows an empty history when the employee never sent a request", async () => {
+    withRequests([]);
+    renderPage();
+    fireEvent.click(
+      await screen.findByRole("button", { name: /Change request history/ }),
+    );
+    expect(
+      await screen.findByText("No change requests yet"),
+    ).toBeInTheDocument();
   });
 
   it("opens the change form from the passport card with current values", async () => {

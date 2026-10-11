@@ -17,7 +17,14 @@ from core.services import get_ceo_approver_users
 from core.services.workflow_engine import begin_recorded_transition, record_workflow_transition
 from employees.services.archiving import retire_biotime_mapping_and_archive_profile
 from in_app_notifications.dispatcher import dispatch_notification_channels
-from in_app_notifications.i18n import decision_type_label, notification_text, pair, profile_name, render
+from in_app_notifications.i18n import (
+    contract_failure_reason,
+    decision_type_label,
+    notification_text,
+    pair,
+    profile_name,
+    render,
+)
 from in_app_notifications.i18n import status_label as status_label_text
 from in_app_notifications.models import Notification
 
@@ -425,7 +432,7 @@ def notify_manual_resolution(decision: ContractDecision) -> int | None:
     text = notification_text(
         "contract.manual_resolution",
         employee_name=profile_name(profile),
-        reason=decision.failure_reason,
+        reason=contract_failure_reason(decision.failure_reason),
     )
     recipients = {}
     for recipient in _company_hr_recipients(decision.company_id):

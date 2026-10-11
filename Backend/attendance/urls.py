@@ -9,7 +9,6 @@ from .biotime_views import (
     BioTimeEmployeeMapViewSet,
 )
 from .views import (
-    AttendanceCorrectionRequestViewSet,
     AttendanceNoticeViewSet,
     AttendanceRecordViewSet,
     AttendanceViolationViewSet,
@@ -26,11 +25,6 @@ router = DefaultRouter()
 router.register(r"attendance/violations", AttendanceViolationViewSet, basename="attendance-violations")
 router.register(r"attendance/notices", AttendanceNoticeViewSet, basename="attendance-notices")
 router.register(r"attendance", AttendanceRecordViewSet, basename="attendance")
-router.register(
-    r"attendance-correction-requests",
-    AttendanceCorrectionRequestViewSet,
-    basename="attendance-correction-requests",
-)
 router.register(r"manager/attendance", ManagerAttendanceViewSet, basename="manager-attendance")
 router.register(r"ceo/attendance", CEOAttendanceViewSet, basename="ceo-attendance")
 router.register(r"biotime-mappings", BioTimeEmployeeMapViewSet, basename="biotime-mappings")

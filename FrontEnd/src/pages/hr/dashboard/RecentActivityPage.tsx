@@ -219,6 +219,7 @@ export default function RecentActivityPage() {
               border: 0,
               fontWeight: 600,
               fontSize: 13,
+              whiteSpace: "normal",
             }}
           >
             {display}
@@ -229,7 +230,7 @@ export default function RecentActivityPage() {
   ];
 
   return (
-    <div style={{ maxWidth: 1600, margin: "0 auto", paddingBottom: 40 }}>
+    <div style={{ width: "100%", minWidth: 0, paddingBottom: 40 }}>
       <div style={{ marginBottom: 24 }}>
         <Title level={3} style={{ margin: 0 }}>
           {t("hr.dashboard.recentActivity", "Recent Activity")}
@@ -312,7 +313,8 @@ export default function RecentActivityPage() {
             showTotal: (total) =>
               t("common.totalItems", { total: total.toString() }),
           }}
-          scroll={{ x: "max-content" }}
+          tableLayout="fixed"
+          scroll={{ x: 1000 }}
         />
       </Card>
     </div>

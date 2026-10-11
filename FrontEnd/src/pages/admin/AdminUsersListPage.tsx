@@ -456,6 +456,7 @@ export default function AdminUsersListPage() {
 
             <Tooltip title={t("admin.users.resetPassword")}>
               <Button
+                aria-label={t("admin.users.resetPassword")}
                 icon={<KeyOutlined />}
                 size="small"
                 style={{ borderRadius: 8 }}

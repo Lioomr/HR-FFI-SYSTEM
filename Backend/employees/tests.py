@@ -14,7 +14,8 @@ from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 from openpyxl import Workbook, load_workbook
 from rest_framework import status
-from rest_framework.test import APIClient
+from rest_framework.request import Request
+from rest_framework.test import APIClient, APIRequestFactory
 
 from attendance.models import BioTimeEmployeeMap
 from audit.models import AuditLog
@@ -29,6 +30,7 @@ from .serializers import (
     EmployeeProfileReadSerializer,
     EmployeeProfileWriteSerializer,
 )
+from .views import EmployeeProfileViewSet
 
 User = get_user_model()
 
@@ -397,6 +399,43 @@ class EmployeeProfileTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["data"]["employee_id"], "EMP-TEST-ME")
 
+    def test_employee_me_uses_account_link_not_a_matching_display_name(self):
+        self.employee_user.full_name = "Account Name That Differs"
+        self.employee_user.save(update_fields=["full_name"])
+        own_profile = EmployeeProfile.objects.create(
+            user=self.employee_user,
+            company=self.company,
+            employee_id="EMP-OWN-LINK",
+            full_name="Employee Record Name",
+        )
+        EmployeeProfile.objects.create(
+            user=self.employee_user_2,
+            company=self.company,
+            employee_id="EMP-OTHER-LINK",
+            full_name="Account Name That Differs",
+        )
+        self.client.force_authenticate(user=self.employee_user)
+
+        response = self.client.get("/api/employees/me/")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["data"]["id"], own_profile.id)
+        self.assertEqual(response.data["data"]["user_id"], self.employee_user.id)
+        self.assertEqual(response.data["data"]["employee_id"], "EMP-OWN-LINK")
+
+    def test_employee_current_requests_uses_the_authenticated_profile(self):
+        EmployeeProfile.objects.create(
+            user=self.employee_user,
+            company=self.company,
+            employee_id="EMP-CURRENT-REQUESTS",
+        )
+        self.client.force_authenticate(user=self.employee_user)
+
+        response = self.client.get("/api/employees/me/current-requests/")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["data"], {"requests": []})
+
     def test_hr_me_endpoint_includes_own_leave_balances(self):
         EmployeeProfile.objects.create(
             user=self.hr_user,
@@ -755,6 +794,43 @@ class EmployeeProfileTests(TestCase):
         self.assertEqual(len(results), 2)
         self.assertEqual(results[0]["full_name"], "Newer Saudi Employee")
         self.assertEqual(results[1]["full_name"], "Older Saudi Employee")
+
+    def test_list_filters_by_displayed_position_and_manager_name(self):
+        manager_user = User.objects.create_user(email="filter-manager@ffi.com", password="password")
+        manager = EmployeeProfile.objects.create(
+            user=manager_user,
+            company=self.company,
+            employee_id="EMP-FILTER-MANAGER",
+            full_name="Filter Manager",
+            full_name_en="Filter Manager",
+            department_ref=self.dept,
+            position_ref=self.pos_senior,
+            department=self.dept.name,
+            job_title=self.pos_senior.name,
+        )
+        EmployeeProfile.objects.create(
+            company=self.company,
+            employee_id="EMP-FILTER-REPORT",
+            full_name="Filter Report",
+            department_ref=self.dept,
+            position_ref=self.pos,
+            department=self.dept.name,
+            job_title=self.pos.name,
+            manager_profile=manager,
+            manager=manager_user,
+        )
+
+        request = Request(
+            APIRequestFactory().get(
+                "/employees",
+                {"position": "Developer", "manager": "Filter Manager"},
+            )
+        )
+        view = EmployeeProfileViewSet()
+        view.request = request
+        results = view._apply_filters(EmployeeProfile.objects.all())
+
+        self.assertEqual(list(results.values_list("employee_id", flat=True)), ["EMP-FILTER-REPORT"])
 
     def test_employee_role_direct_manager_can_access_manager_team(self):
         manager_profile = EmployeeProfile.objects.create(

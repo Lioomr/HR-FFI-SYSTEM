@@ -48,7 +48,8 @@ def _send_request_submission_email_provider(
     status_label_ar = status_label_ar or status["ar"]
     request_type_ar = request_type_ar or request_type_label(request_type)["ar"]
 
-    message = f"Your {request_type} request (#{request_id}) has been submitted and is now {status_label}."
+    noun = request_type if request_type.lower().endswith("request") else f"{request_type} request"
+    message = f"Your {noun} (#{request_id}) has been submitted and is now {status_label}."
     message_ar = f"تم تقديم {request_type_ar} (رقم {request_id}) بنجاح وحالته الآن: {status_label_ar}."
     context = {
         "logo_url": _resolve_logo_source(),

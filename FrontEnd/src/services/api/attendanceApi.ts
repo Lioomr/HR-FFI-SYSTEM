@@ -129,15 +129,6 @@ export async function getAttendanceViolations(
   return data;
 }
 
-export async function getAttendanceViolation(
-  id: number | string,
-): Promise<ApiResponse<AttendanceLateViolation>> {
-  const { data } = await api.get<ApiResponse<AttendanceLateViolation>>(
-    `/api/attendance/violations/${id}/`,
-  );
-  return data;
-}
-
 /** Query string for the notice list, built like the violation list's. */
 export function toNoticeQueryParams(
   filters: AttendanceNoticeFilters = {},
@@ -170,15 +161,6 @@ export async function getAttendanceNotices(
   >("/api/attendance/notices/", {
     params: toNoticeQueryParams(filters),
   });
-  return data;
-}
-
-export async function getAttendanceNotice(
-  id: number | string,
-): Promise<ApiResponse<AttendanceLateNotice>> {
-  const { data } = await api.get<ApiResponse<AttendanceLateNotice>>(
-    `/api/attendance/notices/${id}/`,
-  );
   return data;
 }
 

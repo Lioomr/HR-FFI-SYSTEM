@@ -36,6 +36,7 @@ from core.services import (
     sync_leave_obligations,
     waive_open_blocking_obligations,
 )
+from core.services.stage_coverage import MANAGER_OWN_SOURCES
 from core.services.request_obligations import close_leave_obligations, is_business_trip_leave
 from core.services.workflow_engine import begin_recorded_transition, record_workflow_transition
 from employees.document_extraction import extract_visa_fields
@@ -44,6 +45,7 @@ from employees.services.manager_relationships import get_valid_manager_user, man
 from in_app_notifications.dispatcher import dispatch_notification_channels
 from in_app_notifications.models import Notification
 
+from .document_integrity import on_leave_stage_approved
 from .models import LeaveRequest
 from .notifications import notify_delegation_assigned, notify_leave_approved, notify_leave_rejected
 from .utils import resolve_employee_profile
@@ -64,7 +66,7 @@ EMPLOYEE_REQUESTS_PATH = "/employee/leave/requests"
 DELEGATE_ASSIGNABLE_STATUSES = frozenset(
     {Status.SUBMITTED, Status.PENDING_DELEGATE, Status.PENDING_MANAGER, Status.PENDING_HR, Status.PENDING_CEO}
 )
-MANAGER_DECIDABLE_STATUSES = frozenset({Status.SUBMITTED, Status.PENDING_MANAGER})
+MANAGER_DECIDABLE_STATUSES =frozenset({Status.SUBMITTED, Status.PENDING_MANAGER})
 HR_APPROVABLE_STATUSES = frozenset({Status.SUBMITTED, Status.PENDING_HR})
 # HR may also reject a request that is still waiting on the manager.
 HR_REJECTABLE_STATUSES = frozenset({Status.SUBMITTED, Status.PENDING_HR, Status.PENDING_MANAGER})
@@ -104,7 +106,7 @@ SELF_DECISION_MESSAGE = "Self approval is not allowed."
 OBLIGATIONS_BLOCKING_MESSAGE = "Business Trip obligations must be resolved or waived by CEO before approval."
 NOT_AWAITING_HR_COMPLETION_MESSAGE = "Request is not waiting for HR completion."
 PROFILE_NOT_FOUND_MESSAGE = "Employee profile not found."
-VISA_REQUIRED_MESSAGE = "visa_document is required for non-Saudi employees who will travel."
+VISA_REQUIRED_MESSAGE = "visa_document is required when the employee selected that a visa is needed."
 CONTACT_HR_TO_CANCEL_MESSAGE = "Contact HR to cancel this leave request."
 SELF_CANCELLATION_MESSAGE = "Another HR member must cancel your own leave request."
 NOT_CANCELLABLE_MESSAGE = "Rejected or cancelled requests cannot be cancelled."
@@ -249,18 +251,141 @@ def status_after_delegate_approval(instance: LeaveRequest) -> str:
     return instance.delegate_return_status or first_approval_status(instance.employee, leave_profile(instance))
 
 
-def status_after_manager_approval(instance: LeaveRequest) -> str:
-    return status_after_manager_stage(instance.employee)
+def _is_ceo_stage_approver(user) -> bool:
+    """A real CEO approver. SystemAdmin only views; it never decides the CEO stage."""
+
+    from core.permissions import CEO_APPROVER_DEPARTMENT_ID
+    from employees.models import EmployeeProfile
+
+    if not user or not getattr(user, "is_active", False):
+        return False
+    if user.groups.filter(name="CEO").exists():
+        return True
+    profile = getattr(user, "employee_profile", None)
+    return bool(
+        profile
+        and profile.employment_status == EmployeeProfile.EmploymentStatus.ACTIVE
+        and profile.department_ref_id == CEO_APPROVER_DEPARTMENT_ID
+    )
 
 
-def status_after_hr_approval(instance: LeaveRequest) -> str:
-    """The CEO stage is required for every leave request."""
+def stages_satisfied_by_manager(instance: LeaveRequest, actor=None, actor_source: str | None = None) -> tuple[str, ...]:
+    """Later stages the line manager's own approval already covers, in route order.
 
+    A manager who is also an HR manager has done the HR review, and one who is
+    also a CEO approver has done the CEO review, so the request is not sent back
+    to them. Only the employee's real manager counts (direct or cross-company
+    assignment): a delegate or SystemAdmin deciding in their place does not. An
+    HR manager's own leave is never cleared at the HR stage, and Business Trip
+    leave still needs the CEO stage for its obligations check.
+    """
+
+    actor = actor or instance.manager_decision_by
+    if actor is None or not instance.manager_decision_at:
+        return ()
+    actor_source = actor_source or manager_actor_source(instance, actor)
+    if actor_source not in MANAGER_OWN_SOURCES:
+        return ()
+
+    satisfied = []
+    if is_hr_manager(actor) and not is_hr_manager_origin_request(instance):
+        satisfied.append("hr")
+    if _is_ceo_stage_approver(actor) and not is_business_trip_leave(instance):
+        satisfied.append("ceo")
+    return tuple(satisfied)
+
+
+def status_after_manager_approval(instance: LeaveRequest, satisfied: tuple[str, ...] = ()) -> str:
+    """HR still reviews unless the manager is an HR manager; the CEO stage follows the same way.
+
+    An HR manager's own leave has no HR stage, so only the CEO stage can be covered.
+    """
+
+    hr_done = "hr" in satisfied or is_hr_manager_origin_request(instance)
+    if not hr_done:
+        return Status.PENDING_HR
+    if "ceo" in satisfied:
+        return status_after_ceo_approval(instance)
     return Status.PENDING_CEO
 
 
+def status_after_hr_approval(instance: LeaveRequest) -> str:
+    """The CEO stage is required for every leave request, unless the line manager already did it."""
+
+    if "ceo" in stages_satisfied_by_manager(instance):
+        return status_after_ceo_approval(instance)
+    return Status.PENDING_CEO
+
+
+_COVERED_STAGE_FIELDS = {
+    "hr": ("decided_by", "decided_at"),
+    "ceo": ("ceo_decision_by", "ceo_decision_at"),
+}
+
+
+def _covered_stages(locked: LeaveRequest, satisfied: tuple[str, ...]) -> list[str]:
+    """Stages the manager covered that the request has now actually passed."""
+
+    covered = [role for role in satisfied if role == "hr"]
+    if "ceo" in satisfied and locked.status in {Status.APPROVED, Status.PENDING_HR_COMPLETION}:
+        covered.append("ceo")
+    return covered
+
+
+def _apply_covered_stage_fields(locked: LeaveRequest, covered: list[str], actor, at) -> None:
+    for role in covered:
+        by_field, at_field = _COVERED_STAGE_FIELDS[role]
+        setattr(locked, by_field, actor)
+        setattr(locked, at_field, at)
+
+
+def _covered_stage_fields(covered: list[str]) -> list[str]:
+    return [field for role in covered for field in _COVERED_STAGE_FIELDS[role]]
+
+
+def _covered_ceo_stage(locked: LeaveRequest) -> list[str]:
+    """After HR's step: ``["ceo"]`` when the request skipped the CEO stage because the manager did it."""
+
+    if locked.status in {Status.APPROVED, Status.PENDING_HR_COMPLETION}:
+        return ["ceo"]
+    return []
+
+
+def _record_covered_ceo_stage(locked: LeaveRequest, start, covered: list[str]) -> None:
+    for role in covered:
+        _record_manager_covered_stage(
+            locked, start, role, actor=locked.manager_decision_by, at=locked.ceo_decision_at, source="manager"
+        )
+
+
+_SIGNING_ROLES = {"manager": "line_manager"}
+
+
+def _record_manager_covered_stage(
+    locked: LeaveRequest, start, role: str, *, actor, at, source: str, by: str = "manager"
+) -> None:
+    """Record ``role``'s stage as completed by the line manager, in history and document signing.
+
+    ``by`` names the decision that covered it: the manager's own, or the alternative
+    employee's when that person is also the manager.
+    """
+
+    from core.services.workflow_engine import TransitionStart
+
+    covered = TransitionStart(start.workflow_id, "in_review", role, role, None)
+    record_workflow_transition(
+        locked,
+        covered,
+        action=Action.APPROVE,
+        actor=actor,
+        approver_role=role,
+        metadata={"auto_satisfied_by": by, "actor_source": source},
+    )
+    on_leave_stage_approved(locked, role=_SIGNING_ROLES.get(role, role), actor=actor, at=at)
+
+
 def status_after_ceo_approval(instance: LeaveRequest) -> str:
-    """Only non-Saudi travellers need HR to record a visa; every other CEO approval is final."""
+    """Non-Saudi travellers need HR review; every other CEO approval is final."""
 
     if instance.requires_hr_completion():
         return Status.PENDING_HR_COMPLETION
@@ -283,6 +408,7 @@ def record_leave_submission(instance: LeaveRequest, *, actor) -> None:
     record_workflow_transition(
         instance, start, action=Action.SUBMIT, actor=actor, note=instance.reason or "", approver_role=""
     )
+    on_leave_stage_approved(instance, role="employee", actor=instance.employee or actor, at=instance.created_at)
 
 
 _DELEGATE_DECISION_FIELDS = [
@@ -375,13 +501,48 @@ def apply_delegate_approval(instance: LeaveRequest, *, actor, note: str = "") ->
 
         from_status = locked.status
         start = begin_recorded_transition(locked, actor=actor)
-        locked.status = status_after_delegate_approval(locked)
+        next_status = status_after_delegate_approval(locked)
         locked.delegate_return_status = ""
         locked.delegate_decision_by = actor
         locked.delegate_decision_at = timezone.now()
         locked.delegate_decision_note = note
-        locked.save(update_fields=_DELEGATE_DECISION_FIELDS)
+
+        # An alternative employee who is also the employee's real manager has done the
+        # manager review too, so the request is not sent back to them for it.
+        manager_source = None
+        if next_status == Status.PENDING_MANAGER:
+            source = manager_actor_source(locked, actor)
+            if source in MANAGER_OWN_SOURCES:
+                manager_source = source
+        covered: list[str] = []
+        satisfied: tuple[str, ...] = ()
+        if manager_source:
+            locked.manager_decision_by = actor
+            locked.manager_decision_at = locked.delegate_decision_at
+            locked.manager_decision_note = note
+            satisfied = stages_satisfied_by_manager(locked, actor, manager_source)
+            next_status = status_after_manager_approval(locked, satisfied)
+            covered = _covered_stages(locked, satisfied)
+            _apply_covered_stage_fields(locked, covered, actor, locked.manager_decision_at)
+        locked.status = next_status
+
+        extra_fields = _MANAGER_DECISION_FIELDS if manager_source else []
+        locked.save(
+            update_fields=list(dict.fromkeys([*_DELEGATE_DECISION_FIELDS, *extra_fields, *_covered_stage_fields(covered)]))
+        )
         record_workflow_transition(locked, start, action=Action.APPROVE, actor=actor, note=note)
+        on_leave_stage_approved(locked, role="alternative_employee", actor=actor, at=locked.delegate_decision_at)
+        if manager_source:
+            for role in ["manager", *covered]:
+                _record_manager_covered_stage(
+                    locked,
+                    start,
+                    role,
+                    actor=actor,
+                    at=locked.delegate_decision_at,
+                    source=manager_source,
+                    by="alternative_employee" if role == "manager" else "manager",
+                )
     return Transition(locked, from_status)
 
 
@@ -429,11 +590,14 @@ def apply_manager_approval(instance: LeaveRequest, *, actor, note: str = "") -> 
 
         from_status = locked.status
         start = begin_recorded_transition(locked, actor=actor)
-        locked.status = status_after_manager_approval(locked)
         locked.manager_decision_by = actor
         locked.manager_decision_at = timezone.now()
         locked.manager_decision_note = note
-        locked.save(update_fields=_MANAGER_DECISION_FIELDS)
+        satisfied = stages_satisfied_by_manager(locked, actor, actor_source)
+        locked.status = status_after_manager_approval(locked, satisfied)
+        covered = _covered_stages(locked, satisfied)
+        _apply_covered_stage_fields(locked, covered, actor, locked.manager_decision_at)
+        locked.save(update_fields=_MANAGER_DECISION_FIELDS + _covered_stage_fields(covered))
         record_workflow_transition(
             locked,
             start,
@@ -443,6 +607,11 @@ def apply_manager_approval(instance: LeaveRequest, *, actor, note: str = "") -> 
             approver_role="manager",
             metadata={"actor_source": actor_source},
         )
+        on_leave_stage_approved(locked, role="line_manager", actor=actor, at=locked.manager_decision_at)
+        for role in covered:
+            _record_manager_covered_stage(
+                locked, start, role, actor=actor, at=locked.manager_decision_at, source=actor_source
+            )
     return Transition(locked, from_status, actor_source)
 
 
@@ -496,8 +665,12 @@ def apply_hr_approval(instance: LeaveRequest, *, actor, note: str = "") -> Trans
         locked.decided_at = timezone.now()
         locked.hr_decision_note = note
         locked.status = status_after_hr_approval(locked)
-        locked.save(update_fields=_HR_DECISION_FIELDS)
+        covered = _covered_ceo_stage(locked)
+        _apply_covered_stage_fields(locked, covered, locked.manager_decision_by, locked.decided_at)
+        locked.save(update_fields=_HR_DECISION_FIELDS + _covered_stage_fields(covered))
         record_workflow_transition(locked, start, action=Action.APPROVE, actor=actor, note=note, approver_role="hr")
+        on_leave_stage_approved(locked, role="hr", actor=actor, at=locked.decided_at)
+        _record_covered_ceo_stage(locked, start, covered)
     return Transition(locked, from_status)
 
 
@@ -541,11 +714,15 @@ def apply_ceo_referral(instance: LeaveRequest, *, actor, note: str = "") -> Tran
         start = begin_recorded_transition(locked, actor=actor)
         if note:
             locked.hr_decision_note = note
-        locked.status = Status.PENDING_CEO
+        locked.status = status_after_hr_approval(locked)
         locked.decided_by = actor
         locked.decided_at = timezone.now()
-        locked.save(update_fields=_HR_DECISION_FIELDS)
+        covered = _covered_ceo_stage(locked)
+        _apply_covered_stage_fields(locked, covered, locked.manager_decision_by, locked.decided_at)
+        locked.save(update_fields=_HR_DECISION_FIELDS + _covered_stage_fields(covered))
         record_workflow_transition(locked, start, action=Action.ADVANCE, actor=actor, note=note, approver_role="hr")
+        on_leave_stage_approved(locked, role="hr", actor=actor, at=locked.decided_at)
+        _record_covered_ceo_stage(locked, start, covered)
     return Transition(locked, from_status)
 
 
@@ -603,6 +780,7 @@ def apply_ceo_approval(
                 metadata={"obligations_waived": True} if blocking else None,
             )
             sync_leave_obligations(locked, actor=actor)
+            on_leave_stage_approved(locked, role="ceo", actor=actor, at=locked.ceo_decision_at)
 
     if blocked_summary is not None:
         raise LeaveTransitionError(
@@ -647,7 +825,7 @@ def apply_hr_completion(
 ) -> HRCompletion:
     """Finish a CEO-approved leave at the HR completion stage and approve it.
 
-    A non-Saudi employee who will travel needs a visa PDF. It is stored and its
+    A visa PDF is required only when the employee selected that a visa is needed. It is stored and its
     fields extracted inside the transaction; file storage is not transactional, so
     any failure after the upload deletes the stored file before re-raising.
     ``audit_request`` is only used to audit the document upload.
@@ -666,7 +844,7 @@ def apply_hr_completion(
             profile = leave_profile(locked)
             if not profile:
                 raise LeaveTransitionError(PROFILE_NOT_FOUND_MESSAGE)
-            visa_required = locked.requires_hr_completion()
+            visa_required = locked.requires_visa_upload()
             if visa_required and not visa_file:
                 raise LeaveTransitionError(VISA_REQUIRED_MESSAGE)
 
@@ -715,6 +893,7 @@ def apply_hr_completion(
                 metadata={"visa_document_id": document.id if document else None},
             )
             sync_leave_obligations(locked, actor=actor)
+            on_leave_stage_approved(locked, role="hr_completion", actor=actor, at=locked.hr_completed_at)
     except Exception:
         if document is not None and document.file.name:
             document.file.storage.delete(document.file.name)
@@ -782,7 +961,9 @@ def _notify_ceo_of_pending_leave(instance: LeaveRequest, *, failure_event: str, 
         _log_notification_failure(failure_event, instance, "pending_status", actor_id)
 
 
-def _notify_pending_approvers(instance: LeaveRequest, *, users, action_path: str, failure_event: str, actor_id) -> None:
+def _notify_pending_approvers(
+    instance: LeaveRequest, *, users, action_path: str, failure_event: str, actor_id, extra_details=None
+) -> None:
     try:
         notify_users_for_pending_status(
             users=users,
@@ -790,7 +971,11 @@ def _notify_pending_approvers(instance: LeaveRequest, *, users, action_path: str
             request_id=instance.id,
             requester_name=leave_employee_name(instance),
             status_label=instance.status,
-            details=[f"Leave Type: {instance.leave_type.name}", f"Employee: {leave_employee_email(instance)}"],
+            details=[
+                f"Leave Type: {instance.leave_type.name}",
+                f"Employee: {leave_employee_email(instance)}",
+                *(extra_details or []),
+            ],
             action_path=action_path,
         )
     except Exception:
@@ -808,7 +993,9 @@ def notify_after_delegate_assignment(instance: LeaveRequest, *, actor_id=None) -
 
 def notify_after_delegate_approval(instance: LeaveRequest, *, actor_id=None) -> None:
     failure_event = "leave_delegate_approval_notification_failed"
-    if instance.status == Status.PENDING_CEO:
+    if _request_finished_by_covered_stages(instance):
+        notify_after_ceo_approval(instance, actor_id=actor_id)
+    elif instance.status == Status.PENDING_CEO:
         _notify_ceo_of_pending_leave(instance, failure_event=failure_event, actor_id=actor_id)
     elif instance.status == Status.PENDING_MANAGER:
         _notify_pending_approvers(
@@ -835,7 +1022,16 @@ def notify_after_delegate_rejection(instance: LeaveRequest, *, actor_id=None) ->
         _log_notification_failure("leave_delegate_rejection_notification_failed", instance, "leave_rejected", actor_id)
 
 
+def _request_finished_by_covered_stages(instance: LeaveRequest) -> bool:
+    """True when the line manager's approval also covered the CEO stage, so nobody else decides."""
+
+    return instance.status in {Status.APPROVED, Status.PENDING_HR_COMPLETION}
+
+
 def notify_after_manager_approval(instance: LeaveRequest, *, actor_id=None) -> None:
+    if _request_finished_by_covered_stages(instance):
+        notify_after_ceo_approval(instance, actor_id=actor_id)
+        return
     if instance.status == Status.PENDING_CEO:
         _notify_ceo_of_pending_leave(
             instance, failure_event="manager_leave_approval_notification_failed", actor_id=actor_id
@@ -863,6 +1059,9 @@ def notify_after_manager_rejection(instance: LeaveRequest, *, actor_id=None) -> 
 
 
 def notify_after_hr_approval(instance: LeaveRequest, *, actor_id=None) -> None:
+    if _request_finished_by_covered_stages(instance):
+        notify_after_ceo_approval(instance, actor_id=actor_id)
+        return
     if instance.status != Status.PENDING_CEO:
         return
     _notify_ceo_of_pending_leave(instance, failure_event="leave_hr_approval_notification_failed", actor_id=actor_id)
@@ -876,6 +1075,9 @@ def notify_after_hr_rejection(instance: LeaveRequest, *, actor_id=None) -> None:
 
 
 def notify_after_ceo_referral(instance: LeaveRequest, *, actor_id=None) -> None:
+    if _request_finished_by_covered_stages(instance):
+        notify_after_ceo_approval(instance, actor_id=actor_id)
+        return
     _notify_ceo_of_pending_leave(instance, failure_event="leave_ceo_referral_notification_failed", actor_id=actor_id)
 
 
@@ -887,6 +1089,7 @@ def notify_after_ceo_approval(instance: LeaveRequest, *, actor_id=None) -> None:
             action_path=HR_ACTION_PATH.format(id=instance.id),
             failure_event="ceo_leave_approval_notification_failed",
             actor_id=actor_id,
+            extra_details=[f"Visa PDF: {'Required' if instance.requires_visa_upload() else 'Not required'}"],
         )
         return
     try:

@@ -212,6 +212,9 @@ class ManualAttendanceRetiredTests(BioTimeOnlyAttendancePolicyBase):
 
 
 class AttendanceCorrectionRequestRetiredTests(BioTimeOnlyAttendancePolicyBase):
+    def assertRemoved(self, response):
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
     def _correction(self):
         return AttendanceCorrectionRequest.objects.create(
             employee_profile=self.mapped_profile,
@@ -221,20 +224,20 @@ class AttendanceCorrectionRequestRetiredTests(BioTimeOnlyAttendancePolicyBase):
             created_by=self.mapped_user,
         )
 
-    def test_create_update_and_delete_are_gone(self):
+    def test_create_update_and_delete_are_removed(self):
         correction = self._correction()
         self.client.force_authenticate(user=self.mapped_user)
 
         payload = {"date": str(self.today), "reason": "please fix"}
-        self.assertGone(
+        self.assertRemoved(
             self.client.post("/api/attendance-correction-requests/", payload, format="json", **self.headers)
         )
-        self.assertGone(
+        self.assertRemoved(
             self.client.put(
                 f"/api/attendance-correction-requests/{correction.id}/", payload, format="json", **self.headers
             )
         )
-        self.assertGone(
+        self.assertRemoved(
             self.client.patch(
                 f"/api/attendance-correction-requests/{correction.id}/",
                 {"reason": "edited"},
@@ -242,30 +245,30 @@ class AttendanceCorrectionRequestRetiredTests(BioTimeOnlyAttendancePolicyBase):
                 **self.headers,
             )
         )
-        self.assertGone(self.client.delete(f"/api/attendance-correction-requests/{correction.id}/", **self.headers))
+        self.assertRemoved(self.client.delete(f"/api/attendance-correction-requests/{correction.id}/", **self.headers))
 
         self.assertEqual(AttendanceCorrectionRequest.objects.count(), 1)
         correction.refresh_from_db()
         self.assertEqual(correction.reason, "legacy row")
 
-    def test_submit_approve_reject_and_cancel_are_gone(self):
+    def test_submit_approve_reject_and_cancel_are_removed(self):
         correction = self._correction()
 
         self.client.force_authenticate(user=self.mapped_user)
-        self.assertGone(
+        self.assertRemoved(
             self.client.post(f"/api/attendance-correction-requests/{correction.id}/submit/", **self.headers)
         )
-        self.assertGone(
+        self.assertRemoved(
             self.client.post(f"/api/attendance-correction-requests/{correction.id}/cancel/", **self.headers)
         )
 
         for approver in [self.manager_user, self.hr_user]:
             self.client.force_authenticate(user=approver)
             with self.subTest(user=approver.email):
-                self.assertGone(
+                self.assertRemoved(
                     self.client.post(f"/api/attendance-correction-requests/{correction.id}/approve/", **self.headers)
                 )
-                self.assertGone(
+                self.assertRemoved(
                     self.client.post(
                         f"/api/attendance-correction-requests/{correction.id}/reject/",
                         {"notes": "no"},

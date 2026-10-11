@@ -186,7 +186,12 @@ export default function AnnouncementsManagementPage() {
             okText={t("common.yes")}
             cancelText={t("common.no")}
           >
-            <Button type="text" danger icon={<DeleteOutlined />} />
+            <Button
+              aria-label={t("common.delete")}
+              type="text"
+              danger
+              icon={<DeleteOutlined />}
+            />
           </Popconfirm>
         </Space>
       ),
@@ -205,9 +210,9 @@ export default function AnnouncementsManagementPage() {
           gap: 12,
         }}
       >
-        <h1 style={{ fontSize: 24, margin: 0 }}>
+        <h2 style={{ fontSize: 24, margin: 0 }}>
           {t("hr.announcements.managementTitle")}
-        </h1>
+        </h2>
         <Space wrap>
           <Button
             icon={<ReloadOutlined />}

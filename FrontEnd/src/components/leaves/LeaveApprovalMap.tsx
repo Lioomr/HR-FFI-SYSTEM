@@ -1,3 +1,4 @@
+import { shortEmployeeName } from "../../utils/employeeName";
 import ApprovalFlowMap, {
   type ApprovalFlowStage,
 } from "../requests/ApprovalFlowMap";
@@ -25,11 +26,11 @@ function inferDecisionNote(request: LeaveRequest) {
 function getDelegatedEmployeeName(request: LeaveRequest) {
   const delegatedTo = request.delegated_to;
   if (!delegatedTo) return "";
-  return delegatedTo.full_name || delegatedTo.email || "";
+  return shortEmployeeName(delegatedTo.full_name) || delegatedTo.email || "";
 }
 
 function getActorDisplayName(actor?: WorkflowActor | null) {
-  return actor?.full_name || actor?.email || "";
+  return shortEmployeeName(actor?.full_name) || actor?.email || "";
 }
 
 function getWorkflowStageActorName(request: LeaveRequest, stageKey: string) {
@@ -128,6 +129,10 @@ function buildStages(
 
   const isPendingHrCompletion = request.status === "pending_hr_completion";
 
+  // A later stage (CEO) deciding means HR already passed it on; a rejection
+  // only lands on HR when HR itself recorded it, or nobody downstream did.
+  const rejectedByLaterStage = !!request.ceo_decision_note;
+
   const hrState: ApprovalFlowStage["state"] = finalCancelled
     ? request.decided_at || request.hr_decision_note || request.decision_reason
       ? "completed"
@@ -135,6 +140,7 @@ function buildStages(
         ? "upcoming"
         : "upcoming"
     : finalRejected &&
+        !rejectedByLaterStage &&
         (!!request.hr_decision_note || !request.manager_decision_note)
       ? "rejected"
       : request.status === "pending_hr"
@@ -142,6 +148,7 @@ function buildStages(
         : request.status === "pending_ceo" ||
             isPendingHrCompletion ||
             request.status === "approved" ||
+            rejectedByLaterStage ||
             Boolean(request.decided_at || request.hr_decision_note)
           ? "completed"
           : (needsDelegate && !request.delegate_decision_at) ||
@@ -163,7 +170,7 @@ function buildStages(
             ? "completed"
             : "upcoming";
 
-  // HR completion only applies to non-Saudi employees who travel.
+  // HR completion applies to non-Saudi employees who travel.
   const needsHrCompletion =
     isPendingHrCompletion || Boolean(request.requires_hr_completion_visa);
   const hrCompletionState: ApprovalFlowStage["state"] = !needsHrCompletion
@@ -259,7 +266,7 @@ function buildStages(
           : hrCompletionState === "current"
             ? t(
                 "leave.approvalMap.hrCompletionPending",
-                "Waiting for HR to upload visa and complete the request.",
+                "Waiting for HR to complete the request.",
               )
             : hrCompletionState === "completed"
               ? t("leave.approvalMap.completed")

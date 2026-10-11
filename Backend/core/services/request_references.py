@@ -16,7 +16,6 @@ REFERENCE_PREFIXES = {
     "employee_profile_change": "PC",
     "employee_deletion_request": "EA",
     "asset_return_request": "AR",
-    "attendance_correction_request": "AC",
     "contract_decision": "CD",
     "contract_rating": "CR",
     "job_offer": "JO",

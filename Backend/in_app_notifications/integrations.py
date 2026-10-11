@@ -60,14 +60,6 @@ def _company_for_request(request_type: str, request_id):
                 .values_list("employee_profile__company", flat=True)
                 .first()
             )
-        if request_type == "Attendance Correction":
-            from attendance.models import AttendanceCorrectionRequest
-
-            return (
-                AttendanceCorrectionRequest.objects.filter(pk=request_id)
-                .values_list("employee_profile__company", flat=True)
-                .first()
-            )
         if request_type in {"Employee Archive", "Employee Deletion"}:
             from employees.models import EmployeeDeletionRequest
 
@@ -99,7 +91,6 @@ _EMPLOYEE_PROFILE_FOR_REQUEST = {
     "During Shift Permission": ("permission_requests.PermissionRequest", ("employee_profile_id",)),
     "Asset Return Request": ("assets.AssetReturnRequest", ("employee_id",)),
     "Attendance Request": ("attendance.AttendanceRecord", ("employee_profile_id",)),
-    "Attendance Correction": ("attendance.AttendanceCorrectionRequest", ("employee_profile_id",)),
 }
 
 
@@ -212,6 +203,7 @@ def notify_pending_approvers(
                 whatsapp_template="pending_approval",
                 whatsapp_variables={
                     "approver_name": getattr(user, "full_name", "") or getattr(user, "email", "") or "there",
+                    "approver_name_ar": getattr(getattr(user, "employee_profile", None), "full_name_ar", "") or "",
                     "request_type": request_type,
                     "request_type_ar": request_type_text["ar"],
                     "request_id": request_id,
@@ -273,6 +265,7 @@ def notify_request_status(
         whatsapp_template="request_status_update",
         whatsapp_variables={
             "employee_name": getattr(profile, "full_name", "") or "there",
+            "employee_name_ar": getattr(profile, "full_name_ar", "") or "",
             "request_type": request_type,
             "request_type_ar": request_type_text["ar"],
             "request_id": request_id,

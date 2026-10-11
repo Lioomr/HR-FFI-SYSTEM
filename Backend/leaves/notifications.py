@@ -29,6 +29,22 @@ def _employee_name(user) -> str:
     return getattr(user, "full_name", "") or getattr(user, "email", "") or "Employee"
 
 
+def _employee_name_ar(user) -> str:
+    """Arabic display name from the employee profile, or "" so templates fall back to the English name."""
+    profile = getattr(user, "employee_profile", None)
+    return (getattr(profile, "full_name_ar", "") or "").strip()
+
+
+def _ar_names(*, employee=None, manager=None, delegate=None) -> dict:
+    """Arabic-name variables for the WhatsApp templates; omitted when a profile has no Arabic name."""
+    names = {
+        "employee_name_ar": _employee_name_ar(employee) if employee else "",
+        "manager_name_ar": _employee_name_ar(manager) if manager else "",
+        "delegate_name_ar": _employee_name_ar(delegate) if delegate else "",
+    }
+    return {key: value for key, value in names.items() if value}
+
+
 def _employee_phone(user) -> str:
     profile = getattr(user, "employee_profile", None)
     return getattr(profile, "mobile", "") if profile else ""
@@ -122,6 +138,7 @@ def notify_leave_submitted(leave_request: LeaveRequest) -> None:
                 template_name="leave_request_submitted_v1",
                 language="en",
                 variables={
+                    **_ar_names(employee=employee, manager=manager),
                     "action_url": f"/manager/leave/requests/{leave_request.id}",
                     "manager_name": _employee_name(manager),
                     "employee_name": _employee_name(employee),
@@ -146,6 +163,7 @@ def notify_leave_submitted(leave_request: LeaveRequest) -> None:
             },
             whatsapp_template="leave_request_submitted_v1",
             whatsapp_variables={
+                **_ar_names(employee=employee, manager=manager),
                 "action_url": f"/manager/leave/requests/{leave_request.id}",
                 "manager_name": _employee_name(manager),
                 "employee_name": _employee_name(employee),
@@ -173,6 +191,7 @@ def notify_leave_submitted(leave_request: LeaveRequest) -> None:
             template_name="leave_request_received_v1",
             language="en",
             variables={
+                **_ar_names(employee=employee),
                 "action_url": "/employee/leave/requests",
                 "employee_name": _employee_name(employee),
                 "leave_type": leave_request.leave_type.name,
@@ -195,6 +214,7 @@ def notify_leave_submitted(leave_request: LeaveRequest) -> None:
         },
         whatsapp_template="leave_request_received_v1",
         whatsapp_variables={
+            **_ar_names(employee=employee),
             "action_url": "/employee/leave/requests",
             "employee_name": _employee_name(employee),
             "leave_type": leave_request.leave_type.name,
@@ -229,6 +249,7 @@ def notify_leave_approved(leave_request: LeaveRequest) -> dict:
             template_name="leave_request_approved_v1",
             language="en",
             variables={
+                **_ar_names(employee=employee),
                 "employee_name": _employee_name(employee),
                 "leave_type": leave_request.leave_type.name,
                 "start_date": leave_request.start_date.isoformat(),
@@ -250,6 +271,7 @@ def notify_leave_approved(leave_request: LeaveRequest) -> dict:
         },
         whatsapp_template="leave_request_approved_v1",
         whatsapp_variables={
+            **_ar_names(employee=employee),
             "employee_name": _employee_name(employee),
             "leave_type": leave_request.leave_type.name,
             "start_date": leave_request.start_date.isoformat(),
@@ -287,6 +309,7 @@ def notify_leave_rejected(leave_request: LeaveRequest, rejection_reason: str) ->
             template_name="leave_request_rejected_v1",
             language="en",
             variables={
+                **_ar_names(employee=employee),
                 "employee_name": _employee_name(employee),
                 "leave_type": leave_request.leave_type.name,
                 "start_date": leave_request.start_date.isoformat(),
@@ -308,6 +331,7 @@ def notify_leave_rejected(leave_request: LeaveRequest, rejection_reason: str) ->
         },
         whatsapp_template="leave_request_rejected_v1",
         whatsapp_variables={
+            **_ar_names(employee=employee),
             "employee_name": _employee_name(employee),
             "leave_type": leave_request.leave_type.name,
             "start_date": leave_request.start_date.isoformat(),
@@ -348,6 +372,7 @@ def notify_delegation_assigned(leave_request: LeaveRequest) -> dict:
             template_name="leave_delegation_assigned_v1",
             language="en",
             variables={
+                **_ar_names(employee=employee, delegate=delegate),
                 "delegate_name": _employee_name(delegate),
                 "employee_name": employee_name,
                 "leave_type": leave_request.leave_type.name,
@@ -372,6 +397,7 @@ def notify_delegation_assigned(leave_request: LeaveRequest) -> dict:
         },
         whatsapp_template="leave_delegation_assigned_v1",
         whatsapp_variables={
+            **_ar_names(employee=employee, delegate=delegate),
             "delegate_name": _employee_name(delegate),
             "employee_name": employee_name,
             "leave_type": leave_request.leave_type.name,

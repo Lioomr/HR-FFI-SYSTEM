@@ -11,7 +11,7 @@ Frontend lives in `FrontEnd/`. React 19 + TypeScript + Vite + Ant Design + React
 1. Inspect the page/component, route config (`routes.tsx`), API service (`services/api/<domain>Api.ts`), store, and related types.
 2. Check whether the page needs a `RequireRole` guard.
 3. Confirm i18n: all user-facing strings must use `useI18n` — no hardcoded English.
-4. Check whether text content needs Arabic translations added to `translations.ts`.
+4. Check whether text content needs Arabic translations added to `translations.ar.ts`.
 5. Read `.agents/context/frontend_architecture.md` for the full folder map.
 
 ## Implementation Rules
@@ -38,7 +38,7 @@ Do this while building the page, not in a later refactor pass. It is part of the
 ## i18n (Required)
 
 - Use `const { t, language } = useI18n()` in every component with text.
-- Add both `en` and `ar` to `translations.ts` for every new key.
+- Add both `en` and `ar` (`translations.en.ts`, `translations.ar.ts`) for every new key.
 - For bilingual backend fields (name_en/name_ar), select based on `language`.
 - Read `.agents/context/i18n.md` for patterns.
 

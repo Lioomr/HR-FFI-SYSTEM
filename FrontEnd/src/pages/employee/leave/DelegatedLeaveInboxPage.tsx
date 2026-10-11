@@ -1,3 +1,4 @@
+import { shortEmployeeName } from "../../../utils/employeeName";
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
@@ -188,7 +189,9 @@ export default function DelegatedLeaveInboxPage() {
       key: "employee",
       width: 190,
       render: (_, record) =>
-        record.employee?.full_name || record.employee?.email || "-",
+        shortEmployeeName(record.employee?.full_name) ||
+        record.employee?.email ||
+        "-",
     },
     {
       title: t("leave.type"),
@@ -246,6 +249,7 @@ export default function DelegatedLeaveInboxPage() {
         <Space size={8} wrap>
           <Tooltip title={t("common.details")}>
             <Button
+              aria-label={t("common.details")}
               icon={<EyeOutlined />}
               size="small"
               onClick={(event) => {
@@ -258,6 +262,7 @@ export default function DelegatedLeaveInboxPage() {
             <>
               <Tooltip title={t("common.reject")}>
                 <Button
+                  aria-label={t("common.reject")}
                   danger
                   icon={<CloseCircleOutlined />}
                   size="small"
@@ -270,6 +275,7 @@ export default function DelegatedLeaveInboxPage() {
               </Tooltip>
               <Tooltip title={t("common.approve")}>
                 <Button
+                  aria-label={t("common.approve")}
                   type="primary"
                   icon={<CheckCircleOutlined />}
                   size="small"
@@ -290,7 +296,7 @@ export default function DelegatedLeaveInboxPage() {
   const pendingCount = data.filter((item) => canAct(item)).length;
 
   return (
-    <div style={{ maxWidth: 1080, margin: "0 auto" }}>
+    <div style={{ width: "100%", minWidth: 0 }}>
       <PageHeader
         title={t("leave.delegatedInboxTitle", "Delegated Approval Inbox")}
         subtitle={t(
@@ -332,7 +338,8 @@ export default function DelegatedLeaveInboxPage() {
           rowKey="id"
           loading={loading}
           size={isMobile ? "small" : "middle"}
-          scroll={{ x: "max-content" }}
+          tableLayout="fixed"
+          scroll={{ x: screens.lg ? 1280 : 1100 }}
           locale={{
             emptyText: (
               <Text type="secondary">

@@ -191,12 +191,18 @@ def notify_job_offer_decided(offer: JobOffer) -> list[dict]:
             to_email=recipient.email,
             subject=f"Job Offer {offer.reference_number}: {decision}",
             title=f"Job offer {decision.lower()}",
-            title_ar="تم البتّ في عرض العمل",
+            title_ar=(
+                "تمت الموافقة على عرض العمل"
+                if approved
+                else "تم رفض عرض العمل"
+                if rejected
+                else "تم تحديث عرض العمل"
+            ),
             employee_name=recipient.full_name or recipient.email,
             message=f"Job offer {offer.reference_number} has been {decision.lower()} by the CEO.",
             message_ar=f"تم {'اعتماد' if approved else 'رفض' if rejected else 'تحديث'} عرض العمل {offer.reference_number} من قِبل الرئيس التنفيذي.",
             status=decision,
-            status_ar="معتمد" if approved else "مرفوض" if rejected else decision,
+            status_ar=status_label(offer.approval_status)["ar"],
             status_tone="success" if approved else "danger" if rejected else "info",
             details_title="Decision details",
             details_title_ar="تفاصيل القرار",

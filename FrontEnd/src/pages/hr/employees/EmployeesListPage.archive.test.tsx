@@ -264,6 +264,44 @@ describe("EmployeesListPage archive modal", () => {
 });
 
 describe("EmployeesListPage archive filtering", () => {
+  it("exposes server-backed filters in the employee table headers", async () => {
+    render(<EmployeesListPage />);
+    await screen.findByText("Sara Ahmed");
+
+    for (const heading of [
+      "Employee Name",
+      "Nationality",
+      "Position",
+      "Department",
+      "Manager",
+      "Status",
+    ]) {
+      const headers = screen
+        .getAllByText(heading)
+        .map((label) => label.closest("th"))
+        .filter(Boolean);
+      expect(
+        headers.some((header) =>
+          header!.querySelector(".ant-table-filter-trigger"),
+        ),
+      ).toBe(true);
+    }
+
+    const statusHeader = screen
+      .getAllByText("Status")
+      .map((label) => label.closest("th"))
+      .find((header) => header?.querySelector(".ant-table-filter-trigger"));
+    fireEvent.click(
+      statusHeader!.querySelector(".ant-table-filter-trigger") as HTMLElement,
+    );
+    fireEvent.click(await screen.findByText("Suspended"));
+    fireEvent.click(screen.getByRole("button", { name: "OK" }));
+
+    await waitFor(() =>
+      expect(latestTableCall()).toMatchObject({ status: "SUSPENDED" }),
+    );
+  });
+
   it("requests active employees by default", async () => {
     render(<EmployeesListPage />);
     await screen.findByText("Sara Ahmed");

@@ -151,7 +151,7 @@ export default function MyLeaveBalancePage() {
   if (loading) return <LoadingState title={t("loading.generic")} />;
 
   return (
-    <div style={{ maxWidth: 1100, margin: "0 auto" }}>
+    <div style={{ width: "100%", minWidth: 0 }}>
       <PageHeader
         title={t("leave.balanceTitle")}
         subtitle={`${t("leave.currentYear")}: ${new Date().getFullYear()}`}
@@ -186,7 +186,7 @@ export default function MyLeaveBalancePage() {
           rowKey="leave_type_id"
           pagination={false}
           size="small"
-          scroll={{ x: "max-content" }}
+          scroll={{ x: 760 }}
           locale={{ emptyText: t("common.noData") }}
         />
         <Typography.Paragraph

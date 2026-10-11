@@ -118,12 +118,12 @@ export default function MyLeaveRequestsPage() {
       title: t("permissionRequests.list.reference"),
       key: "reference_no",
       render: (_, record) => record.reference_no || `#${record.id}`,
-      width: 170,
+      width: 160,
     },
     {
       title: t("leave.type"),
       key: "leave_type",
-      width: 180,
+      width: 160,
       render: (_, record) => translateLeaveType(record.leave_type?.name),
     },
     {
@@ -145,7 +145,7 @@ export default function MyLeaveRequestsPage() {
       dataIndex: "days",
       key: "days",
       align: "center",
-      width: 90,
+      width: 72,
       responsive: ["md"],
     },
     {
@@ -153,13 +153,11 @@ export default function MyLeaveRequestsPage() {
       dataIndex: "reason",
       key: "reason",
       ellipsis: true,
-      width: 220,
       responsive: ["lg"],
     },
     {
       title: t("leave.rejectionReason"),
       key: "rejection_reason",
-      width: 220,
       responsive: ["xl"],
       render: (_, record) => {
         const isRejected = (record.status || "").toLowerCase() === "rejected";
@@ -178,7 +176,7 @@ export default function MyLeaveRequestsPage() {
       title: t("common.status"),
       dataIndex: "status",
       key: "status",
-      width: 150,
+      width: 180,
       render: (status, record) => {
         const statusKey = `leave.status.${status?.toLowerCase()}`;
         const translated = t(statusKey);
@@ -209,7 +207,7 @@ export default function MyLeaveRequestsPage() {
       title: t("common.actions"),
       key: "actions",
       align: "center",
-      width: isMobile ? 140 : 170,
+      width: 112,
       fixed: screens.lg ? "right" : undefined,
       render: (_, record) => {
         return (
@@ -223,6 +221,7 @@ export default function MyLeaveRequestsPage() {
           >
             <Tooltip title={t("common.details")}>
               <Button
+                aria-label={t("common.details")}
                 icon={<EyeOutlined />}
                 size="small"
                 onClick={(event) => {
@@ -233,6 +232,7 @@ export default function MyLeaveRequestsPage() {
             </Tooltip>
             <Tooltip title={t("leave.downloadRequestPdf")}>
               <Button
+                aria-label={t("common.download")}
                 icon={<FilePdfOutlined />}
                 size="small"
                 loading={pdfLoadingId === record.id}
@@ -249,7 +249,7 @@ export default function MyLeaveRequestsPage() {
   ];
 
   return (
-    <div style={{ maxWidth: 1000, margin: "0 auto" }}>
+    <div style={{ width: "100%", minWidth: 0 }}>
       <PageHeader
         title={t("leave.requestsTitle")}
         subtitle={t("leave.requestsSubtitle")}
@@ -277,7 +277,8 @@ export default function MyLeaveRequestsPage() {
           rowKey="id"
           loading={loading}
           size={isMobile ? "small" : "middle"}
-          scroll={{ x: "max-content" }}
+          tableLayout="fixed"
+          scroll={{ x: screens.xl ? 1280 : screens.lg ? 1100 : 900 }}
           pagination={{
             current: page,
             pageSize,

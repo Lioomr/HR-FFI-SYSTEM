@@ -10,7 +10,21 @@ pilot never bulk-reprocesses archived documents.
 |---|---|
 | `engine.py` | PaddleOCR loading, model-directory discovery, page rendering, result normalisation |
 | `mrz.py` | ICAO 9303 TD3 machine readable zone parsing and check-digit validation |
+| `countries.py` | Static ICAO / ISO 3166 alpha-3 code -> English country name table |
 | `parsers.py` | Per-document-type field extraction and validation rules |
+
+## Passport output format
+
+Passport fields are returned in the format the employee profile stores, so an
+OCR suggestion can be compared with (and applied to) profile values directly:
+
+- `nationality` and `issuing_country` are English country names (`EGY` ->
+  `Egypt`, `SAU` -> `Saudi Arabia`, `D` -> `Germany`). A spelled name in capitals
+  gets its usual spelling (`EGYPT` -> `Egypt`). An unknown code is kept as read
+  and a warning asks HR to confirm the nationality.
+- `full_name` in ALL CAPS (always the case for an MRZ name) is title-cased
+  (`OMR ABDELAAL` -> `Omr Abdelaal`, `AL-QAHTANI` -> `Al-Qahtani`,
+  `O'BRIEN` -> `O'Brien`). A printed mixed-case name is left exactly as read.
 | `pipeline.py` | Orchestration, status/warning decisions, persistence |
 
 `employees/document_extraction.py` remains as a thin compatibility surface for

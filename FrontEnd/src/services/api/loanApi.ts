@@ -342,6 +342,25 @@ export async function downloadLoanRequestPdf(
   return response.data;
 }
 
+/**
+ * HR in-app preview of the loan PDF: the "work paper" with the approval-trail
+ * page, its times printed in this browser's timezone (the backend ignores
+ * these parameters for non-HR viewers). Not the verifiable original — the
+ * plain download (`downloadLoanRequestPdf`) still returns that.
+ */
+export async function getLoanRequestWorkpaperBlob(
+  id: number | string,
+): Promise<Blob> {
+  const response = await api.get(`/api/loans/loan-requests/${id}/pdf/`, {
+    params: {
+      workpaper: 1,
+      tz: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    },
+    responseType: "blob",
+  });
+  return response.data;
+}
+
 export async function markLoanDisbursed(id: number | string, comment?: string) {
   const { data } = await api.post<ApiResponse<LoanRequest>>(
     `/api/loans/disbursements/${id}/mark-disbursed/`,

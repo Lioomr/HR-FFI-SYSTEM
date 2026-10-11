@@ -1,3 +1,4 @@
+import { shortEmployeeName } from "../../utils/employeeName";
 import { useCallback, useEffect, useState } from "react";
 import {
   Alert,
@@ -93,7 +94,9 @@ export default function CEOLeaveInboxPage() {
   }, [loadData, page]);
 
   const employeeName = (record: LeaveRequest) =>
-    record.employee?.full_name || `#${record.employee?.id ?? record.id}`;
+    shortEmployeeName(
+      record.employee?.full_name || `#${record.employee?.id ?? record.id}`,
+    );
 
   const openRequest = (record: LeaveRequest) => {
     navigate(`/ceo/leave/requests/${record.id}`);

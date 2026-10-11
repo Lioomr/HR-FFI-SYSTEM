@@ -124,6 +124,7 @@ class LeaveRequestSerializer(serializers.ModelSerializer):
     workflow = serializers.SerializerMethodField()
     obligations_summary = serializers.SerializerMethodField()
     requires_hr_completion_visa = serializers.SerializerMethodField()
+    visa_upload_required = serializers.SerializerMethodField()
     employee_documents = serializers.SerializerMethodField()
     company_id = serializers.PrimaryKeyRelatedField(source="company", read_only=True)
     company_name = serializers.CharField(source="company.name", read_only=True)
@@ -136,6 +137,7 @@ class LeaveRequestSerializer(serializers.ModelSerializer):
             "status",
             # Fixed at submission: CEO approval routing depends on it.
             "will_travel",
+            "will_require_visa",
             "decided_by",
             "decided_at",
             "decision_reason",
@@ -222,6 +224,9 @@ class LeaveRequestSerializer(serializers.ModelSerializer):
         # Independent of status so approved requests still describe the path they took.
         return obj.requires_hr_completion()
 
+    def get_visa_upload_required(self, obj):
+        return obj.requires_visa_upload()
+
     def get_employee_documents(self, obj):
         from employees.serializers import EmployeeDocumentSerializer
 
@@ -251,6 +256,7 @@ class LeaveRequestCreateSerializer(serializers.ModelSerializer):
             "airplane_ticket_payer",
             "airplane_ticket_address",
             "will_travel",
+            "will_require_visa",
             "delegated_to",
             "delegation_note",
         ]
@@ -281,6 +287,34 @@ class LeaveRequestCreateSerializer(serializers.ModelSerializer):
         profile = EmployeeProfile.objects.filter(user=user).first()
         if not profile or profile.is_archived or not profile.company_id:
             raise serializers.ValidationError("Archived employees cannot create leave requests.")
+
+        if attrs.get("will_travel", False):
+            travel_fields = (
+                "date_of_rejoin",
+                "po_box",
+                "full_address",
+                "airplane_ticket_payer",
+                "airplane_ticket_address",
+                "delegated_to",
+                "delegation_note",
+            )
+            missing_travel_fields = {
+                field: "This field is required when traveling."
+                for field in travel_fields
+                if attrs.get(field) is None or isinstance(attrs[field], str) and not attrs[field].strip()
+            }
+            if missing_travel_fields:
+                raise serializers.ValidationError(missing_travel_fields)
+
+        if attrs.get("will_travel", False) and not profile.is_saudi:
+            if attrs.get("will_require_visa") is None:
+                raise serializers.ValidationError(
+                    {"will_require_visa": "Select whether you will require a visa for this trip."}
+                )
+        elif attrs.get("will_require_visa") is not None:
+            raise serializers.ValidationError(
+                {"will_require_visa": "Visa requirement applies only to non-Saudi employees who will travel."}
+            )
 
         from organization.services import get_active_company_for_request
 

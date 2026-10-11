@@ -67,22 +67,6 @@ export interface DelegationDraft {
   reason: string;
 }
 
-export interface AttendanceCorrectionApproval {
-  id: number | string | null;
-  employeeName: string | null;
-  employeeEmail: string | null;
-  date: string | null;
-  currentCheckInAt: string | null;
-  currentCheckOutAt: string | null;
-  currentStatus: string | null;
-  requestedCheckInAt: string | null;
-  requestedCheckOutAt: string | null;
-  requestedStatus: string | null;
-  reason: string | null;
-  status: string | null;
-  createdAt: string | null;
-}
-
 /** CEO-approver-facing, safe subset of a hiring request response. */
 export interface HiringRequestApproval {
   id: number | string | null;

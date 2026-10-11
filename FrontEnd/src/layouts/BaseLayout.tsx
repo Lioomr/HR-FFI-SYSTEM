@@ -1,9 +1,9 @@
+import { shortEmployeeName } from "../utils/employeeName";
 import { Suspense, useEffect, useMemo, useState } from "react";
 import {
   Layout,
   Menu,
   Dropdown,
-  Typography,
   Avatar,
   Drawer,
   Grid,
@@ -53,6 +53,7 @@ import {
   UserDeleteOutlined,
   UserOutlined,
   UserSwitchOutlined,
+  SafetyCertificateOutlined,
   WalletOutlined,
   WarningOutlined,
   WhatsAppOutlined,
@@ -65,7 +66,7 @@ import type { Role } from "../auth/authStore";
 import { logoutApi } from "../services/api/authApi";
 import { useI18n } from "../i18n/useI18n";
 import type { AppLanguage } from "../i18n/types";
-import { getEmployee } from "../services/api/employeesApi";
+import { getEmployee, type Employee } from "../services/api/employeesApi";
 import { isApiError } from "../services/api/apiTypes";
 import { useManagerAccess } from "../hooks/useManagerAccess";
 import { isFinanceApproverEmployee } from "../utils/financeApprover";
@@ -217,6 +218,8 @@ function getTitle(
   if (pathname.startsWith("/hr/attendance-policy"))
     return t("hr.attendancePolicy.title");
   if (pathname.startsWith("/hr/penalties")) return t("penalties.hrTitle");
+  if (pathname.startsWith("/hr/documents/verify"))
+    return t("documentIntegrity.verify.title");
   if (pathname.startsWith("/employee/penalties")) return t("penalties.myTitle");
   if (pathname.startsWith("/hr")) return t("layout.hrManagement");
   if (pathname.startsWith("/manager/dashboard"))
@@ -522,7 +525,8 @@ export default function BaseLayout() {
 
   // Real-time notifications: single WS connection + polling fallback for the
   // whole authenticated shell (shared with the header bell and inbox page).
-  useNotificationsRuntime();
+  const [isSwitchingOrganization, setIsSwitchingOrganization] = useState(false);
+  useNotificationsRuntime({ paused: isSwitchingOrganization });
 
   const screens = useBreakpoint();
   const isMobile = !screens.md;
@@ -534,7 +538,7 @@ export default function BaseLayout() {
   const [isFinanceApprover, setIsFinanceApprover] = useState(false);
   const [isCFOApprover, setIsCFOApprover] = useState(false);
   const [isCEOApprover, setIsCEOApprover] = useState(false);
-  const [isSwitchingOrganization, setIsSwitchingOrganization] = useState(false);
+  const [selfEmployee, setSelfEmployee] = useState<Employee | null>(null);
   const [openMenuKeys, setOpenMenuKeys] = useState<string[]>(() =>
     getOpenKeysForPath(location.pathname),
   );
@@ -552,6 +556,31 @@ export default function BaseLayout() {
   // Employee with direct reports gets it, a Manager without them does not.
   const { access: managerAccess } = useManagerAccess();
   const hasManagerAccess = managerAccess.has_access;
+  // Extra privileges an Employee holds through assignments rather than the
+  // role, shown beside the role so the effective access is visible.
+  const privilegeBadges =
+    role === "Employee"
+      ? [
+          hasManagerAccess && {
+            key: "manager",
+            label: t("role.badge.manager", "Manager"),
+          },
+          isFinanceApprover && {
+            key: "finance",
+            label: t("role.badge.financeApprover", "Finance Approver"),
+          },
+          isCFOApprover && {
+            key: "cfo",
+            label: t("role.badge.cfoApprover", "CFO Approver"),
+          },
+          isCEOApprover && {
+            key: "ceo",
+            label: t("role.badge.ceoApprover", "CEO Approver"),
+          },
+        ].filter((badge): badge is { key: string; label: string } =>
+          Boolean(badge),
+        )
+      : [];
   const organizations = user?.accessible_organizations ?? [];
   const activeOrganizationId =
     user?.active_organization_id ?? user?.default_organization_id ?? null;
@@ -609,6 +638,7 @@ export default function BaseLayout() {
     async function loadFinanceEligibility() {
       if (role !== "Employee") {
         if (mounted) {
+          setSelfEmployee(null);
           setIsFinanceApprover(false);
           setIsCFOApprover(false);
           setIsCEOApprover(false);
@@ -620,16 +650,19 @@ export default function BaseLayout() {
         if (!mounted) return;
 
         if (isApiError(profileRes)) {
+          setSelfEmployee(null);
           setIsFinanceApprover(false);
           setIsCFOApprover(false);
           setIsCEOApprover(false);
         } else {
+          setSelfEmployee(profileRes.data);
           setIsFinanceApprover(isFinanceApproverEmployee(profileRes.data));
           setIsCFOApprover(isCFOApproverEmployee(profileRes.data));
           setIsCEOApprover(isCEOApproverEmployee(profileRes.data));
         }
       } catch {
         if (mounted) {
+          setSelfEmployee(null);
           setIsFinanceApprover(false);
           setIsCFOApprover(false);
           setIsCEOApprover(false);
@@ -857,6 +890,13 @@ export default function BaseLayout() {
             <Link to="/hr/workflow/delegations">
               {t("layout.nav.alternatesSetup", "Alternates Setup")}
             </Link>
+          ),
+        },
+        {
+          key: "/hr/documents/verify",
+          icon: <SafetyCertificateOutlined />,
+          label: (
+            <Link to="/hr/documents/verify">{t("layout.nav.verifyPdf")}</Link>
           ),
         },
       ],
@@ -1654,7 +1694,22 @@ export default function BaseLayout() {
   };
 
   // ─── User name display ─────────────────────────────────────────────────────
-  const displayName = user?.email?.split("@")[0] || "User";
+  // On the employee surface, display the identity reached through the
+  // account's one-to-one EmployeeProfile link. This keeps the shell and page
+  // content consistent even when the login account name/email differs from
+  // the HR employee record.
+  const employeeDisplayName =
+    language === "ar"
+      ? selfEmployee?.full_name_ar ||
+        selfEmployee?.full_name_en ||
+        selfEmployee?.full_name
+      : selfEmployee?.full_name_en ||
+        selfEmployee?.full_name ||
+        selfEmployee?.full_name_ar;
+  const displayName =
+    shortEmployeeName(employeeDisplayName) ||
+    user?.email?.split("@")[0] ||
+    "User";
   const profilePathByRole: Record<Role, string> = {
     SystemAdmin: "/admin/profile",
     HRManager: "/hr/profile",
@@ -1865,13 +1920,14 @@ export default function BaseLayout() {
           >
             {isMobile && (
               <Button
+                aria-label={t("layout.openMenu", "Open navigation menu")}
                 icon={<MenuOutlined />}
                 onClick={() => setMobileMenuOpen(true)}
                 type="text"
                 style={{
                   fontSize: 18,
-                  width: 40,
-                  height: 40,
+                  width: 44,
+                  height: 44,
                   borderRadius: 10,
                   background: "rgba(249,115,22,0.08)",
                   color: "#f97316",
@@ -1881,12 +1937,15 @@ export default function BaseLayout() {
             {isHrDashboard ? (
               <DashboardGreeting isMobile={isMobile} />
             ) : (
-              <Typography.Title
-                level={isMobile ? 5 : 4}
+              // The page's one <h1>. A plain element rather than
+              // Typography.Title so the global `h1.ant-typography` sizing
+              // rules never resize it.
+              <h1
                 style={{
                   margin: 0,
                   fontWeight: 600,
                   fontSize: isMobile ? 13 : 15,
+                  lineHeight: 1.5,
                   color: "#64748b",
                   letterSpacing: "0.02em",
                   textTransform: "uppercase",
@@ -1898,7 +1957,7 @@ export default function BaseLayout() {
                 }}
               >
                 {getTitle(location.pathname, t)}
-              </Typography.Title>
+              </h1>
             )}
           </div>
 
@@ -1928,6 +1987,7 @@ export default function BaseLayout() {
                   alignItems: "center",
                   gap: 8,
                   minWidth: isMobile ? 96 : 0,
+                  minHeight: isMobile ? 44 : undefined,
                   width: isMobile ? undefined : 168,
                   flex: isMobile ? "0 1 150px" : undefined,
                   padding: isMobile ? "4px 8px" : "5px 10px",
@@ -1947,6 +2007,7 @@ export default function BaseLayout() {
                   }}
                 />
                 <Select
+                  aria-label={t("layout.companySelector", "Company")}
                   size="small"
                   value={activeOrganizationId ?? undefined}
                   onChange={handleOrganizationChange}
@@ -1976,6 +2037,7 @@ export default function BaseLayout() {
             {!isMobile && (
               <div style={{ padding: "5px 4px", borderRadius: 8 }}>
                 <Select
+                  aria-label={t("language.label", "Language")}
                   size="small"
                   value={language}
                   onChange={(value) => setLanguage(value as AppLanguage)}
@@ -2007,14 +2069,23 @@ export default function BaseLayout() {
               placement="bottomRight"
               trigger={["click"]}
             >
-              <div
+              <button
+                type="button"
+                aria-label={`${t("layout.profile")}: ${displayName}`}
+                aria-haspopup="menu"
                 style={{
                   display: "flex",
                   alignItems: "center",
                   gap: 10,
                   cursor: "pointer",
                   padding: "4px 6px",
+                  minHeight: 44,
                   borderRadius: 10,
+                  border: 0,
+                  background: "transparent",
+                  font: "inherit",
+                  color: "inherit",
+                  textAlign: "start",
                 }}
               >
                 <Avatar
@@ -2044,7 +2115,13 @@ export default function BaseLayout() {
                     <div
                       style={{ fontSize: 11, color: organizationTheme.muted }}
                     >
-                      {role}
+                      {getRoleLabel(role, t)}
+                      {privilegeBadges.map((badge) => (
+                        <span key={badge.key}>
+                          {" · "}
+                          {badge.label}
+                        </span>
+                      ))}
                     </div>
                   </div>
                 )}
@@ -2053,7 +2130,7 @@ export default function BaseLayout() {
                     style={{ fontSize: 9, color: organizationTheme.muted }}
                   />
                 )}
-              </div>
+              </button>
             </Dropdown>
           </div>
         </Header>

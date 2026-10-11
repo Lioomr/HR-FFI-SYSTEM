@@ -4,7 +4,6 @@ import {
   ArrowRightOutlined,
   CalendarOutlined,
   ClockCircleOutlined,
-  FileTextOutlined,
   SearchOutlined,
   UserOutlined,
   WalletOutlined,
@@ -94,12 +93,6 @@ export default function DashboardPage() {
       path: "/employee/payslips",
     },
     {
-      title: label("corrections"),
-      description: label("correctionsHint"),
-      icon: <FileTextOutlined />,
-      path: "/employee/attendance-corrections",
-    },
-    {
       title: label("assets"),
       description: label("assetsHint"),
       icon: <InboxOutlined />,
@@ -132,12 +125,12 @@ export default function DashboardPage() {
       <header className="ed-welcome">
         <div>
           <span className="ed-eyebrow">{label("subtitle")}</span>
-          <h1>
+          <h2>
             {label("welcome")}
             {displayName
               ? `${language === "ar" ? "،" : ","} ${displayName}`
               : ""}
-          </h1>
+          </h2>
           <p>{label("intro")}</p>
         </div>
         <Link className="ed-profile-link" to="/employee/profile">

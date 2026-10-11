@@ -1,3 +1,4 @@
+import { shortEmployeeName } from "../../utils/employeeName";
 import { useState } from "react";
 import type { ReactNode } from "react";
 import { Alert, Button, Empty, Flex, Tag, Typography, message } from "antd";
@@ -194,7 +195,7 @@ export default function AttendanceNoticesTable({
             render: (_: unknown, record: AttendanceLateNotice) => (
               <Flex vertical gap={0}>
                 <Text strong>
-                  <bdi>{record.employee_name}</bdi>
+                  <bdi>{shortEmployeeName(record.employee_name)}</bdi>
                 </Text>
                 <Text type="secondary" style={{ fontSize: 12 }}>
                   <bdi>{record.employee_code}</bdi>

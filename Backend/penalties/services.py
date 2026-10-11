@@ -718,9 +718,14 @@ def _attendance_candidate_specs(result):
     """Return {source_kind: (catalog_code, note, evidence)} for one daily result."""
     inputs = result.calculation_inputs or {}
     policy = inputs.get("policy", {})
-    if result.date < effective_from() or not policy.get("working_day", True) or inputs.get("lone_opaque_punch"):
-        # A lone untyped punch or lone non-check-in punch cannot establish
-        # arrival or departure; the attendance projection keeps it unchanged.
+    if (
+        result.date < effective_from()
+        or not policy.get("working_day", True)
+        or policy.get("is_exempt")
+        or inputs.get("lone_opaque_punch")
+    ):
+        # Exempt profiles and ambiguous punch projections stay out of the
+        # automatic penalty ledger while the attendance projection is retained.
         return {}
     specs = {}
     # The printed schedule starts at the first measured minute. The legacy
@@ -967,6 +972,8 @@ def sync_absence_candidates(records, *, eligible_rows=None):
     never produces one penalty per absent day.
     """
 
+    from attendance.biotime_policy import is_attendance_exempt
+
     records = sorted(records, key=lambda row: (row.employee_profile_id, row.date, row.pk))
     scopes = {}
     for row in records:
@@ -978,6 +985,8 @@ def sync_absence_candidates(records, *, eligible_rows=None):
         if record.date < effective_from():
             continue
         profile = record.employee_profile
+        if is_attendance_exempt(profile):
+            continue
         EmployeeProfile.objects.select_for_update().get(pk=profile.pk)
         cycle_start, _cycle_end = penalty_year_cycle(profile, record.date)
         cycle_start = max(cycle_start or effective_from(), effective_from())

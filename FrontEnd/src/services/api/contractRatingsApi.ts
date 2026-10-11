@@ -1,6 +1,7 @@
 import { api } from "./apiClient";
 import type { ApiResponse, PaginatedResponse } from "./apiTypes";
 import { isApiError } from "./apiTypes";
+import { workpaperParams } from "./documentIntegrityApi";
 import type { WorkflowSnapshot } from "../../types/workflow";
 import type {
   ContractDecisionType,
@@ -77,6 +78,16 @@ export type GradeRanges = Record<RatingGrade, [number, number]>;
 export interface RatingCriteriaPayload {
   criteria: RatingCriterion[];
   grade_ranges: GradeRanges;
+}
+
+export interface PendingContractRatingAction {
+  id: number;
+  status: ContractRatingStatus;
+}
+
+export interface PendingContractRatingActions {
+  employee: PendingContractRatingAction | null;
+  manager: PendingContractRatingAction | null;
 }
 
 /** Header fields present in every role's payload. */
@@ -322,10 +333,16 @@ export function toContractRatingView(
     return { ...raw, viewer: "full" } as unknown as FullContractRating;
   }
   if ("employee_response" in raw) {
-    return { ...raw, viewer: "employee" } as unknown as EmployeeContractRatingView;
+    return {
+      ...raw,
+      viewer: "employee",
+    } as unknown as EmployeeContractRatingView;
   }
   if ("manager_response" in raw) {
-    return { ...raw, viewer: "manager" } as unknown as ManagerContractRatingView;
+    return {
+      ...raw,
+      viewer: "manager",
+    } as unknown as ManagerContractRatingView;
   }
   if ("hr_comment_requested_at" in raw) {
     const header = { ...raw };
@@ -425,6 +442,31 @@ export async function listContractRatings(
   return { ...data, data: { ...data.data, items } };
 }
 
+let pendingActionsRequest:
+  | Promise<ApiResponse<PendingContractRatingActions>>
+  | undefined;
+
+/**
+ * Lightweight route-gate check. Concurrent employee and manager guards share
+ * one request; the result is not retained after completion, so a later portal
+ * entry still observes newly-created rating work.
+ */
+export function getPendingContractRatingActions(): Promise<
+  ApiResponse<PendingContractRatingActions>
+> {
+  if (!pendingActionsRequest) {
+    pendingActionsRequest = api
+      .get<ApiResponse<PendingContractRatingActions>>(
+        `${BASE}/pending-actions/`,
+      )
+      .then(({ data }) => data)
+      .finally(() => {
+        pendingActionsRequest = undefined;
+      });
+  }
+  return pendingActionsRequest;
+}
+
 export function getContractRating(id: number | string) {
   return unwrapView(api.get<ApiResponse<RawRating>>(`${BASE}/${id}/`));
 }
@@ -442,7 +484,26 @@ export async function downloadContractRatingPdf(
   return response.data;
 }
 
-export function submitRatingHrGate(id: number | string, rating_mode: RatingMode) {
+/**
+ * HR in-app preview of the decision PDF: once DECIDED (frozen) the backend
+ * returns the work paper with the approval-trail page in this browser's
+ * timezone; it ignores the parameters for other viewers. Not the verifiable
+ * original — `downloadContractRatingPdf` keeps returning that.
+ */
+export async function getContractRatingWorkpaperBlob(
+  id: number | string,
+): Promise<Blob> {
+  const response = await api.get(`${BASE}/${id}/pdf/`, {
+    params: workpaperParams(),
+    responseType: "blob",
+  });
+  return response.data;
+}
+
+export function submitRatingHrGate(
+  id: number | string,
+  rating_mode: RatingMode,
+) {
   return unwrapMutation(
     api.post<ApiResponse<RawRating>>(`${BASE}/${id}/hr-gate/`, { rating_mode }),
   );
@@ -453,7 +514,10 @@ export function submitManagerRatingResponse(
   payload: RatingResponsePayload,
 ) {
   return unwrapMutation(
-    api.post<ApiResponse<RawRating>>(`${BASE}/${id}/manager-response/`, payload),
+    api.post<ApiResponse<RawRating>>(
+      `${BASE}/${id}/manager-response/`,
+      payload,
+    ),
   );
 }
 

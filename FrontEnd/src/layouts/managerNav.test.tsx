@@ -391,6 +391,7 @@ describe("BaseLayout manager navigation", () => {
     expect(groupOf("/hr/job-offers")).toBe("Hiring");
     expect(groupOf("/hr/starting-work-acknowledgments")).toBe("Hiring");
     expect(groupOf("/hr/templates")).toBe("Hiring");
+    expect(groupOf("/hr/documents/verify")).toBe("Work Inbox");
     expect(groupOf("/hr/payroll")).toBe("Payroll & Assets");
     expect(groupOf("/employee/attendance")).toBe("My Requests");
     expect(groupOf("/employee/assets")).toBe("My Requests");

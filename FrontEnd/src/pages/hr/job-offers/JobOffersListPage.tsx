@@ -416,7 +416,7 @@ export default function JobOffersListPage() {
     statusFilter !== "all" || approvalFilter !== "all" || search.length > 0;
 
   return (
-    <div style={{ maxWidth: 1600, margin: "0 auto", paddingBottom: 24 }}>
+    <div style={{ width: "100%", minWidth: 0, paddingBottom: 24 }}>
       {messageContext}
       {modalContext}
 

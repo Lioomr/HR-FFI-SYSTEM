@@ -149,7 +149,6 @@ export default function MyLoanRequestsPage() {
       key: "reason",
       dataIndex: "reason",
       ellipsis: true,
-      width: 220,
       responsive: ["lg"],
     },
     {
@@ -201,6 +200,7 @@ export default function MyLoanRequestsPage() {
           <div style={{ display: "flex", gap: 8 }}>
             <Tooltip title={t("loans.list.viewDetails")}>
               <Button
+                aria-label={t("common.view")}
                 size="small"
                 icon={<EyeOutlined />}
                 onClick={() => navigate(`/employee/loans/${record.id}`)}
@@ -209,6 +209,7 @@ export default function MyLoanRequestsPage() {
             {isPending ? (
               <Tooltip title={t("loans.list.cancelReq")}>
                 <Button
+                  aria-label={t("common.cancel")}
                   danger
                   size="small"
                   icon={<CloseCircleOutlined />}
@@ -224,7 +225,7 @@ export default function MyLoanRequestsPage() {
   ];
 
   return (
-    <div style={{ maxWidth: 1000, margin: "0 auto" }}>
+    <div style={{ width: "100%", minWidth: 0 }}>
       <PageHeader
         title={t("loans.myRequests.title")}
         subtitle={t("loans.myRequests.subtitle")}
@@ -247,7 +248,8 @@ export default function MyLoanRequestsPage() {
           columns={columns}
           dataSource={items}
           size={isMobile ? "small" : "middle"}
-          scroll={{ x: "max-content" }}
+          tableLayout="fixed"
+          scroll={{ x: screens.lg ? 920 : 760 }}
           expandable={{
             expandedRowRender: (record) => (
               <LoanApprovalMap request={record} t={t} />

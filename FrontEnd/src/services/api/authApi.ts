@@ -66,3 +66,40 @@ export async function resetPasswordConfirmApi(
   );
   return data;
 }
+
+export async function requestPasswordResetOtpApi(payload: {
+  identifier: string;
+}) {
+  const { data } = await api.post<ApiResponse<{ message: string }>>(
+    "/auth/password-reset/request",
+    payload,
+  );
+  return data;
+}
+
+export async function verifyPasswordResetOtpApi(payload: {
+  identifier: string;
+  otp: string;
+}) {
+  const { data } = await api.post<ApiResponse<{ masked_phone?: string }>>(
+    "/auth/password-reset/verify",
+    payload,
+  );
+  return data;
+}
+
+export type PasswordResetOtpConfirmRequest = {
+  identifier: string;
+  otp: string;
+  new_password: string;
+};
+
+export async function confirmPasswordResetOtpApi(
+  payload: PasswordResetOtpConfirmRequest,
+) {
+  const { data } = await api.post<ApiResponse<{}>>(
+    "/auth/password-reset/confirm",
+    payload,
+  );
+  return data;
+}

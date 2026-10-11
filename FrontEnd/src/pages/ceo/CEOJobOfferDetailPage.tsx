@@ -30,6 +30,8 @@ import {
 import ApprovalActions from "../../components/ceo/ApprovalActions";
 import StickyDecisionBar from "../../components/ceo/StickyDecisionBar";
 import { useFilePreview } from "../../components/ui/useFilePreview";
+import DocumentIntegrityPanel from "../../components/documents/DocumentIntegrityPanel";
+import { isDocumentFinal } from "../../components/documents/documentTypes";
 import ErrorState from "../../components/ui/ErrorState";
 import LoadingState from "../../components/ui/LoadingState";
 import PageHeader from "../../components/ui/PageHeader";
@@ -1025,6 +1027,19 @@ export default function CEOJobOfferDetailPage() {
             </SectionTitle>
             <JobOfferWorkflowHistory history={offer.workflow?.history} />
           </Surface>
+
+          {/* Read-only for the CEO; the backend answers 404 to a CEO who did
+              not decide the offer, which the card shows as unavailable. */}
+          <div style={{ marginTop: 16 }}>
+            <DocumentIntegrityPanel
+              documentType="job_offer"
+              requestId={offer.id}
+              isFinal={
+                isDocumentFinal("job_offer", offer.status) &&
+                Boolean(offer.sent_at)
+              }
+            />
+          </div>
         </Col>
       </Row>
 
