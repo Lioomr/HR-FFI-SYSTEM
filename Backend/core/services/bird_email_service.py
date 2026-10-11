@@ -548,7 +548,15 @@ def send_leave_rejected_email(
         _row("Requested to", "نهاية الإجازة المطلوبة", end_date),
     ]
     if rejection_reason:
-        rows.append(_row("Reason", "السبب", rejection_reason, value_color="#b42318"))
+        rows.append(
+            _row(
+                "Reason",
+                "السبب",
+                rejection_reason,
+                value_ar="غير محدد" if rejection_reason.strip() == "Not specified" else rejection_reason,
+                value_color="#b42318",
+            )
+        )
     context.update(
         _details(
             rows,
@@ -791,8 +799,11 @@ def send_user_invite_email(
         f"You have been invited to join the FFI HR System as {role}. "
         f"This invitation expires in {expires_in_hours} hours."
     )
+    from in_app_notifications.i18n import role_label
+
+    role_ar = role_label(role)["ar"]
     message_ar = (
-        f"تمت دعوتك للانضمام إلى نظام الموارد البشرية بدور {role}. "
+        f"تمت دعوتك للانضمام إلى نظام الموارد البشرية بدور {role_ar}. "
         f"تنتهي صلاحية هذه الدعوة خلال {expires_in_hours} ساعة."
     )
     subject = "You have been invited to FFI HR System"
@@ -805,7 +816,7 @@ def send_user_invite_email(
             f"The link expires in {expires_in_hours} hours."
         )
         message_ar = (
-            f"هذا تذكير بقبول دعوتك إلى نظام الموارد البشرية بدور {role}. "
+            f"هذا تذكير بقبول دعوتك إلى نظام الموارد البشرية بدور {role_ar}. "
             f"تنتهي صلاحية الرابط خلال {expires_in_hours} ساعة."
         )
         subject = "Invitation Reminder: FFI HR System"
@@ -823,7 +834,7 @@ def send_user_invite_email(
         preheader=message,
         preheader_ar=message_ar,
     )
-    rows = [_row("Assigned role", "الدور المُسند", role)]
+    rows = [_row("Assigned role", "الدور المُسند", role, value_ar=role_ar)]
     if inviter_name:
         rows.append(_row("Invited by", "بدعوة من", inviter_name))
     rows.append(

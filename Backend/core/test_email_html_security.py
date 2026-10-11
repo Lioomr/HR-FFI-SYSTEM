@@ -113,3 +113,23 @@ def test_dispatcher_escapes_content_and_retains_safe_application_links(template,
     assert "javascript:alert(1)" not in Links(html).hrefs
     if url.startswith("/"):
         assert f"https://hr.example.com{url}" in Links(html).hrefs
+
+
+@pytest.mark.parametrize("template", ["emails/generic_notification.html", "emails/announcement_notification.html"])
+def test_email_templates_leak_no_template_syntax_or_comment_text(template):
+    # A multi-line ``{# ... #}`` comment is not a Django comment and would be printed into every email.
+    html = render_to_string(
+        template,
+        {
+            "title": "Title",
+            "title_ar": "العنوان",
+            "message": "Message",
+            "message_ar": "الرسالة",
+            "employee_name": "Omar",
+            "announcement_title": "Announcement",
+        },
+    )
+    assert "{#" not in html
+    assert "#}" not in html
+    assert "{%" not in html
+    assert "Inbox preview" not in html

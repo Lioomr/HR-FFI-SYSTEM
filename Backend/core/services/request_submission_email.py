@@ -40,6 +40,8 @@ def _send_request_submission_email_provider(
     from in_app_notifications.i18n import request_type_label
     from in_app_notifications.i18n import status_label as status_label_text
 
+    from .whatsapp_template_library import localize_detail_ar
+
     action_url = _build_action_url(action_path)
     subject = f"{request_type} submitted - #{request_id}"
     # Never show a raw workflow code, and keep the Arabic half fully Arabic.
@@ -65,9 +67,9 @@ def _send_request_submission_email_provider(
         "preheader_ar": message_ar,
         "rows": [
             {"label": "Request ID", "label_ar": "رقم الطلب", "value": f"#{request_id}"},
-            {"label": "Status", "label_ar": "الحالة", "value": status_label},
+            {"label": "Status", "label_ar": "الحالة", "value": status_label, "value_ar": status_label_ar},
             *(
-                {"label": "Detail", "label_ar": "تفصيل", "value": str(item)}
+                {"label": "Detail", "label_ar": "تفصيل", "value": str(item), "value_ar": localize_detail_ar(item)}
                 for item in (details or [])
             ),
         ],

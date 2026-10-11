@@ -80,8 +80,7 @@
 <body class="font-latin"
   style="margin:0;padding:0;background-color:#f6f7f9;color:#1c1f24;font-family:'Segoe UI',-apple-system,BlinkMacSystemFont,Roboto,'Helvetica Neue',Arial,sans-serif;">
 
-  {# Inbox preview: one short, English-first line (matches the English subject, avoids mixed-direction
-     text), then invisible padding so the visible header/body text never leaks into the preview. #}
+  {% comment %}Inbox preview: one short English-first line, then invisible padding so header/body text never leaks into it.{% endcomment %}
   <div lang="en" dir="ltr"
     style="display:none;max-height:0;overflow:hidden;mso-hide:all;font-size:1px;line-height:1px;color:#f6f7f9;opacity:0;">
     {% if preheader %}{{ preheader|truncatechars:110 }}{% else %}{{ message|truncatechars:110 }}{% endif %}

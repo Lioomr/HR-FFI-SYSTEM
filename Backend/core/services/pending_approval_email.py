@@ -165,8 +165,12 @@ def send_pending_approval_email(
         {"label": "Requested by", "label_ar": "مقدّم الطلب", "value": requester_name},
         {"label": "Status", "label_ar": "الحالة", "value": status_label, "value_ar": status_label_ar},
     ]
+    from .whatsapp_template_library import localize_detail_ar
+
     for item in details or []:
-        rows.append({"label": "Detail", "label_ar": "تفصيل", "value": str(item)})
+        rows.append(
+            {"label": "Detail", "label_ar": "تفصيل", "value": str(item), "value_ar": localize_detail_ar(item)}
+        )
     context = {
         "logo_url": _resolve_logo_source(),
         "contact_email": getattr(settings, "EMAIL_CONTACT_EMAIL", "hr@fficontracting.com"),
