@@ -472,6 +472,42 @@ def notify_auto_renewal_failure(decision: ContractDecision) -> int | None:
     return notify_manual_resolution(decision)
 
 
+def notify_employee_termination_notice(decision: ContractDecision) -> int | None:
+    """Send the bilingual non-renewal notice to the employee after termination approval."""
+    profile = decision.employee_profile
+    recipient = profile.user
+    if recipient is None:
+        return None
+    text = notification_text(
+        "contract.termination_notice_employee",
+        employee_name=profile_name(profile),
+        contract_end_date=decision.original_contract_expiry.strftime("%d-%m-%Y"),
+    )
+    try:
+        result = dispatch_notification_channels(
+            recipient=recipient,
+            event_key="contract.termination_notice",
+            **text,
+            category=Notification.Category.DOCUMENT,
+            related_object=decision,
+            deduplication_key=f"contract.expiry:{decision.id}:employee-termination-notice",
+            metadata={
+                "contract_decision_id": decision.id,
+                "employee_profile_id": profile.id,
+                "milestone": "contract.termination_notice_employee",
+                "contract_end_date": decision.original_contract_expiry.isoformat(),
+            },
+            email_context={"hide_greeting": True},
+            email_send_immediately=True,
+            whatsapp_enabled=True,
+            email_enabled=True,
+        )
+        return int(result.get("created", False)) if result.get("notification") is not None else None
+    except Exception:
+        logger.exception("employee_contract_termination_notice_failed", extra={"decision_id": decision.id})
+        return None
+
+
 def notify_hr_termination_settlement(decision: ContractDecision, *, termination_date: date) -> int | None:
     """Tell HR to raise the termination settlement once a contract is terminated.
 
@@ -801,6 +837,7 @@ def finalize_decision(decision_id: int, *, actor=None, automatic: bool = False, 
             ) from exc
         # Match the rating flow's termination so both leave the profile in the same state.
         mark_employment_terminated(profile, now)
+        notify_employee_termination_notice(decision)
         if profile.user_id:
             profile.user.is_active = False
             profile.user.auth_token_version += 1

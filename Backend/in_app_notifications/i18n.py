@@ -580,6 +580,31 @@ MESSAGES: dict[str, dict[str, tuple[str, str]]] = {
             "(بدل الإجازة السنوية) لهذا الموظف.",
         ),
     },
+    "contract.termination_notice_employee": {
+        "title": (
+            "Official Notice of Non-Renewal of Employment Contract",
+            "إشعار رسمي بعدم تجديد عقد العمل",
+        ),
+        "message": (
+            "Dear {employee_name},\n"
+            "Greetings,\n\n"
+            "We would like to express our sincere thanks and appreciation for your efforts and dedication during your "
+            "employment with us, and to acknowledge your valuable contributions.\n\n"
+            "We wish to inform you that the company does not intend to renew your employment contract, which ends on "
+            "{contract_end_date}. This letter serves as formal notice of non-renewal in accordance with Saudi Labor "
+            "Law and the terms of the contract.\n\n"
+            "Thank you for your cooperation. We wish you success in your future career.\n"
+            "Yours sincerely,",
+            "الأستاذ/ة {employee_name} المحترم/ة،\n"
+            "تحية طيبة،\n\n"
+            "نود في البداية أن نتقدم لكم بخالص الشكر والتقدير على جهودكم المبذولة وعطائكم خلال فترة عملكم معنا، مثمنين "
+            "ما قدمتموه من مساهمات.\n\n"
+            "نحيطكم علمًا بعدم رغبة الشركة في تجديد عقد العمل المبرم معكم، والذي ينتهي بتاريخ {contract_end_date}. ويُعد "
+            "هذا الخطاب إشعارًا رسميًا بعدم التجديد، وذلك وفقًا لما نص عليه نظام العمل السعودي وبنود العقد.\n\n"
+            "شاكرين ومقدرين لكم تعاونكم، ومتمنين لكم التوفيق والنجاح في مسيرتكم القادمة.\n"
+            "وتفضلوا بقبول وافر التحية والتقدير",
+        ),
+    },
     "contract.renewal_settlement_review_required": {
         "title": (
             "Annual leave settlement review: {employee_name}",

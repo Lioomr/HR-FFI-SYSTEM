@@ -92,6 +92,20 @@ def _queue_whatsapp(notification_id: int, payload: dict) -> None:
         logger.exception("notification_whatsapp_queue_failed", extra={"notification_id": notification_id})
 
 
+def _queue_email_immediately(notification_id: int, payload: dict, email_enabled: bool) -> None:
+    try:
+        from .tasks import deliver_email_notification
+
+        deliver_email_notification.delay(
+            notification_id,
+            payload.get("email_payload") or {},
+            email_enabled,
+            allow_after_whatsapp_success=True,
+        )
+    except Exception:
+        logger.exception("notification_email_queue_failed", extra={"notification_id": notification_id})
+
+
 def _generic_whatsapp_text(title: str, message: str, action_url: str, title_ar: str = "", message_ar: str = "") -> str:
     return render_generic_notification(
         title=title, message=message, action_url=action_url, title_ar=title_ar, message_ar=message_ar
@@ -251,6 +265,7 @@ def _send_email(*, recipient, title, message, action_url, template, context, tim
             "employee_name": email_context.get("employee_name")
             or getattr(recipient, "full_name", "")
             or "Colleague / الزميل",
+            "hide_greeting": bool(email_context.get("hide_greeting", False)),
             "rows": email_context.get("rows") or [],
             "details_title": email_context.get("details_title", "Details"),
             "details_title_ar": email_context.get("details_title_ar", "التفاصيل"),
@@ -293,10 +308,14 @@ def dispatch_notification_channels(
     company_id: int | None = None,
     whatsapp_enabled: bool | None = None,
     email_enabled: bool | None = None,
+    email_send_immediately: bool = False,
     redeliver_existing: bool = True,
     known_new: bool = False,
 ) -> dict:
-    """Persist immediately and enqueue WhatsApp-first external delivery after commit.
+    """Persist immediately and enqueue external delivery after commit.
+
+    Email is normally queued as a fallback after WhatsApp fails or is skipped.
+    ``email_send_immediately`` opts a specific notice into parallel email delivery.
 
     ``known_new`` lets a caller that has already batch-checked recipients against
     a shared ``deduplication_key`` (e.g. a company-wide announcement) skip the
@@ -358,6 +377,14 @@ def dispatch_notification_channels(
             email_delivery = NotificationDelivery.objects.filter(
                 notification=notification, channel=NotificationDelivery.Channel.EMAIL
             ).first()
+            if email_send_immediately:
+                email_delivery, _ = _claim_delivery(notification, NotificationDelivery.Channel.EMAIL)
+                if (created or redeliver_existing) and email_delivery.status != NotificationDelivery.Status.SENT:
+                    transaction.on_commit(
+                        lambda notification_id=notification.id, payload=task_payload: _queue_email_immediately(
+                            notification_id, payload, email_enabled
+                        )
+                    )
             if created:
                 transaction.on_commit(lambda notification_id=notification.id: _broadcast_created(notification_id))
             held = (

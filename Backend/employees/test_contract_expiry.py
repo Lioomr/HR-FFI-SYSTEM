@@ -321,7 +321,9 @@ class ContractExpiryWorkflowTests(TestCase):
         self.assertEqual(self.profile.contract_expiry, decision.original_contract_expiry)
         notify_failure.assert_called_once()
 
-    def test_approved_termination_archives_and_disables_login(self):
+    @patch("employees.contract_expiry.dispatch_notification_channels")
+    def test_approved_termination_archives_and_disables_login(self, dispatch):
+        dispatch.return_value = {"notification": object(), "created": True}
         decision, _ = ensure_contract_decision(self.profile)
         submit_decision(decision.id, actor=self.hr, decision_type=ContractDecision.DecisionType.TERMINATE)
 
@@ -332,6 +334,13 @@ class ContractExpiryWorkflowTests(TestCase):
         self.assertTrue(self.profile.is_archived)
         self.assertEqual(self.profile.archive_reason, EmployeeProfile.ArchiveReason.END_OF_CONTRACT)
         self.assertFalse(self.employee.is_active)
+        employee_notice = next(
+            call.kwargs
+            for call in dispatch.call_args_list
+            if call.kwargs["deduplication_key"].endswith(":employee-termination-notice")
+        )
+        self.assertEqual(employee_notice["recipient"], self.employee)
+        self.assertTrue(employee_notice["email_send_immediately"])
 
     @patch("employees.contract_expiry.dispatch_notification_channels")
     def test_approved_termination_marks_terminated_and_asks_hr_for_a_settlement(self, dispatch):

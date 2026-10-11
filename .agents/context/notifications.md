@@ -163,6 +163,8 @@ job title / position is "Chief Executive Officer" or "General Manager". SystemAd
 - Set `action_url` / `action_path` (and any `action_url` in WhatsApp variables or email context) to a plain app path
   such as `/hr/leave/requests/{id}`. Do not add `?company=` yourself; the dispatcher adds it. Links built outside the
   dispatcher (sending WhatsApp or email directly) miss this and open in the user's default company.
+- Set `email_send_immediately=True` only when a specific notice must be delivered by email even when WhatsApp succeeds.
+  The default remains WhatsApp-first with email fallback.
 - Test a new notification with a recipient whose own company differs from the record's. Assert that
   `notification.company_id` and the link's `company=` value both equal the record's company (see
   `test_pending_approval_links_open_the_request_company` in `Backend/in_app_notifications/tests.py`).

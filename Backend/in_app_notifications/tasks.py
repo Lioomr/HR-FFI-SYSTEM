@@ -212,7 +212,11 @@ def deliver_whatsapp_notification(
 
 @shared_task(bind=True, acks_late=True, reject_on_worker_lost=True, max_retries=3)
 def deliver_email_notification(
-    self, notification_id: int, email_payload: dict | None = None, email_enabled: bool = True
+    self,
+    notification_id: int,
+    email_payload: dict | None = None,
+    email_enabled: bool = True,
+    allow_after_whatsapp_success: bool = False,
 ):
     delivery = None
     retryable = False
@@ -224,7 +228,10 @@ def deliver_email_notification(
                 notification=notification,
                 channel=NotificationDelivery.Channel.WHATSAPP,
             )
-            if whatsapp.status not in {NotificationDelivery.Status.FAILED, NotificationDelivery.Status.SKIPPED}:
+            if not allow_after_whatsapp_success and whatsapp.status not in {
+                NotificationDelivery.Status.FAILED,
+                NotificationDelivery.Status.SKIPPED,
+            }:
                 return {"status": "blocked", "whatsapp_status": whatsapp.status}
             delivery, _ = NotificationDelivery.objects.get_or_create(
                 notification=notification,

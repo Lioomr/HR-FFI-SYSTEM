@@ -133,12 +133,12 @@
             {% if title_ar %}{{ title_ar }}{% else %}{{ title }}{% endif %}</h1>
           {% if subtitle_ar %}<p class="doc-subtitle"
             style="margin:0 0 18px;font-size:13px;color:#8b9099;line-height:1.6;">{{ subtitle_ar }}</p>{% endif %}
-          <p class="doc-greeting doc-greeting-ar"
+          {% if not hide_greeting %}<p class="doc-greeting doc-greeting-ar"
             style="margin:0 0 14px;font-size:15px;color:#4a4f57;line-height:1.9;mso-line-height-rule:exactly;">{% if not employee_name or employee_name == "Colleague / الزميل" %}<strong style="color:#1c1f24;">زميلنا العزيز</strong>،{% else %}عزيزي /
-            عزيزتي <strong style="color:#1c1f24;">{{ employee_name }}</strong>،{% endif %}</p>
+            عزيزتي <strong style="color:#1c1f24;">{{ employee_name }}</strong>،{% endif %}</p>{% endif %}
           <p class="doc-message doc-message-ar"
             style="margin:0 0 24px;font-size:15px;color:#4a4f57;line-height:1.95;mso-line-height-rule:exactly;">
-            {% if message_ar %}{{ message_ar }}{% else %}{{ message }}{% endif %}</p>
+            {% if message_ar %}{{ message_ar|linebreaksbr }}{% else %}{{ message|linebreaksbr }}{% endif %}</p>
 
           {% block details_ar %}{% endblock %}
           {% block next_steps_ar %}{% endblock %}
@@ -181,11 +181,11 @@
             style="margin:0 0 14px;font-size:21px;font-weight:700;color:#1c1f24;line-height:1.35;">{{ title }}</h2>
           {% if subtitle %}<p class="doc-subtitle"
             style="margin:0 0 18px;font-size:13px;color:#8b9099;line-height:1.6;">{{ subtitle }}</p>{% endif %}
-          <p class="doc-greeting"
+          {% if not hide_greeting %}<p class="doc-greeting"
             style="margin:0 0 14px;font-size:15px;color:#4a4f57;line-height:1.6;">Dear <strong
-              style="color:#1c1f24;">{% if not employee_name or employee_name == "Colleague / الزميل" %}Colleague{% else %}{{ employee_name }}{% endif %}</strong>,</p>
+              style="color:#1c1f24;">{% if not employee_name or employee_name == "Colleague / الزميل" %}Colleague{% else %}{{ employee_name }}{% endif %}</strong>,</p>{% endif %}
           <p class="doc-message doc-message-en"
-            style="margin:0 0 24px;font-size:15px;color:#4a4f57;line-height:1.75;">{{ message }}</p>
+            style="margin:0 0 24px;font-size:15px;color:#4a4f57;line-height:1.75;">{{ message|linebreaksbr }}</p>
 
           {% block details %}{% endblock %}
           {% block next_steps %}{% endblock %}

@@ -129,7 +129,17 @@ def test_rating_renewal_asks_hr_to_review_the_unsettled_annual_leave_term(world)
 
 def test_rating_termination_closes_the_decision_and_asks_hr_for_a_settlement(world):
     rating = pending_ceo(world)
-    rating = submit_ceo_decision(rating.pk, actor=world.ceo, ceo_decision="TERMINATE", comment="End")
+    with patch("employees.contract_expiry.dispatch_notification_channels") as employee_dispatch:
+        employee_dispatch.return_value = {"notification": object(), "created": True}
+        rating = submit_ceo_decision(rating.pk, actor=world.ceo, ceo_decision="TERMINATE", comment="End")
+    employee_notice = next(
+        call.kwargs
+        for call in employee_dispatch.call_args_list
+        if call.kwargs["deduplication_key"].endswith(":employee-termination-notice")
+    )
+    assert employee_notice["recipient"].id == world.employee.id
+    assert employee_notice["email_send_immediately"] is True
+    assert world.employee.is_active is True
     assert rating.contract_decision.status == ContractDecision.Status.PENDING_HR
 
     with patch("employees.contract_expiry.dispatch_notification_channels") as dispatch:

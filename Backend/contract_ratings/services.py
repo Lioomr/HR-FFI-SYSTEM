@@ -21,6 +21,7 @@ from employees.contract_expiry import (
     contract_rating_due,
     contract_terms_snapshot,
     ensure_contract_decision,
+    notify_employee_termination_notice,
     notify_hr_renewal_settlement_review,
 )
 from employees.models import ContractDecision, EmployeeProfile
@@ -561,6 +562,7 @@ def submit_ceo_decision(
             actor,
             metadata={"contract_expiry": str(profile.contract_expiry)},
         )
+        notify_employee_termination_notice(rating.contract_decision)
     from .document_integrity import on_contract_rating_decided
 
     # Freezes the HR/CEO decision copy after commit; a failure is logged, never raised.
