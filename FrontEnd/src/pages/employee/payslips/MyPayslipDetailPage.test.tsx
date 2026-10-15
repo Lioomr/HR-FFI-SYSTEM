@@ -55,6 +55,31 @@ describe("employee payslip pages", () => {
     ).toBeInTheDocument();
   });
 
+  it("adds the pay up to net, sizes the bar and hides zero components", async () => {
+    renderDetail();
+    await screen.findByText("Basic Salary", {}, FIND);
+    // 10,267 kept of 11,000: the bar and its keys round to whole percents.
+    expect(
+      screen.getByText(
+        en("payroll.ui.flow.netShare").replace("{percent}", "93"),
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        en("payroll.ui.flow.deductedShare").replace("{percent}", "7"),
+      ),
+    ).toBeInTheDocument();
+    // Telephone and Petrol are 0.00 in this payslip.
+    expect(screen.queryByText("Telephone")).not.toBeInTheDocument();
+    expect(screen.queryByText("Petrol")).not.toBeInTheDocument();
+    expect(
+      screen.getByText(en("payroll.ui.flow.zeroHidden")),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(en("payroll.ui.flow.noneThisMonth")),
+    ).toBeInTheDocument();
+  });
+
   it("never renders provisions or company cost, even when the payload contains them", async () => {
     const detail = payrollMockState().payslipDetails.get(201)!;
     Object.assign(detail, {
@@ -158,7 +183,5 @@ it("keeps a null salary component Unknown, labels tables and isolates Arabic mon
       name: resolveTranslation("ar", "payroll.pdf.earnings"),
     }),
   ).toBeInTheDocument();
-  expect(
-    document.querySelector('.payroll-payslip-summary [dir="ltr"]'),
-  ).toBeTruthy();
+  expect(document.querySelector('.pslip-figures [dir="ltr"]')).toBeTruthy();
 });

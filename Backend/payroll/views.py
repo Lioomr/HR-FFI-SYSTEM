@@ -1,6 +1,5 @@
 import csv
 import logging
-from decimal import Decimal
 from html import escape
 
 from audit.utils import audit
@@ -19,8 +18,6 @@ from organization.services import (
     filter_queryset_by_company_scope,
     get_active_company_for_request,
 )
-from reportlab.lib import colors
-from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
 from reportlab.platypus import Paragraph, Spacer, Table, TableStyle
@@ -64,31 +61,11 @@ def _is_duplicate_period_error(error_dict) -> bool:
     return False
 
 
-def _fmt_amount(value):
-    return f"{(value or Decimal('0.00')):,.2f}"
-
-
-def _first_two_names(full_name):
-    name = " ".join(str(full_name or "").strip().split())
-    if not name:
-        return "-"
-    return " ".join(name.split(" ")[:2])
-
-
 def _cell_paragraph(value, style):
     text = escape(shape_ar(str(value or "-")))
     regular, bold = font_pair()
     localized = ParagraphStyle("PayrollLocalized", parent=style, fontName=bold if "Bold" in style.fontName else regular)
     return Paragraph(text, localized)
-
-
-def _short_text(value, max_chars):
-    text = " ".join(str(value or "").split())
-    if not text:
-        return "-"
-    if len(text) <= max_chars:
-        return text
-    return f"{text[: max_chars - 3]}..."
 
 
 def _build_payslip_pdf(payslip):
@@ -141,163 +118,9 @@ def _build_payslip_pdf(payslip):
 
 
 def _build_payroll_report_pdf(run, items):
-    styles = getSampleStyleSheet()
-    palette = PALETTE
-    primary_orange = palette["primary_orange"]
-    light_orange = palette["light_orange"]
-    soft_orange = palette["soft_orange"]
-    dark_text = palette["dark_text"]
+    from .pdf_report import build_payroll_report_pdf
 
-    cell_style = ParagraphStyle(
-        "PayrollCell",
-        parent=styles["Normal"],
-        fontName="Helvetica",
-        fontSize=7,
-        leading=9,
-        textColor=dark_text,
-    )
-    meta_value_style = ParagraphStyle(
-        "PayrollMetaValue",
-        parent=styles["Normal"],
-        fontName="Helvetica-Bold",
-        fontSize=10,
-        textColor=dark_text,
-    )
-
-    total_basic = sum((item.basic_salary or Decimal("0.00")) for item in items)
-    total_allowances = sum((item.total_allowances or Decimal("0.00")) for item in items)
-    total_deductions = sum((item.total_deductions or Decimal("0.00")) for item in items)
-    total_net = sum((item.net_salary or Decimal("0.00")) for item in items)
-
-    header_table = build_corporate_header(
-        title="Payroll Run Report",
-        period_text=f"Period {run.month:02d}/{run.year}",
-        second_col_width=220 * mm,
-    )
-    story = [header_table, Spacer(1, 8)]
-
-    metadata_table = Table(
-        [
-            [
-                "Run ID",
-                Paragraph(str(run.id), meta_value_style),
-                "Status",
-                Paragraph(str(run.status), meta_value_style),
-            ],
-            [
-                "Employees",
-                Paragraph(str(run.total_employees), meta_value_style),
-                "Recorded Total Net",
-                Paragraph(_fmt_amount(run.total_net), meta_value_style),
-            ],
-        ],
-        colWidths=[24 * mm, 66 * mm, 36 * mm, 132 * mm],
-    )
-    metadata_table.setStyle(
-        TableStyle(
-            [
-                ("BACKGROUND", (0, 0), (-1, -1), soft_orange),
-                ("BOX", (0, 0), (-1, -1), 0.7, primary_orange),
-                ("INNERGRID", (0, 0), (-1, -1), 0.4, palette["grid_orange"]),
-                ("FONTNAME", (0, 0), (-1, -1), "Helvetica"),
-                ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
-                ("FONTNAME", (2, 0), (2, -1), "Helvetica-Bold"),
-                ("FONTSIZE", (0, 0), (-1, -1), 9),
-                ("TEXTCOLOR", (0, 0), (-1, -1), dark_text),
-                ("ALIGN", (1, 0), (1, -1), "LEFT"),
-                ("ALIGN", (3, 0), (3, -1), "LEFT"),
-                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-                ("LEFTPADDING", (0, 0), (-1, -1), 6),
-                ("RIGHTPADDING", (0, 0), (-1, -1), 6),
-                ("TOPPADDING", (0, 0), (-1, -1), 5),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
-            ]
-        )
-    )
-    story.extend([metadata_table, Spacer(1, 10)])
-
-    summary_table = Table(
-        [
-            ["Total Basic", _fmt_amount(total_basic), "Total Allowances", _fmt_amount(total_allowances)],
-            ["Total Deductions", _fmt_amount(total_deductions), "Total Net", _fmt_amount(total_net)],
-        ],
-        colWidths=[44 * mm, 56 * mm, 44 * mm, 56 * mm],
-    )
-    summary_table.setStyle(
-        TableStyle(
-            [
-                ("BACKGROUND", (0, 0), (-1, -1), light_orange),
-                ("BOX", (0, 0), (-1, -1), 0.7, primary_orange),
-                ("INNERGRID", (0, 0), (-1, -1), 0.4, palette["grid_orange"]),
-                ("FONTNAME", (0, 0), (-1, -1), "Helvetica-Bold"),
-                ("FONTSIZE", (0, 0), (-1, -1), 9),
-                ("TEXTCOLOR", (0, 0), (-1, -1), dark_text),
-                ("ALIGN", (1, 0), (1, -1), "RIGHT"),
-                ("ALIGN", (3, 0), (3, -1), "RIGHT"),
-                ("LEFTPADDING", (0, 0), (-1, -1), 6),
-                ("RIGHTPADDING", (0, 0), (-1, -1), 6),
-                ("TOPPADDING", (0, 0), (-1, -1), 5),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
-            ]
-        )
-    )
-    story.extend([summary_table, Spacer(1, 10)])
-
-    rows = [
-        ["Employee ID", "Employee Name", "Department", "Position", "Basic", "Allowances", "Deductions", "Net"],
-    ]
-    for item in items:
-        rows.append(
-            [
-                str(item.employee_id or "-"),
-                _cell_paragraph(_first_two_names(item.employee_name), cell_style),
-                _cell_paragraph(_short_text(item.department, 30), cell_style),
-                _cell_paragraph(_short_text(item.position, 28), cell_style),
-                _fmt_amount(item.basic_salary),
-                _fmt_amount(item.total_allowances),
-                _fmt_amount(item.total_deductions),
-                _fmt_amount(item.net_salary),
-            ]
-        )
-    if len(rows) == 1:
-        rows.append(["-", "No employees found", "-", "-", "0.00", "0.00", "0.00", "0.00"])
-
-    details_table = Table(
-        rows,
-        repeatRows=1,
-        colWidths=[26 * mm, 44 * mm, 42 * mm, 40 * mm, 26 * mm, 28 * mm, 26 * mm, 28 * mm],
-    )
-    details_table.setStyle(
-        TableStyle(
-            [
-                ("BACKGROUND", (0, 0), (-1, 0), primary_orange),
-                ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-                ("FONTSIZE", (0, 0), (-1, 0), 8),
-                ("FONTNAME", (0, 1), (-1, -1), "Helvetica"),
-                ("FONTSIZE", (0, 1), (-1, -1), 7),
-                ("TEXTCOLOR", (0, 1), (-1, -1), dark_text),
-                ("ALIGN", (4, 1), (-1, -1), "RIGHT"),
-                ("ALIGN", (0, 0), (-1, 0), "CENTER"),
-                ("BOX", (0, 0), (-1, -1), 0.6, palette["border_orange"]),
-                ("INNERGRID", (0, 0), (-1, -1), 0.25, palette["grid_orange"]),
-                ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.HexColor("#ffffff"), soft_orange]),
-                ("LEFTPADDING", (0, 0), (-1, -1), 4),
-                ("RIGHTPADDING", (0, 0), (-1, -1), 4),
-                ("TOPPADDING", (0, 0), (-1, -1), 4),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
-                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-            ]
-        )
-    )
-    story.append(details_table)
-    if hasattr(run, "settings_snapshot"):
-        from .exporting import detail_pages
-
-        story.extend(detail_pages(run, items))
-    story.extend([Spacer(1, 10), build_signature_stamp_block(total_width=269 * mm)])
-
-    return build_platypus_story_pdf(story, "Payroll Run Report", pagesize=landscape(A4))
+    return build_payroll_report_pdf(run, items)
 
 
 def _export_payroll_run_response(request, run):

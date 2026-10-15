@@ -3,13 +3,9 @@
 import json
 import re
 from decimal import Decimal
-from html import escape
 from io import BytesIO
 
 import openpyxl
-from reportlab.lib import colors
-from reportlab.lib.styles import getSampleStyleSheet
-from reportlab.platypus import PageBreak, Paragraph, Spacer, Table, TableStyle
 
 from . import dto
 from .models import PayrollAdjustment
@@ -236,74 +232,3 @@ def workbook(run, items):
     buffer = BytesIO()
     wb.save(buffer)
     return buffer.getvalue()
-
-
-def detail_pages(run, items):
-    styles = getSampleStyleSheet()
-    story = [PageBreak(), Paragraph("Payroll details", styles["Heading1"])]
-    counts = dto.validation(run)["counts"]
-    story.append(
-        Paragraph(
-            f"Settings revision: {run.settings_snapshot.get('settings_revision', 0)}; validation errors: {counts['errors']}; warnings: {counts['warnings']}",
-            styles["Normal"],
-        )
-    )
-    for item in items:
-        value = dto.item_dto(item)
-        story.extend(
-            [Spacer(1, 10), Paragraph(escape(f"{item.employee_id}: {item.employee_name}"), styles["Heading2"])]
-        )
-        rows = [["Category", "Line", "Amount"]]
-        for line in item.lines.order_by("id"):
-            value_line = dto.line_dto(line)
-            rows.append(
-                [
-                    line.category,
-                    Paragraph(escape(value_line["label"]), styles["Normal"]),
-                    value_line["amount"] or "Unknown",
-                ]
-            )
-        rows.extend(
-            [
-                ["TOTAL", "Gross", value["gross_salary"]],
-                ["TOTAL", "Net", value["net_salary"]],
-                ["TOTAL", "Company cost", value["total_company_cost"]],
-            ]
-        )
-        table = Table(rows, colWidths=[95, 330, 95], repeatRows=1)
-        table.setStyle(
-            TableStyle(
-                [
-                    ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#ffedd5")),
-                    ("GRID", (0, 0), (-1, -1), 0.3, colors.grey),
-                    ("VALIGN", (0, 0), (-1, -1), "TOP"),
-                ]
-            )
-        )
-        story.append(table)
-        for key in ("cost_incomplete", "accommodation_status", "carry_forward"):
-            story.append(Paragraph(escape(f"{key}: {json.dumps(value[key], ensure_ascii=False)}"), styles["Normal"]))
-    for issue in dto.validation(run)["errors"] + dto.validation(run)["warnings"]:
-        story.append(Paragraph(escape(f"{issue['code']}: {issue['message']}"), styles["Normal"]))
-    for allocation in run.rent_allocations.order_by("rent_id"):
-        value = dto.rent_dto(allocation)
-        story.append(Paragraph(escape(f"Accommodation: {value['rent_name']}"), styles["Heading2"]))
-        for resident in value["residents"]:
-            raw = resident["raw_share"]
-            story.append(
-                Paragraph(
-                    escape(
-                        f"{resident['employee']['employee_name']}: {raw['numerator']}/{raw['denominator']} (approximately {raw['decimal']}); rounded {resident['rounded_share']}; in payroll {resident['in_payroll']}"
-                    ),
-                    styles["Normal"],
-                )
-            )
-        for key in ("monthly_rent", "vacant_unallocated_raw", "not_in_payroll_raw", "rounding_difference"):
-            raw = value[key]
-            story.append(
-                Paragraph(
-                    escape(f"{key}: {raw['numerator']}/{raw['denominator']} (approximately {raw['decimal']})"),
-                    styles["Normal"],
-                )
-            )
-    return story

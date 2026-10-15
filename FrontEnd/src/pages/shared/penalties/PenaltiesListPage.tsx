@@ -61,6 +61,9 @@ import { useI18n } from "../../../i18n/useI18n";
 import PenaltyStatusTag from "./PenaltyStatusTag";
 import PenaltyCategoryTag from "./PenaltyCategoryTag";
 import PenaltyAmount from "./PenaltyAmount";
+import MyPenaltyRecordOverview, {
+  type PolicyExample,
+} from "./MyPenaltyRecordOverview";
 import { penaltyErrorMessage } from "./penaltyErrors";
 
 type CreateValues = {
@@ -188,6 +191,8 @@ export default function PenaltiesListPage({
   const [createError, setCreateError] = useState<string | null>(null);
   const [form] = Form.useForm<CreateValues>();
   const requestSeq = useRef(0);
+  const [policyOpen, setPolicyOpen] = useState<string[]>([]);
+  const policyRef = useRef<HTMLDivElement>(null);
   const scope = useMemo(
     () => (role === "employee" ? { mine: true } : {}),
     [role],
@@ -506,6 +511,38 @@ export default function PenaltiesListPage({
       })),
     ];
   };
+  const stepLabel = (level: PenaltyCatalogLevel) => {
+    if (!level.amount_value)
+      return t(`penalties.action.${level.action}`, undefined, level.action);
+    const basis = t(
+      `penalties.basis.${level.amount_basis}`,
+      undefined,
+      level.amount_basis ?? "",
+    );
+    return `${level.amount_value} ${basis}`;
+  };
+  const policyExample: PolicyExample | null = (() => {
+    const withSteps = catalog.filter((item) => ladder(item).length >= 3);
+    const item =
+      withSteps.find((entry) => entry.category === "work_time") ?? withSteps[0];
+    if (!item) return null;
+    return {
+      title: language === "ar" ? item.title_ar : item.title_en,
+      steps: ladder(item).slice(0, 4).map(stepLabel),
+    };
+  })();
+  const openPolicy = () => {
+    setPolicyOpen(["schedule"]);
+    // Wait for the panel to open before scrolling it into view.
+    window.setTimeout(
+      () =>
+        policyRef.current?.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        }),
+      50,
+    );
+  };
   const scheduleColumns: ColumnsType<PenaltyCatalogItem> = [
     {
       title: t("penalties.catalogItem"),
@@ -615,38 +652,49 @@ export default function PenaltiesListPage({
           ) : undefined
         }
       />
-      <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
-        {statCards.map((card) => {
-          const count = stats[card.key];
-          const active =
-            card.key === "all" ? !filters.status : filters.status === card.key;
-          return (
-            <Col key={card.key} xs={12} lg={6}>
-              <StatCard
-                compact
-                title={t(`penalties.stats.${card.key}`)}
-                value={count ?? "—"}
-                icon={card.icon}
-                color={card.color}
-                ariaLabel={t("penalties.stats.show", {
-                  label: t(`penalties.stats.${card.key}`),
-                  count: count ?? "—",
-                })}
-                note={
-                  active && hasFilters
-                    ? { label: t("penalties.stats.filtered"), tone: "info" }
-                    : undefined
-                }
-                onClick={() =>
-                  updateFilter({
-                    status: card.key === "all" ? undefined : card.key,
-                  })
-                }
-              />
-            </Col>
-          );
-        })}
-      </Row>
+      {role === "employee" ? (
+        <MyPenaltyRecordOverview
+          catalog={catalog}
+          disputedCount={stats.disputed}
+          policyExample={policyExample}
+          onOpenPolicy={openPolicy}
+        />
+      ) : (
+        <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
+          {statCards.map((card) => {
+            const count = stats[card.key];
+            const active =
+              card.key === "all"
+                ? !filters.status
+                : filters.status === card.key;
+            return (
+              <Col key={card.key} xs={12} lg={6}>
+                <StatCard
+                  compact
+                  title={t(`penalties.stats.${card.key}`)}
+                  value={count ?? "—"}
+                  icon={card.icon}
+                  color={card.color}
+                  ariaLabel={t("penalties.stats.show", {
+                    label: t(`penalties.stats.${card.key}`),
+                    count: count ?? "—",
+                  })}
+                  note={
+                    active && hasFilters
+                      ? { label: t("penalties.stats.filtered"), tone: "info" }
+                      : undefined
+                  }
+                  onClick={() =>
+                    updateFilter({
+                      status: card.key === "all" ? undefined : card.key,
+                    })
+                  }
+                />
+              </Col>
+            );
+          })}
+        </Row>
+      )}
       <Card styles={{ body: { paddingTop: 16 } }}>
         <Row gutter={[12, 12]} align="middle" style={{ marginBottom: 16 }}>
           <Col xs={24} md={12} xl={role === "hr" ? 6 : 8}>
@@ -832,48 +880,54 @@ export default function PenaltiesListPage({
           }}
         />
       </Card>
-      <Collapse
-        style={{ marginTop: 16, background: token.colorBgContainer }}
-        items={[
-          {
-            key: "schedule",
-            label: (
-              <Space size={8}>
-                <BookOutlined aria-hidden />
-                <span style={{ fontWeight: 600 }}>
-                  {t("penalties.catalogTitle")}
+      <div ref={policyRef} style={{ scrollMarginTop: 88 }}>
+        <Collapse
+          style={{ marginTop: 16, background: token.colorBgContainer }}
+          activeKey={policyOpen}
+          onChange={(keys) =>
+            setPolicyOpen(Array.isArray(keys) ? keys : [keys])
+          }
+          items={[
+            {
+              key: "schedule",
+              label: (
+                <Space size={8}>
+                  <BookOutlined aria-hidden />
+                  <span style={{ fontWeight: 600 }}>
+                    {t("penalties.catalogTitle")}
+                  </span>
+                </Space>
+              ),
+              extra: (
+                <span style={secondaryText}>
+                  {t("penalties.scheduleCount", { count: catalog.length })}
                 </span>
-              </Space>
-            ),
-            extra: (
-              <span style={secondaryText}>
-                {t("penalties.scheduleCount", { count: catalog.length })}
-              </span>
-            ),
-            children: (
-              <div>
-                <p style={{ ...secondaryText, fontSize: 13, marginTop: 0 }}>
-                  {t("penalties.scheduleHint")}
-                </p>
-                {catalogAlert}
-                <Tabs
-                  items={categories.map((category) => ({
-                    key: category,
-                    label: t(
-                      `penalties.category.${category}`,
-                      undefined,
-                      category,
-                    ),
-                    children: scheduleTable(
-                      catalog.filter((item) => item.category === category),
-                    ),
-                  }))}
-                />
-              </div>
-            ),
-          },
-        ]}
-      />
+              ),
+              children: (
+                <div>
+                  <p style={{ ...secondaryText, fontSize: 13, marginTop: 0 }}>
+                    {t("penalties.scheduleHint")}
+                  </p>
+                  {catalogAlert}
+                  <Tabs
+                    items={categories.map((category) => ({
+                      key: category,
+                      label: t(
+                        `penalties.category.${category}`,
+                        undefined,
+                        category,
+                      ),
+                      children: scheduleTable(
+                        catalog.filter((item) => item.category === category),
+                      ),
+                    }))}
+                  />
+                </div>
+              ),
+            },
+          ]}
+        />
+      </div>
       {role === "hr" && (
         <Modal
           title={t("penalties.create")}

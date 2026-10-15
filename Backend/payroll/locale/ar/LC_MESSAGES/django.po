@@ -214,20 +214,230 @@ msgstr "تم إنشاء قسائم الرواتب"
 msgid "payroll.message.recalculated"
 msgstr "تمت إعادة حساب مسير الرواتب."
 
+msgid "payroll.month.1"
+msgstr "يناير"
+
+msgid "payroll.month.10"
+msgstr "أكتوبر"
+
+msgid "payroll.month.11"
+msgstr "نوفمبر"
+
+msgid "payroll.month.12"
+msgstr "ديسمبر"
+
+msgid "payroll.month.2"
+msgstr "فبراير"
+
+msgid "payroll.month.3"
+msgstr "مارس"
+
+msgid "payroll.month.4"
+msgstr "أبريل"
+
+msgid "payroll.month.5"
+msgstr "مايو"
+
+msgid "payroll.month.6"
+msgstr "يونيو"
+
+msgid "payroll.month.7"
+msgstr "يوليو"
+
+msgid "payroll.month.8"
+msgstr "أغسطس"
+
+msgid "payroll.month.9"
+msgstr "سبتمبر"
+
 msgid "payroll.payment_mode.bank_transfer"
 msgstr "تحويل بنكي"
+
+msgid "payroll.pdf.absence_base"
+msgstr "أساس خصم الغياب"
+
+msgid "payroll.pdf.accommodation_summary"
+msgstr "ملخص السكن"
 
 msgid "payroll.pdf.additions"
 msgstr "الإضافات"
 
+msgid "payroll.pdf.air_ticket"
+msgstr "تذكرة الطيران السنوية"
+
+msgid "payroll.pdf.allocated_payroll"
+msgstr "الموزع على المقيمين في المسير"
+
+msgid "payroll.pdf.amount"
+msgstr "المبلغ"
+
+msgid "payroll.pdf.amounts_in_sar"
+msgstr "جميع المبالغ بالريال السعودي."
+
+msgid "payroll.pdf.approval"
+msgstr "الاعتماد"
+
+msgid "payroll.pdf.approved_by"
+msgstr "اعتمده"
+
+msgid "payroll.pdf.assumptions"
+msgstr "الافتراضات"
+
+msgid "payroll.pdf.availability"
+msgstr "التوفر"
+
+msgid "payroll.pdf.basis_note"
+msgstr "يُحتسب الأجر على أساس شهر من 30 يومًا، ويُقرَّب كل بند إلى أقرب ريال (النصف يُقرَّب للأعلى)."
+
+msgid "payroll.pdf.blocked"
+msgstr "غير جاهز للاعتماد"
+
+msgid "payroll.pdf.company_cost"
+msgstr "تكلفة الشركة"
+
+msgid "payroll.pdf.company_stamp"
+msgstr "ختم الشركة"
+
+msgid "payroll.pdf.complete"
+msgstr "مكتمل"
+
+msgid "payroll.pdf.cost_incomplete_note"
+msgstr "تكلفة الشركة مجموع جزئي للمبالغ المعروفة. غير متاح: {details}."
+
 msgid "payroll.pdf.deductions"
 msgstr "الخصومات"
+
+msgid "payroll.pdf.department"
+msgstr "القسم"
+
+msgid "payroll.pdf.details"
+msgstr "المبالغ"
 
 msgid "payroll.pdf.earnings"
 msgstr "تفاصيل المستحقات"
 
 msgid "payroll.pdf.employee"
 msgstr "الموظف"
+
+msgid "payroll.pdf.employee_id"
+msgstr "الرقم الوظيفي"
+
+msgid "payroll.pdf.employee_name"
+msgstr "الاسم"
+
+msgid "payroll.pdf.employee_register"
+msgstr "سجل الموظفين"
+
+msgid "payroll.pdf.employees_affected"
+msgstr "الموظفون المتأثرون"
+
+msgid "payroll.pdf.employees_excluded"
+msgstr "الموظفون المستبعدون"
+
+msgid "payroll.pdf.employees_included"
+msgstr "الموظفون المشمولون"
+
+msgid "payroll.pdf.eos_base"
+msgstr "أساس مخصص نهاية الخدمة"
+
+msgid "payroll.pdf.exceptions"
+msgstr "الاستثناءات"
+
+msgid "payroll.pdf.exceptions_intro"
+msgstr "الموظفون الذين لديهم إضافات أو خصومات أو مبالغ غير محصلة أو تعديلات يدوية أو راتب صفري أو موقوف أو ملاحظات مانعة. بقية الموظفين صُرف لهم الراتب المعتاد."
+
+msgid "payroll.pdf.executive"
+msgstr "تنفيذي: بدون تتبع للحضور"
+
+msgid "payroll.pdf.generated_at"
+msgstr "تاريخ الإنشاء"
+
+msgid "payroll.pdf.gosi_base"
+msgstr "أساس التأمينات الاجتماعية"
+
+msgid "payroll.pdf.gosi_rates"
+msgstr "نسب التأمينات (سعودي / غير سعودي)"
+
+msgid "payroll.pdf.grand_total"
+msgstr "الإجمالي العام (عدد الموظفين: {count})"
+
+msgid "payroll.pdf.gross"
+msgstr "الإجمالي"
+
+msgid "payroll.pdf.id_cost"
+msgstr "تكلفة الإقامة الشهرية (غير السعودي)"
+
+msgid "payroll.pdf.issue"
+msgstr "الملاحظة"
+
+msgid "payroll.pdf.key_figures"
+msgstr "الأرقام الرئيسية"
+
+msgid "payroll.pdf.known_subtotal_marker"
+msgstr "* تكلفة الشركة لهذا الموظف مجموع جزئي للمبالغ المعروفة؛ بعض مخصصات الشركة غير متاحة."
+
+msgid "payroll.pdf.leave_base"
+msgstr "أساس مخصص الإجازة"
+
+msgid "payroll.pdf.legacy_banner"
+msgstr "تم الحساب بواسطة نظام الرواتب السابق؛ المبالغ محفوظة كما هي."
+
+msgid "payroll.pdf.legacy_register_note"
+msgstr "لم يسجل نظام الرواتب السابق الإضافات أو مخصصات الشركة. الإجمالي = الراتب الأساسي + البدلات."
+
+msgid "payroll.pdf.manual_adjustments"
+msgstr "تعديلات يدوية من الموارد البشرية: {count}"
+
+msgid "payroll.pdf.medical_invoice"
+msgstr "فاتورة التأمين الطبي السنوية"
+
+msgid "payroll.pdf.medical_invoice_missing"
+msgstr "فاتورة التأمين الطبي مفقودة"
+
+msgid "payroll.pdf.monthly_rent"
+msgstr "الإيجار الشهري"
+
+msgid "payroll.pdf.net"
+msgstr "الصافي"
+
+msgid "payroll.pdf.no"
+msgstr "لا"
+
+msgid "payroll.pdf.no_department"
+msgstr "بدون قسم"
+
+msgid "payroll.pdf.no_employees"
+msgstr "لا يوجد موظفون في مسير الرواتب هذا."
+
+msgid "payroll.pdf.no_exceptions"
+msgstr "لا توجد استثناءات: لا يوجد موظف لديه إضافات أو خصومات أو تعديلات أو ملاحظات مانعة."
+
+msgid "payroll.pdf.no_medical_insurance"
+msgstr "لا يوجد تأمين طبي"
+
+msgid "payroll.pdf.not_available"
+msgstr "غير متاح"
+
+msgid "payroll.pdf.not_available_for"
+msgstr "غير متاح لعدد {count} من الموظفين"
+
+msgid "payroll.pdf.not_available_legacy"
+msgstr "غير متاح - النظام السابق"
+
+msgid "payroll.pdf.not_configured"
+msgstr "غير مُعدّ"
+
+msgid "payroll.pdf.notes"
+msgstr "ملاحظات"
+
+msgid "payroll.pdf.notes_settings"
+msgstr "الملاحظات والإعدادات المستخدمة"
+
+msgid "payroll.pdf.overtime_base"
+msgstr "أساس العمل الإضافي"
+
+msgid "payroll.pdf.page_of"
+msgstr "صفحة {page} من {total}"
 
 msgid "payroll.pdf.payment_mode"
 msgstr "طريقة الدفع"
@@ -244,8 +454,92 @@ msgstr "رقم قسيمة الراتب"
 msgid "payroll.pdf.period"
 msgstr "الفترة"
 
+msgid "payroll.pdf.prepared_by"
+msgstr "أعدّه"
+
+msgid "payroll.pdf.property"
+msgstr "العقار"
+
+msgid "payroll.pdf.provision_proration"
+msgstr "توزيع المخصصات"
+
 msgid "payroll.pdf.provisions"
 msgstr "مخصصات الشركة"
+
+msgid "payroll.pdf.provisions_legacy"
+msgstr "لا تظهر مخصصات الشركة لأن نظام الرواتب السابق لم يحسبها."
+
+msgid "payroll.pdf.provisions_note"
+msgstr "مخصصات الشركة تكاليف على الشركة وليست جزءًا من صافي راتب الموظف. إجمالي تكلفة الشركة = صافي الرواتب + مخصصات الشركة المعروفة."
+
+msgid "payroll.pdf.provisions_unknown_note"
+msgstr "تشمل المبالغ القيم المعروفة فقط؛ الموظفون بدون قيمة غير مشمولين في الإجمالي."
+
+msgid "payroll.pdf.ready_to_finalize"
+msgstr "جاهز للاعتماد"
+
+msgid "payroll.pdf.reconciled"
+msgstr "متطابق"
+
+msgid "payroll.pdf.reviewed_by"
+msgstr "راجعه"
+
+msgid "payroll.pdf.rounding_note"
+msgstr "تُقرَّب حصة كل مقيم إلى أقرب ريال قبل ترحيلها. فرق التقريب هو الحصص الدقيقة مطروحًا منها المبالغ المقربة، ولا يُحمَّل على أي موظف ولا يدخل في تكلفة الشركة. القيم المسبوقة بالرمز ≈ عرض مقرب لكسور دقيقة."
+
+msgid "payroll.pdf.run_id"
+msgstr "رقم المسير"
+
+msgid "payroll.pdf.run_report_title"
+msgstr "تقرير مسير الرواتب"
+
+msgid "payroll.pdf.settings_legacy"
+msgstr "لم تُسجل إعدادات: تم حساب هذا المسير بواسطة نظام الرواتب السابق."
+
+msgid "payroll.pdf.settings_revision"
+msgstr "رقم مراجعة الإعدادات"
+
+msgid "payroll.pdf.severity"
+msgstr "الأهمية"
+
+msgid "payroll.pdf.signature"
+msgstr "التوقيع"
+
+msgid "payroll.pdf.signature_date"
+msgstr "التاريخ"
+
+msgid "payroll.pdf.signature_name"
+msgstr "الاسم"
+
+msgid "payroll.pdf.status"
+msgstr "الحالة"
+
+msgid "payroll.pdf.subtotal"
+msgstr "المجموع الفرعي: {department} ({count})"
+
+msgid "payroll.pdf.suspended_decision"
+msgstr "قرار أجر الموظف الموقوف"
+
+msgid "payroll.pdf.total_provisions"
+msgstr "إجمالي المخصصات المعروفة"
+
+msgid "payroll.pdf.unknown_for_employees"
+msgstr "{label} لعدد {count} من الموظفين"
+
+msgid "payroll.pdf.validation_counts"
+msgstr "أخطاء مانعة: {errors}، تحذيرات: {warnings}"
+
+msgid "payroll.pdf.validation_issues"
+msgstr "ملاحظات التحقق"
+
+msgid "payroll.pdf.validation_status"
+msgstr "حالة التحقق"
+
+msgid "payroll.pdf.whole_run"
+msgstr "المسير كاملًا"
+
+msgid "payroll.pdf.yes"
+msgstr "نعم"
 
 msgid "payroll.provision_proration.full_month"
 msgstr "شهر كامل"

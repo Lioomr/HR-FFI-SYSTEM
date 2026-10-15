@@ -182,11 +182,50 @@ describe("PenaltiesListPage", () => {
     });
     render(<PenaltiesListPage role="employee" />);
     fireEvent.click(await screen.findByText("Penalty policy"));
-    expect(await screen.findByText("#3")).toBeInTheDocument();
-    expect(screen.getByText("#4").parentElement).toHaveTextContent(
-      "#4 Deduction · 5 % of daily wage",
-    );
+    // The policy guide repeats the step numbers; the schedule tags use <strong>.
+    expect(
+      await screen.findByText("#3", { selector: "strong" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("#4", { selector: "strong" }).parentElement,
+    ).toHaveTextContent("#4 Deduction · 5 % of daily wage");
     expect(screen.queryByRole("switch")).not.toBeInTheDocument();
+  });
+
+  it("shows the employee's record: waiting responses, totals and a Respond button", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-10-15T09:00:00Z"));
+    try {
+      render(<PenaltiesListPage role="employee" />);
+      expect(
+        await screen.findByText("1 waiting for your response."),
+      ).toBeInTheDocument();
+      // September had a penalty, so 5 of the last 6 months are clean.
+      expect(screen.getByText("Good record")).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: "Respond" }),
+      ).toBeInTheDocument();
+      expect(penaltiesApi.listPenalties).toHaveBeenCalledWith(
+        expect.objectContaining({ mine: true, date_from: "2026-01-01" }),
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("celebrates a clean record and keeps the HR view without it", async () => {
+    vi.mocked(penaltiesApi.listPenalties).mockResolvedValue(page([]));
+    const { unmount } = render(<PenaltiesListPage role="employee" />);
+    expect(await screen.findByText("Spotless record")).toBeInTheDocument();
+    expect(
+      screen.getByText("No penalties in the last 6 months."),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Nothing here. Keep it up!")).toBeInTheDocument();
+    unmount();
+
+    render(<PenaltiesListPage role="hr" />);
+    await waitFor(() => expect(penaltiesApi.listPenalties).toHaveBeenCalled());
+    expect(screen.queryByText("Spotless record")).not.toBeInTheDocument();
   });
 
   it("names each row's view button and requires create fields before submitting", async () => {

@@ -333,7 +333,7 @@ def test_employee_serializer_has_no_company_cost_provision_keys(context):
 
 
 def test_catalog_parity_and_all_44_validation_keys():
-    assert set(EN) == set(AR) and len(EN) == 151
+    assert set(EN) == set(AR) and len(EN) == 249
     removed = "payroll.assumption.provision_proration_pending"
     assert removed not in EN
     for language, messages in (("en", EN), ("ar", AR)):

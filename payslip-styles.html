@@ -1,0 +1,276 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Payslip Styles</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#f3f4f7;--ink:#0b1220;--ink2:#334155;--muted:#64748b;--faint:#94a3b8;--line:#eceff3;--brand:#ea580c;--brand2:#f97316;--good:#059669;--bad:#e11d48}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);font-family:Inter,system-ui,sans-serif;color:var(--ink);-webkit-font-smoothing:antialiased}
+.page{max-width:1180px;margin:0 auto;padding:32px 16px 80px}
+.page>h1{margin:0;font-size:26px;letter-spacing:-.02em}
+.page>p{margin:6px 0 18px;color:var(--muted);font-size:14px;max-width:760px}
+.bar{position:sticky;top:0;z-index:9;display:flex;flex-wrap:wrap;gap:16px;align-items:center;padding:10px 0 14px;background:var(--bg)}
+.seg{display:inline-flex;padding:3px;border-radius:999px;background:#fff;box-shadow:inset 0 0 0 1px #e2e8f0}
+.seg button{border:0;cursor:pointer;padding:7px 14px;border-radius:999px;font:600 13px Inter;background:none;color:#475569}
+.seg button.on{background:var(--ink);color:#fff}
+.seg-label{font-size:12px;color:var(--muted);font-weight:600;margin-inline-end:-8px}
+.opt{margin-top:34px}
+.opt-label{display:flex;align-items:baseline;flex-wrap:wrap;gap:10px;margin:0 0 12px}
+.opt-label b{display:inline-grid;place-items:center;width:28px;height:28px;border-radius:8px;background:var(--ink);color:#fff;font-size:14px}
+.opt-label span{font-weight:700;font-size:16px}
+.opt-label em{font-style:normal;color:var(--muted);font-size:13px}
+.frame{margin:0 auto;transition:max-width .25s}
+.phone .frame{max-width:390px}
+.cur{font-size:.62em;font-weight:600;color:var(--faint);margin-inline-start:4px;letter-spacing:.02em}
+.num{font-variant-numeric:tabular-nums}
+.btn{display:inline-flex;align-items:center;gap:8px;border:0;cursor:pointer;font:600 13px Inter;padding:9px 14px;border-radius:10px;white-space:nowrap}
+.btn-p{background:var(--brand);color:#fff;box-shadow:0 6px 16px -8px rgba(234,88,12,.8)}
+.btn-g{background:#fff;color:var(--ink2);box-shadow:inset 0 0 0 1px #e2e8f0}
+.pill{display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:600}
+.pill i{width:6px;height:6px;border-radius:50%;background:currentColor}
+.paid{color:var(--good);background:#ecfdf5}
+.ico{width:16px;height:16px;display:block}
+
+/* ========== A · Hero net pay ========== */
+.A .top{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:16px}
+.A .top h2{margin:0;font-size:22px;letter-spacing:-.02em}
+.A .top .acts{display:flex;gap:8px;flex-wrap:wrap}
+.A .hero{position:relative;overflow:hidden;border-radius:24px;padding:28px;color:#fff;background:radial-gradient(90% 120% at 100% 0%,rgba(249,115,22,.45),transparent 55%),linear-gradient(150deg,#0b1220,#1b2438)}
+.A .hero .k{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:#cbd5e1;font-weight:600}
+.A .hero .net{font-size:52px;font-weight:800;letter-spacing:-.04em;line-height:1.05;margin:8px 0 6px}
+.A .hero .net .cur{color:#94a3b8;font-size:.36em}
+.A .hero .meta{display:flex;flex-wrap:wrap;gap:8px 18px;font-size:13px;color:#cbd5e1}
+.A .hero .meta b{color:#fff;font-weight:600}
+.A .hero .paidtag{position:absolute;top:24px;inset-inline-end:24px;color:#6ee7b7;background:rgba(16,185,129,.15)}
+.A .eq{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:16px 0}
+.A .eq div{background:#fff;border-radius:16px;padding:14px 16px;box-shadow:inset 0 0 0 1px var(--line)}
+.A .eq small{display:block;font-size:12px;color:var(--muted);margin-bottom:4px}
+.A .eq strong{font-size:18px;font-weight:700}
+.A .eq .op{color:var(--faint);font-weight:700;margin-inline-end:4px}
+.A .eq .netc{background:#fff7ed;box-shadow:inset 0 0 0 1px #fed7aa}.A .eq .netc strong{color:var(--brand)}
+.A .cols{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.A .card{background:#fff;border-radius:20px;padding:20px;box-shadow:inset 0 0 0 1px var(--line)}
+.A .card h3{margin:0 0 14px;font-size:15px;display:flex;justify-content:space-between}
+.A .card h3 span{font-weight:700}
+.A .row{padding:9px 0;border-bottom:1px dashed #eef0f3}
+.A .row:last-child{border-bottom:0}
+.A .row .l{display:flex;justify-content:space-between;font-size:13.5px}
+.A .row .l em{font-style:normal;color:var(--faint);font-size:12px;margin-inline-start:6px}
+.A .row .b{height:4px;border-radius:9px;background:#f1f4f8;margin-top:7px;overflow:hidden}
+.A .row .b i{display:block;height:100%;border-radius:9px;background:linear-gradient(90deg,#fdba74,#ea580c)}
+.A .ded .row .b i{background:linear-gradient(90deg,#fda4af,#e11d48)}
+.A .empty{display:flex;align-items:center;gap:10px;padding:16px;border-radius:14px;background:#f0fdf4;color:#047857;font-size:13px;font-weight:500}
+.phone .A .eq{grid-template-columns:1fr 1fr}.phone .A .cols{grid-template-columns:1fr}.phone .A .hero .net{font-size:40px}.phone .A .hero{padding:22px}
+.phone .A .hero .paidtag{position:static;margin-bottom:10px}
+
+/* ========== B · Digital receipt ========== */
+.B{display:grid;grid-template-columns:1fr 340px;gap:22px;align-items:start}
+.B .paper{position:relative;background:#fff;border-radius:18px;padding:34px 34px 30px;box-shadow:0 20px 40px -24px rgba(15,23,42,.25)}
+.B .paper::after{content:"";position:absolute;left:0;right:0;bottom:-10px;height:20px;background:radial-gradient(circle at 10px 0,transparent 9px,#fff 10px) repeat-x;background-size:20px 20px}
+.B .brand{display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:20px;border-bottom:2px solid var(--ink)}
+.B .logo{display:flex;align-items:center;gap:10px;font-weight:800;font-size:15px}
+.B .logo span{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;color:#fff;background:linear-gradient(145deg,#fb923c,#ea580c)}
+.B .brand .r{text-align:end;font-size:12px;color:var(--muted)}
+.B .brand .r b{display:block;font-size:16px;color:var(--ink);letter-spacing:-.01em}
+.B .sec{margin-top:22px}
+.B .sec h4{margin:0 0 8px;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+.B .ln{display:flex;align-items:baseline;gap:8px;padding:6px 0;font-size:14px}
+.B .ln .dots{flex:1;border-bottom:1.5px dotted #cbd5e1;transform:translateY(-4px)}
+.B .ln .amt{font:600 13.5px "JetBrains Mono",monospace}
+.B .ln em{font-style:normal;color:var(--faint);font-size:12px}
+.B .ln.tot{font-weight:700;border-top:1px solid #e5e7eb;margin-top:6px;padding-top:10px}
+.B .ln.neg .amt{color:var(--bad)}
+.B .netbox{margin-top:24px;padding:18px 20px;border-radius:14px;background:var(--ink);color:#fff;display:flex;justify-content:space-between;align-items:center}
+.B .netbox small{display:block;color:#94a3b8;font-size:12px}
+.B .netbox b{font:700 26px "JetBrains Mono",monospace;letter-spacing:-.02em}
+.B .stamp{position:absolute;top:110px;inset-inline-end:40px;transform:rotate(-12deg);border:3px solid rgba(5,150,105,.55);color:rgba(5,150,105,.75);border-radius:10px;padding:4px 14px;font-weight:800;letter-spacing:.2em;font-size:20px}
+.B .side{display:flex;flex-direction:column;gap:12px}
+.B .side .c{background:#fff;border-radius:16px;padding:18px;box-shadow:inset 0 0 0 1px var(--line)}
+.B .side .c small{color:var(--muted);font-size:12px}
+.B .side .c .v{font-size:15px;font-weight:600;margin-top:2px}
+.B .side .acts{display:grid;gap:8px}
+.B .side .acts .btn{justify-content:center;padding:12px}
+.phone .B{grid-template-columns:1fr}.phone .B .paper{padding:24px 20px}.phone .B .stamp{top:96px;inset-inline-end:16px;font-size:16px}
+
+/* ========== C · Donut dashboard ========== */
+.C .top{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:16px}
+.C .ttl small{display:block;color:var(--muted);font-size:13px}
+.C .ttl h2{margin:2px 0 0;font-size:22px;letter-spacing:-.02em;display:flex;align-items:center;gap:10px}
+.C .months{display:flex;align-items:center;gap:6px}
+.C .months button{border:0;background:#fff;width:34px;height:34px;border-radius:10px;cursor:pointer;box-shadow:inset 0 0 0 1px #e2e8f0;color:var(--ink2);font-size:15px}
+.C .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr));gap:16px}
+.C .card{background:#fff;border-radius:22px;padding:22px;box-shadow:0 1px 2px rgba(15,23,42,.04),0 10px 30px -18px rgba(15,23,42,.18)}
+.C .donut{position:relative;width:220px;height:220px;margin:6px auto 18px}
+.C .donut svg{transform:rotate(-90deg)}
+.C .donut .mid{position:absolute;inset:0;display:grid;place-items:center;text-align:center}
+.C .donut .mid small{display:block;color:var(--muted);font-size:12px}
+.C .donut .mid b{font-size:28px;letter-spacing:-.03em}
+.C .legend{display:grid;gap:8px}
+.C .legend div{display:grid;grid-template-columns:10px 1fr auto auto;gap:10px;align-items:center;font-size:13px}
+.C .legend i{width:10px;height:10px;border-radius:3px}
+.C .legend .p{color:var(--faint);font-size:12px;width:38px;text-align:end}
+.C .kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px}
+.C .kpi{background:#fff;border-radius:18px;padding:16px;box-shadow:inset 0 0 0 1px var(--line)}
+.C .kpi .ic{width:32px;height:32px;border-radius:10px;display:grid;place-items:center;margin-bottom:10px;font-weight:700}
+.C .kpi small{display:block;color:var(--muted);font-size:12px}
+.C .kpi b{font-size:20px;letter-spacing:-.02em}
+.C .tbl h3{margin:0 0 6px;font-size:15px}
+.C .tbl .r{display:grid;grid-template-columns:1fr auto;gap:10px;padding:11px 0;border-bottom:1px solid #f1f3f6;font-size:13.5px}
+.C .tbl .r:last-child{border-bottom:0}
+.C .tbl .r em{display:block;font-style:normal;color:var(--faint);font-size:12px;margin-top:1px}
+.C .tbl .tag{display:inline-block;font-size:11px;font-weight:600;padding:1px 7px;border-radius:6px;margin-inline-start:6px}
+.C .two{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr));gap:16px}
+.phone .C .grid,.phone .C .two{grid-template-columns:1fr}.phone .C .kpis{grid-template-columns:1fr 1fr 1fr;gap:8px}.phone .C .kpi{padding:12px}.phone .C .kpi b{font-size:15px}.phone .C .kpi .ic{display:none}
+
+/* ========== D · Flow bar ========== */
+.D{background:#fff;border-radius:24px;box-shadow:0 1px 2px rgba(15,23,42,.04),0 14px 36px -20px rgba(15,23,42,.2);overflow:hidden}
+.D .hd{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;padding:24px 26px 0}
+.D .hd small{color:var(--muted);font-size:13px}
+.D .hd h2{margin:2px 0 0;font-size:22px;letter-spacing:-.02em;display:flex;align-items:center;gap:10px}
+.D .hd .acts{display:flex;gap:8px}
+.D .flow{padding:26px}
+.D .figs{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.D .figs .f small{display:block;font-size:12px;color:var(--muted);margin-bottom:2px}
+.D .figs .f b{font-size:20px;letter-spacing:-.02em}
+.D .figs .f.net b{font-size:40px;color:var(--ink);letter-spacing:-.04em}
+.D .figs .arrow{color:var(--faint);font-size:20px;padding-bottom:6px}
+.D .stack{display:flex;height:14px;border-radius:999px;overflow:hidden;margin:18px 0 10px;background:#f1f4f8;gap:2px}
+.D .stack i{display:block;height:100%}
+.D .keys{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:12px;color:var(--muted)}
+.D .keys span{display:inline-flex;align-items:center;gap:6px}.D .keys i{width:9px;height:9px;border-radius:3px}
+.D .panes{display:grid;grid-template-columns:1fr 1fr 1fr;border-top:1px solid var(--line)}
+.D .pane{padding:20px 22px;border-inline-end:1px solid var(--line)}
+.D .pane:last-child{border-inline-end:0}
+.D .pane h4{margin:0 0 12px;font-size:12px;letter-spacing:.1em;text-transform:uppercase;display:flex;justify-content:space-between;color:var(--muted)}
+.D .pane h4 b{letter-spacing:0;color:var(--ink);font-size:13px}
+.D .it{display:flex;justify-content:space-between;gap:10px;padding:7px 0;font-size:13.5px}
+.D .it em{display:block;font-style:normal;color:var(--faint);font-size:11.5px}
+.D .it .dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-inline-end:8px;vertical-align:1px}
+.D .none{font-size:13px;color:var(--faint);padding:6px 0}
+.D .foot{display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;padding:14px 26px;background:#fafbfc;border-top:1px solid var(--line);font-size:12.5px;color:var(--muted)}
+.phone .D .panes{grid-template-columns:1fr}.phone .D .pane{border-inline-end:0;border-bottom:1px solid var(--line)}.phone .D .figs .f.net b{font-size:32px}.phone .D .figs .arrow{display:none}.phone .D .hd .acts{width:100%}.phone .D .hd .acts .btn{flex:1;justify-content:center}
+
+/* ========== E · Statement ledger ========== */
+.E .shell{background:#fff;border-radius:24px;box-shadow:0 1px 2px rgba(15,23,42,.04),0 14px 36px -20px rgba(15,23,42,.2);overflow:hidden}
+.E .strip{display:flex;gap:6px;padding:14px 16px;border-bottom:1px solid var(--line);overflow-x:auto;scrollbar-width:none}
+.E .strip button{flex-shrink:0;border:0;cursor:pointer;padding:8px 12px;border-radius:12px;background:#f6f7f9;font:600 12.5px Inter;color:var(--muted);text-align:start}
+.E .strip button small{display:block;font-weight:500;font-size:11px;color:var(--faint);margin-top:1px}
+.E .strip button.on{background:var(--ink);color:#fff}.E .strip button.on small{color:#94a3b8}
+.E .head{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;padding:24px 26px}
+.E .head small{color:var(--muted);font-size:13px}
+.E .head .n{font-size:42px;font-weight:800;letter-spacing:-.04em;line-height:1.1}
+.E .head .sub{display:flex;gap:10px;align-items:center;font-size:13px;color:var(--muted);margin-top:4px;flex-wrap:wrap}
+.E .head .acts{display:flex;gap:8px}
+.E .grp{padding:0 26px 6px}
+.E .grp h5{margin:14px 0 4px;font-size:11.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--faint)}
+.E .tx{display:grid;grid-template-columns:36px 1fr auto;gap:12px;align-items:center;padding:11px 0;border-bottom:1px solid #f3f4f6}
+.E .tx .ic{width:36px;height:36px;border-radius:12px;display:grid;place-items:center;font-size:15px;font-weight:700}
+.E .tx .ic.in{background:#ecfdf5;color:var(--good)}.E .tx .ic.out{background:#fff1f2;color:var(--bad)}.E .tx .ic.plus{background:#eff6ff;color:#2563eb}
+.E .tx .nm{font-size:14px;font-weight:600}
+.E .tx .nm em{display:block;font-style:normal;font-weight:400;color:var(--faint);font-size:12px}
+.E .tx .a{font:600 14px "JetBrains Mono",monospace}
+.E .tx .a.out{color:var(--bad)}.E .tx .a.in{color:var(--good)}
+.E .total{display:flex;justify-content:space-between;align-items:center;margin:10px 26px 24px;padding:16px 18px;border-radius:16px;background:linear-gradient(135deg,#fff7ed,#fff);box-shadow:inset 0 0 0 1px #fed7aa;font-weight:700}
+.E .total b{font:700 20px "JetBrains Mono",monospace;color:var(--brand)}
+.phone .E .head .n{font-size:34px}.phone .E .head .acts{width:100%}.phone .E .head .acts .btn{flex:1;justify-content:center}.phone .E .grp,.phone .E .head{padding-inline:18px}.phone .E .total{margin-inline:18px}
+</style>
+</head>
+<body>
+<div class="page">
+  <h1>Payslip page styles</h1>
+  <p>Five directions for the employee payslip page. They use only what the page already gets: period, status, payment method, salary lines, additions, deductions and the totals. Switch the sample month and the screen width, then tell me which letter you want.</p>
+  <div class="bar">
+    <span class="seg-label">Month</span><div class="seg" id="scSeg"></div>
+    <span class="seg-label">Width</span><div class="seg" id="wSeg"></div>
+  </div>
+  <div id="out"></div>
+</div>
+<script>
+const SC={
+ simple:{label:'Simple month (your screenshot)',period:'October 2026',mode:'Bank Transfer',
+  earn:[['Basic Salary',2500],['Housing',0],['Transportation',1000],['Telephone',0],['Petrol',0],['Other Allowance',0]],
+  add:[],ded:[]},
+ busy:{label:'Busy month (overtime + deductions)',period:'September 2026',mode:'Bank Transfer',
+  earn:[['Basic Salary',8000],['Housing',2000],['Transportation',800],['Telephone',200],['Petrol',0],['Other Allowance',0]],
+  add:[['Overtime',750,'12 hours'],['Business trip allowance',400,'from August 2026']],
+  ded:[['Social insurance (GOSI)',975,''],['Absence',367,'1 day'],['Loan instalment',500,'3 of 10']]}
+};
+let sc='simple',width='desktop';
+const f=n=>n.toLocaleString('en-US');
+const cur='<span class="cur">SAR</span>';
+const money=n=>`<span class="num">${f(n)}</span>${cur}`;
+const sum=a=>a.reduce((s,x)=>s+x[1],0);
+const DL='<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11m0 0l-4.5-4.5M12 15l4.5-4.5M5 19h14"/></svg>';
+const BACK='<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>';
+const CHECK='<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8.5 12.5l2.5 2.5 4.5-5"/></svg>';
+const COLORS=['#ea580c','#f59e0b','#0ea5e9','#8b5cf6','#14b8a6','#64748b'];
+function m(){const s=SC[sc];const earn=s.earn.filter(e=>e[1]>0);const gross=sum(s.earn),adds=sum(s.add),deds=sum(s.ded);return {...s,earnNZ:earn,gross,adds,deds,net:gross+adds-deds};}
+const acts=`<button class="btn btn-p">${DL}Download PDF</button><button class="btn btn-g">My Payslips ${BACK}</button>`;
+const paid='<span class="pill paid"><i></i>Paid</span>';
+
+const V={
+A:{name:'Net pay hero',desc:'A dark banner with your net pay, the gross + additions − deductions = net sum, then earnings and deductions with bars',r(d){
+ const max=Math.max(...d.earnNZ.map(e=>e[1]),...d.add.map(e=>e[1]),1),maxD=Math.max(...d.ded.map(e=>e[1]),1);
+ const rows=(a,mx)=>a.map(e=>`<div class="row"><div class="l"><span>${e[0]}${e[2]?`<em>${e[2]}</em>`:''}</span><b class="num">${f(e[1])}</b></div><div class="b"><i style="width:${e[1]/mx*100}%"></i></div></div>`).join('');
+ return `<div class="A"><div class="top"><h2>Payslip · ${d.period}</h2><div class="acts">${acts}</div></div>
+ <div class="hero"><span class="pill paidtag"><i></i>Paid</span><div class="k">Net pay</div><div class="net">${money(d.net)}</div><div class="meta"><span>Period <b>${d.period}</b></span><span>Paid by <b>${d.mode}</b></span></div></div>
+ <div class="eq"><div><small>Gross salary</small><strong>${money(d.gross)}</strong></div><div><small>Additions</small><strong><span class="op">+</span>${money(d.adds)}</strong></div><div><small>Deductions</small><strong><span class="op">−</span>${money(d.deds)}</strong></div><div class="netc"><small>Net pay</small><strong>${money(d.net)}</strong></div></div>
+ <div class="cols"><div class="card"><h3><span>Earnings</span><span class="num">${f(d.gross+d.adds)}</span></h3>${rows(d.earnNZ,max)}${d.add.length?`<h3 style="margin-top:16px"><span style="font-size:13px;color:var(--muted)">Additions</span></h3>${rows(d.add,max)}`:''}</div>
+ <div class="card ded"><h3><span>Deductions</span><span class="num">${f(d.deds)}</span></h3>${d.ded.length?rows(d.ded,maxD):`<div class="empty">${CHECK}Nothing was deducted this month.</div>`}</div></div></div>`}},
+
+B:{name:'Digital receipt',desc:'A printed-receipt look with dotted lines and a PAID stamp; payment details and buttons sit beside it',r(d){
+ const ln=(a,neg)=>a.map(e=>`<div class="ln${neg?' neg':''}"><span>${e[0]} ${e[2]?`<em>${e[2]}</em>`:''}</span><span class="dots"></span><span class="amt">${neg?'−':''}${f(e[1])}</span></div>`).join('');
+ return `<div class="B"><div class="paper"><div class="brand"><div class="logo"><span>F</span>FFI · Payslip</div><div class="r">Pay period<b>${d.period}</b></div></div>
+ <div class="stamp">PAID</div>
+ <div class="sec"><h4>Earnings</h4>${ln(d.earnNZ)}<div class="ln tot"><span>Gross salary</span><span class="dots"></span><span class="amt">${f(d.gross)}</span></div></div>
+ ${d.add.length?`<div class="sec"><h4>Additions</h4>${ln(d.add)}<div class="ln tot"><span>Total additions</span><span class="dots"></span><span class="amt">${f(d.adds)}</span></div></div>`:''}
+ <div class="sec"><h4>Deductions</h4>${d.ded.length?ln(d.ded,true):'<div class="ln"><span style="color:var(--faint)">No deductions this month</span></div>'}<div class="ln tot neg"><span>Total deductions</span><span class="dots"></span><span class="amt">${d.deds?'−':''}${f(d.deds)}</span></div></div>
+ <div class="netbox"><div><small>Net pay · SAR</small>Transferred to your bank</div><b>${f(d.net)}</b></div></div>
+ <div class="side"><div class="c"><small>Status</small><div class="v">${paid}</div></div><div class="c"><small>Payment method</small><div class="v">${d.mode}</div></div><div class="c"><small>Pay period</small><div class="v">${d.period}</div></div><div class="acts">${acts}</div></div></div>`}},
+
+C:{name:'Donut dashboard',desc:'Finance-app style: a donut chart of what makes up your gross, totals cards, and side-by-side tables',r(d){
+ const parts=[...d.earnNZ,...d.add].map((e,i)=>({n:e[0],v:e[1],c:COLORS[i%COLORS.length]}));const tot=sum(parts.map(p=>[0,p.v]))||1;
+ const R=88,C=2*Math.PI*R;let off=0;const arcs=parts.map(p=>{const len=p.v/tot*C;const s=`<circle cx="110" cy="110" r="${R}" fill="none" stroke="${p.c}" stroke-width="22" stroke-dasharray="${Math.max(len-3,0)} ${C}" stroke-dashoffset="${-off}"/>`;off+=len;return s}).join('');
+ const r=(a,neg,tag)=>a.map(e=>`<div class="r"><span>${e[0]}${tag?`<span class="tag" style="${tag}">${neg?'Deduction':'Addition'}</span>`:''}${e[2]?`<em>${e[2]}</em>`:''}</span><b class="num" style="${neg?'color:var(--bad)':''}">${neg?'−':''}${f(e[1])}</b></div>`).join('');
+ return `<div class="C"><div class="top"><div class="ttl"><small>My payslips</small><h2>${d.period} ${paid}</h2></div><div style="display:flex;gap:8px;flex-wrap:wrap"><div class="months"><button title="Previous month">‹</button><button title="Next month">›</button></div>${acts}</div></div>
+ <div class="kpis"><div class="kpi"><div class="ic" style="background:#fff7ed;color:var(--brand)">G</div><small>Gross + additions</small><b>${money(d.gross+d.adds)}</b></div><div class="kpi"><div class="ic" style="background:#fff1f2;color:var(--bad)">−</div><small>Deductions</small><b>${money(d.deds)}</b></div><div class="kpi" style="background:var(--ink);color:#fff;box-shadow:none"><div class="ic" style="background:rgba(255,255,255,.1);color:#fdba74">N</div><small style="color:#94a3b8">Net pay</small><b>${money(d.net)}</b></div></div>
+ <div class="grid"><div class="card"><div class="donut"><svg width="220" height="220" viewBox="0 0 220 220"><circle cx="110" cy="110" r="${R}" fill="none" stroke="#f1f4f8" stroke-width="22"/>${arcs}</svg><div class="mid"><div><small>Net pay</small><b class="num">${f(d.net)}</b><small>SAR · ${d.mode}</small></div></div></div>
+ <div class="legend">${parts.map(p=>`<div><i style="background:${p.c}"></i><span>${p.n}</span><b class="num">${f(p.v)}</b><span class="p">${Math.round(p.v/tot*100)}%</span></div>`).join('')}</div></div>
+ <div class="two"><div class="card tbl"><h3>Earnings</h3>${r(d.earnNZ)}${r(d.add,false,'background:#eff6ff;color:#2563eb')}</div><div class="card tbl"><h3>Deductions</h3>${d.ded.length?r(d.ded,true):'<div class="r"><span style="color:var(--faint)">No deductions this month</span><b></b></div>'}<div class="r" style="font-weight:700"><span>Total</span><b class="num">${f(d.deds)}</b></div></div></div></div></div>`}},
+
+D:{name:'Pay flow bar',desc:'One clean card: gross → net with a colored bar showing where the money goes, then three columns for earnings, additions and deductions',r(d){
+ const total=d.gross+d.adds||1;const seg=[...d.earnNZ.map((e,i)=>({v:e[1],c:COLORS[i%COLORS.length]})),...d.add.map(e=>({v:e[1],c:'#3b82f6'}))];
+ const netShare=d.net/total*100, dedShare=d.deds/total*100;
+ const it=(a,c,neg)=>a.length?a.map((e,i)=>`<div class="it"><span><span class="dot" style="background:${typeof c==='function'?c(i):c}"></span>${e[0]}${e[2]?`<em style="margin-inline-start:16px">${e[2]}</em>`:''}</span><b class="num" style="${neg?'color:var(--bad)':''}">${neg?'−':''}${f(e[1])}</b></div>`).join(''):`<div class="none">None this month</div>`;
+ return `<div class="D"><div class="hd"><div><small>Payslip</small><h2>${d.period} ${paid}</h2></div><div class="acts">${acts}</div></div>
+ <div class="flow"><div class="figs"><div class="f"><small>Gross</small><b>${money(d.gross)}</b></div><span class="arrow">+</span><div class="f"><small>Additions</small><b>${money(d.adds)}</b></div><span class="arrow">−</span><div class="f"><small>Deductions</small><b style="color:${d.deds?'var(--bad)':'inherit'}">${money(d.deds)}</b></div><span class="arrow">=</span><div class="f net"><small>Net pay</small><b>${money(d.net)}</b></div></div>
+ <div class="stack"><i style="width:${netShare}%;background:linear-gradient(90deg,#10b981,#059669)"></i>${d.deds?`<i style="width:${dedShare}%;background:repeating-linear-gradient(-45deg,#fb7185 0 5px,#e11d48 5px 10px)"></i>`:''}</div>
+ <div class="keys"><span><i style="background:#059669"></i>Net pay ${Math.round(netShare)}%</span>${d.deds?`<span><i style="background:#e11d48"></i>Deducted ${Math.round(dedShare)}%</span>`:''}<span>Paid by ${d.mode}</span></div></div>
+ <div class="panes"><div class="pane"><h4>Earnings <b class="num">${f(d.gross)}</b></h4>${it(d.earnNZ,i=>COLORS[i%COLORS.length])}</div><div class="pane"><h4>Additions <b class="num">${f(d.adds)}</b></h4>${it(d.add,'#3b82f6')}</div><div class="pane"><h4>Deductions <b class="num">${f(d.deds)}</b></h4>${it(d.ded,'#e11d48',true)}</div></div>
+ <div class="foot"><span>Allowances with 0 are hidden</span><span>Amounts in SAR</span></div></div>`}},
+
+E:{name:'Bank statement',desc:'A banking-app layout: a row of months to switch between, a big net figure, then each line as a + or − entry',r(d){
+ const months=['May','Jun','Jul','Aug','Sep','Oct'];const curM=d.period.slice(0,3);
+ const tx=(a,kind)=>a.map(e=>`<div class="tx"><span class="ic ${kind}">${kind==='out'?'−':'+'}</span><span class="nm">${e[0]}<em>${e[2]||(kind==='in'?'Monthly salary component':kind==='plus'?'Addition':'Deduction')}</em></span><span class="a ${kind==='out'?'out':'in'}">${kind==='out'?'−':'+'}${f(e[1])}</span></div>`).join('');
+ return `<div class="E"><div class="shell"><div class="strip">${months.map(x=>`<button class="${x===curM?'on':''}">${x} 2026<small>${x===curM?'Viewing':'Paid'}</small></button>`).join('')}</div>
+ <div class="head"><div><small>Net pay for ${d.period}</small><div class="n">${money(d.net)}</div><div class="sub">${paid}<span>Paid by ${d.mode}</span></div></div><div class="acts">${acts}</div></div>
+ <div class="grp"><h5>Earnings · ${f(d.gross)}</h5>${tx(d.earnNZ,'in')}${d.add.length?`<h5>Additions · ${f(d.adds)}</h5>${tx(d.add,'plus')}`:''}<h5>Deductions · ${f(d.deds)}</h5>${d.ded.length?tx(d.ded,'out'):'<div class="tx"><span class="ic in">✓</span><span class="nm">No deductions<em>Nothing was taken from this month</em></span><span></span></div>'}</div>
+ <div class="total"><span>Net pay</span><b>${f(d.net)} SAR</b></div></div></div>`}}
+};
+
+function seg(id,opts,val,set){document.getElementById(id).innerHTML=opts.map(([k,l])=>`<button class="${k===val?'on':''}" data-k="${k}">${l}</button>`).join('');document.getElementById(id).onclick=e=>{const k=e.target.closest('button')?.dataset.k;if(k){set(k);render();}};}
+function render(){
+ seg('scSeg',Object.entries(SC).map(([k,v])=>[k,v.label]),sc,v=>sc=v);
+ seg('wSeg',[['desktop','Desktop'],['phone','Phone']],width,v=>width=v);
+ document.body.classList.toggle('phone',width==='phone');
+ const d=m();
+ document.getElementById('out').innerHTML=Object.entries(V).map(([k,v])=>`<section class="opt"><div class="opt-label"><b>${k}</b><span>${v.name}</span><em>${v.desc}</em></div><div class="frame">${v.r(d)}</div></section>`).join('');
+}
+render();
+</script>
+</body>
+</html>

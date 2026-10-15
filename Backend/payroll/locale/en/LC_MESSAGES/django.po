@@ -214,20 +214,230 @@ msgstr "Payslips generated"
 msgid "payroll.message.recalculated"
 msgstr "Payroll run recalculated."
 
+msgid "payroll.month.1"
+msgstr "January"
+
+msgid "payroll.month.10"
+msgstr "October"
+
+msgid "payroll.month.11"
+msgstr "November"
+
+msgid "payroll.month.12"
+msgstr "December"
+
+msgid "payroll.month.2"
+msgstr "February"
+
+msgid "payroll.month.3"
+msgstr "March"
+
+msgid "payroll.month.4"
+msgstr "April"
+
+msgid "payroll.month.5"
+msgstr "May"
+
+msgid "payroll.month.6"
+msgstr "June"
+
+msgid "payroll.month.7"
+msgstr "July"
+
+msgid "payroll.month.8"
+msgstr "August"
+
+msgid "payroll.month.9"
+msgstr "September"
+
 msgid "payroll.payment_mode.bank_transfer"
 msgstr "Bank Transfer"
+
+msgid "payroll.pdf.absence_base"
+msgstr "Absence deduction base"
+
+msgid "payroll.pdf.accommodation_summary"
+msgstr "Accommodation summary"
 
 msgid "payroll.pdf.additions"
 msgstr "Additions"
 
+msgid "payroll.pdf.air_ticket"
+msgstr "Annual air ticket"
+
+msgid "payroll.pdf.allocated_payroll"
+msgstr "Allocated to payroll residents"
+
+msgid "payroll.pdf.amount"
+msgstr "Amount"
+
+msgid "payroll.pdf.amounts_in_sar"
+msgstr "All amounts are in Saudi riyals (SAR)."
+
+msgid "payroll.pdf.approval"
+msgstr "Approval"
+
+msgid "payroll.pdf.approved_by"
+msgstr "Approved By"
+
+msgid "payroll.pdf.assumptions"
+msgstr "Assumptions"
+
+msgid "payroll.pdf.availability"
+msgstr "Availability"
+
+msgid "payroll.pdf.basis_note"
+msgstr "Pay uses a 30-day month; each payroll line is rounded to whole riyals (half up)."
+
+msgid "payroll.pdf.blocked"
+msgstr "Blocked"
+
+msgid "payroll.pdf.company_cost"
+msgstr "Company cost"
+
+msgid "payroll.pdf.company_stamp"
+msgstr "Company Stamp"
+
+msgid "payroll.pdf.complete"
+msgstr "Complete"
+
+msgid "payroll.pdf.cost_incomplete_note"
+msgstr "Company cost is a known subtotal. Not available: {details}."
+
 msgid "payroll.pdf.deductions"
 msgstr "Deductions"
+
+msgid "payroll.pdf.department"
+msgstr "Department"
+
+msgid "payroll.pdf.details"
+msgstr "Amounts"
 
 msgid "payroll.pdf.earnings"
 msgstr "Earnings Breakdown"
 
 msgid "payroll.pdf.employee"
 msgstr "Employee"
+
+msgid "payroll.pdf.employee_id"
+msgstr "ID"
+
+msgid "payroll.pdf.employee_name"
+msgstr "Name"
+
+msgid "payroll.pdf.employee_register"
+msgstr "Employee register"
+
+msgid "payroll.pdf.employees_affected"
+msgstr "Employees affected"
+
+msgid "payroll.pdf.employees_excluded"
+msgstr "Employees excluded"
+
+msgid "payroll.pdf.employees_included"
+msgstr "Employees included"
+
+msgid "payroll.pdf.eos_base"
+msgstr "End-of-service provision base"
+
+msgid "payroll.pdf.exceptions"
+msgstr "Exceptions"
+
+msgid "payroll.pdf.exceptions_intro"
+msgstr "Employees with additions, deductions, uncollected amounts, manual adjustments, zero or suspended pay, or blocking issues. Everyone else received the regular salary."
+
+msgid "payroll.pdf.executive"
+msgstr "Executive: no attendance tracking"
+
+msgid "payroll.pdf.generated_at"
+msgstr "Generated at"
+
+msgid "payroll.pdf.gosi_base"
+msgstr "GOSI base"
+
+msgid "payroll.pdf.gosi_rates"
+msgstr "GOSI rates (Saudi / non-Saudi)"
+
+msgid "payroll.pdf.grand_total"
+msgstr "Grand total ({count} employees)"
+
+msgid "payroll.pdf.gross"
+msgstr "Gross"
+
+msgid "payroll.pdf.id_cost"
+msgstr "Monthly ID cost (non-Saudi)"
+
+msgid "payroll.pdf.issue"
+msgstr "Issue"
+
+msgid "payroll.pdf.key_figures"
+msgstr "Key figures"
+
+msgid "payroll.pdf.known_subtotal_marker"
+msgstr "* Company cost for this employee is a known subtotal; some company provisions are not available."
+
+msgid "payroll.pdf.leave_base"
+msgstr "Leave provision base"
+
+msgid "payroll.pdf.legacy_banner"
+msgstr "Calculated by the previous payroll system; amounts kept as they were."
+
+msgid "payroll.pdf.legacy_register_note"
+msgstr "The previous payroll system did not record additions or company provisions. Gross = basic salary + allowances."
+
+msgid "payroll.pdf.manual_adjustments"
+msgstr "HR manual adjustments: {count}"
+
+msgid "payroll.pdf.medical_invoice"
+msgstr "Annual medical invoice"
+
+msgid "payroll.pdf.medical_invoice_missing"
+msgstr "medical invoice missing"
+
+msgid "payroll.pdf.monthly_rent"
+msgstr "Monthly rent"
+
+msgid "payroll.pdf.net"
+msgstr "Net"
+
+msgid "payroll.pdf.no"
+msgstr "No"
+
+msgid "payroll.pdf.no_department"
+msgstr "No department"
+
+msgid "payroll.pdf.no_employees"
+msgstr "This payroll run has no employees."
+
+msgid "payroll.pdf.no_exceptions"
+msgstr "No exceptions: no employee has additions, deductions, adjustments or blocking issues."
+
+msgid "payroll.pdf.no_medical_insurance"
+msgstr "No medical insurance"
+
+msgid "payroll.pdf.not_available"
+msgstr "Not available"
+
+msgid "payroll.pdf.not_available_for"
+msgstr "Not available for {count} employees"
+
+msgid "payroll.pdf.not_available_legacy"
+msgstr "Not available - previous system"
+
+msgid "payroll.pdf.not_configured"
+msgstr "Not configured"
+
+msgid "payroll.pdf.notes"
+msgstr "Notes"
+
+msgid "payroll.pdf.notes_settings"
+msgstr "Notes and settings used"
+
+msgid "payroll.pdf.overtime_base"
+msgstr "Overtime base"
+
+msgid "payroll.pdf.page_of"
+msgstr "Page {page} of {total}"
 
 msgid "payroll.pdf.payment_mode"
 msgstr "Payment Mode"
@@ -244,8 +454,92 @@ msgstr "Payslip ID"
 msgid "payroll.pdf.period"
 msgstr "Period"
 
+msgid "payroll.pdf.prepared_by"
+msgstr "Prepared By"
+
+msgid "payroll.pdf.property"
+msgstr "Property"
+
+msgid "payroll.pdf.provision_proration"
+msgstr "Provision proration"
+
 msgid "payroll.pdf.provisions"
 msgstr "Company Provisions"
+
+msgid "payroll.pdf.provisions_legacy"
+msgstr "Company provisions are not shown because the previous payroll system did not calculate them."
+
+msgid "payroll.pdf.provisions_note"
+msgstr "Company provisions are company costs and are not part of employee net salary. Total company cost = net salary + known company provisions."
+
+msgid "payroll.pdf.provisions_unknown_note"
+msgstr "Amounts include only known values; employees without a value are not included in the total."
+
+msgid "payroll.pdf.ready_to_finalize"
+msgstr "Ready to finalize"
+
+msgid "payroll.pdf.reconciled"
+msgstr "Reconciled"
+
+msgid "payroll.pdf.reviewed_by"
+msgstr "Reviewed By"
+
+msgid "payroll.pdf.rounding_note"
+msgstr "Each resident's share is rounded to whole riyals before it is posted. The rounding difference is the exact shares minus the rounded amounts; it is not charged to any employee and is not part of company cost. Values marked ≈ are rounded displays of exact fractions."
+
+msgid "payroll.pdf.run_id"
+msgstr "Run ID"
+
+msgid "payroll.pdf.run_report_title"
+msgstr "Payroll Run Report"
+
+msgid "payroll.pdf.settings_legacy"
+msgstr "No settings were recorded: this run was calculated by the previous payroll system."
+
+msgid "payroll.pdf.settings_revision"
+msgstr "Settings revision"
+
+msgid "payroll.pdf.severity"
+msgstr "Severity"
+
+msgid "payroll.pdf.signature"
+msgstr "Signature"
+
+msgid "payroll.pdf.signature_date"
+msgstr "Date"
+
+msgid "payroll.pdf.signature_name"
+msgstr "Name"
+
+msgid "payroll.pdf.status"
+msgstr "Status"
+
+msgid "payroll.pdf.subtotal"
+msgstr "Subtotal: {department} ({count})"
+
+msgid "payroll.pdf.suspended_decision"
+msgstr "Suspended pay decision"
+
+msgid "payroll.pdf.total_provisions"
+msgstr "Total known provisions"
+
+msgid "payroll.pdf.unknown_for_employees"
+msgstr "{label} for {count} employees"
+
+msgid "payroll.pdf.validation_counts"
+msgstr "{errors} blocking errors, {warnings} warnings"
+
+msgid "payroll.pdf.validation_issues"
+msgstr "Validation issues"
+
+msgid "payroll.pdf.validation_status"
+msgstr "Validation"
+
+msgid "payroll.pdf.whole_run"
+msgstr "Whole run"
+
+msgid "payroll.pdf.yes"
+msgstr "Yes"
 
 msgid "payroll.provision_proration.full_month"
 msgstr "Full month"

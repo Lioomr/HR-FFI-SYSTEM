@@ -496,31 +496,50 @@ def build_corporate_header(title: str, period_text: str, second_col_width: float
     return header_table
 
 
-def build_signature_stamp_block(total_width: float):
+def build_signature_stamp_block(
+    total_width: float,
+    *,
+    headers: Sequence[str] | None = None,
+    signer_lines: Sequence[str] | None = None,
+    fonts: tuple[str, str] | None = None,
+    rtl: bool = False,
+):
+    """Signature and stamp table.
+
+    The optional keywords localise it: ``headers`` (four column titles),
+    ``signer_lines`` (the Name/Date/Signature lines), ``fonts`` ((regular,
+    bold)) and ``rtl`` (stamp column first). Text must already be shaped.
+    """
+
     signer_width = total_width * 0.23
     stamp_width = total_width - (signer_width * 3)
-    signature_table = Table(
-        [
-            ["Prepared By", "Reviewed By", "Approved By", "Company Stamp"],
-            [
-                "Name: ____________________\nDate: ____________________\nSignature: _______________",
-                "Name: ____________________\nDate: ____________________\nSignature: _______________",
-                "Name: ____________________\nDate: ____________________\nSignature: _______________",
-                "\n\n\n",
-            ],
-        ],
-        colWidths=[signer_width, signer_width, signer_width, stamp_width],
+    regular, bold = fonts or ("Helvetica", "Helvetica-Bold")
+    signer = (
+        "\n".join(signer_lines)
+        if signer_lines
+        else "Name: ____________________\nDate: ____________________\nSignature: _______________"
     )
+    rows = [
+        list(headers or ["Prepared By", "Reviewed By", "Approved By", "Company Stamp"]),
+        [signer, signer, signer, "\n\n\n"],
+    ]
+    widths = [signer_width, signer_width, signer_width, stamp_width]
+    signers, stamp = ((0, 1), (-2, 1)), -1
+    if rtl:
+        rows = [list(reversed(row)) for row in rows]
+        widths.reverse()
+        signers, stamp = ((1, 1), (-1, 1)), 0
+    signature_table = Table(rows, colWidths=widths)
     signature_table.setStyle(
         TableStyle(
             [
                 ("BACKGROUND", (0, 0), (-1, 0), PALETTE["primary_orange"]),
                 ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                ("FONTNAME", (0, 0), (-1, 0), bold),
                 ("FONTSIZE", (0, 0), (-1, 0), 8),
-                ("BACKGROUND", (0, 1), (-2, 1), colors.white),
-                ("BACKGROUND", (-1, 1), (-1, 1), PALETTE["soft_orange"]),
-                ("FONTNAME", (0, 1), (-1, 1), "Helvetica"),
+                ("BACKGROUND", *signers, colors.white),
+                ("BACKGROUND", (stamp, 1), (stamp, 1), PALETTE["soft_orange"]),
+                ("FONTNAME", (0, 1), (-1, 1), regular),
                 ("FONTSIZE", (0, 1), (-1, 1), 7),
                 ("TEXTCOLOR", (0, 1), (-1, 1), PALETTE["dark_text"]),
                 ("BOX", (0, 0), (-1, -1), 0.7, PALETTE["border_orange"]),

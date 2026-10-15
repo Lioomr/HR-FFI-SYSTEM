@@ -521,7 +521,8 @@ def test_rent_non_payroll_resident_rounding_report_frozen_and_exports(ctx):
     response = ctx.client.get(f"/payroll-runs/{run.pk}/export/", {"file_format": "pdf"}, **ctx.headers)
     assert response.status_code == 200
     text = " ".join(page.extract_text() for page in PdfReader(BytesIO(response.content)).pages)
-    assert "rounding_difference: 1.00/1" in text
+    # The PDF shows the rounding difference as a labelled decimal, not a raw ratio.
+    assert "Shared home" in text and re.search(r"Rounding\s+difference", text) and "1.00/1" not in text
     allocation.refresh_from_db()
     assert {key: getattr(allocation, key) for key in stored_fields} == before
 

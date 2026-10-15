@@ -1,0 +1,468 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Penalties Styles</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#f3f4f7;--ink:#0b1220;--ink2:#334155;--muted:#64748b;--faint:#94a3b8;--line:#eceff3;--brand:#ea580c;--good:#059669;--bad:#e11d48;--warn:#d97706;--info:#2563eb}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);font-family:Inter,system-ui,sans-serif;color:var(--ink);-webkit-font-smoothing:antialiased}
+.page{max-width:1180px;margin:0 auto;padding:32px 16px 80px}
+.page>h1{margin:0;font-size:26px;letter-spacing:-.02em}
+.page>p{margin:6px 0 18px;color:var(--muted);font-size:14px;max-width:780px}
+.bar{position:sticky;top:0;z-index:9;display:flex;flex-wrap:wrap;gap:16px;align-items:center;padding:10px 0 14px;background:var(--bg)}
+.seg{display:inline-flex;padding:3px;border-radius:999px;background:#fff;box-shadow:inset 0 0 0 1px #e2e8f0}
+.seg button{border:0;cursor:pointer;padding:7px 14px;border-radius:999px;font:600 13px Inter;background:none;color:#475569}
+.seg button.on{background:var(--ink);color:#fff}
+.seg-label{font-size:12px;color:var(--muted);font-weight:600;margin-inline-end:-8px}
+.opt{margin-top:36px}
+.opt-label{display:flex;align-items:baseline;flex-wrap:wrap;gap:10px;margin:0 0 12px}
+.opt-label b{display:inline-grid;place-items:center;width:28px;height:28px;border-radius:8px;background:var(--ink);color:#fff;font-size:14px}
+.opt-label span{font-weight:700;font-size:16px}
+.opt-label em{font-style:normal;color:var(--muted);font-size:13px}
+.frame{margin:0 auto}
+.phone .frame{max-width:390px}
+.num{font-variant-numeric:tabular-nums}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;border:0;cursor:pointer;font:600 13px Inter;padding:8px 13px;border-radius:10px;white-space:nowrap}
+.btn-p{background:var(--brand);color:#fff}
+.btn-g{background:#fff;color:var(--ink2);box-shadow:inset 0 0 0 1px #e2e8f0}
+.btn-s{padding:6px 10px;font-size:12px;border-radius:8px}
+.pill{display:inline-flex;align-items:center;gap:6px;padding:3px 9px;border-radius:999px;font-size:11.5px;font-weight:600;white-space:nowrap}
+.pill i{width:6px;height:6px;border-radius:50%;background:currentColor}
+.s-issued{color:#c2410c;background:#fff7ed}
+.s-disputed{color:#7c3aed;background:#f5f3ff}
+.s-pending_hr_mark{color:var(--info);background:#eff6ff}
+.s-waived{color:var(--muted);background:#f1f5f9}
+.s-applied{color:var(--bad);background:#fff1f2}
+.cat{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--muted)}
+.cat i{width:8px;height:8px;border-radius:2px}
+.c-work_time{--c:#f59e0b}.c-work_organization{--c:#0ea5e9}.c-worker_conduct{--c:#8b5cf6}
+.cat i{background:var(--c)}
+.ico{width:16px;height:16px;display:block;flex-shrink:0}
+.muted{color:var(--muted)}
+.card{background:#fff;border-radius:20px;box-shadow:inset 0 0 0 1px var(--line)}
+.ttl{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:16px}
+.ttl h2{margin:0;font-size:22px;letter-spacing:-.02em}
+.ttl small{display:block;color:var(--muted);font-size:13px;margin-top:3px}
+
+/* ========== A · Action-first cards ========== */
+.A .need{display:flex;align-items:center;gap:16px;padding:18px 20px;border-radius:20px;background:linear-gradient(135deg,#fff7ed,#fff);box-shadow:inset 0 0 0 1px #fed7aa;margin-bottom:16px}
+.A .need .ic{width:44px;height:44px;border-radius:14px;display:grid;place-items:center;background:var(--brand);color:#fff;flex-shrink:0}
+.A .need b{display:block;font-size:15px}
+.A .need span{font-size:13px;color:var(--ink2)}
+.A .need .btn{margin-inline-start:auto}
+.A .clean{display:flex;align-items:center;gap:18px;padding:26px;border-radius:22px;background:linear-gradient(135deg,#ecfdf5,#fff);box-shadow:inset 0 0 0 1px #a7f3d0;margin-bottom:16px}
+.A .clean .ic{width:56px;height:56px;border-radius:18px;display:grid;place-items:center;background:var(--good);color:#fff;flex-shrink:0}
+.A .clean .ic .ico{width:28px;height:28px}
+.A .clean b{display:block;font-size:18px;letter-spacing:-.01em}
+.A .clean span{font-size:13.5px;color:var(--ink2)}
+.A .tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}
+.A .tabs button{border:0;cursor:pointer;padding:7px 12px;border-radius:999px;font:600 12.5px Inter;background:#fff;color:var(--muted);box-shadow:inset 0 0 0 1px #e2e8f0}
+.A .tabs button.on{background:var(--ink);color:#fff;box-shadow:none}
+.A .tabs button em{font-style:normal;opacity:.7;margin-inline-start:4px}
+.A .list{display:grid;gap:10px}
+.A .pc{display:grid;grid-template-columns:4px 1fr auto;gap:16px;align-items:center;padding:16px 18px 16px 0;background:#fff;border-radius:16px;box-shadow:inset 0 0 0 1px var(--line);overflow:hidden}
+.A .pc .strip{align-self:stretch;background:var(--c)}
+.A .pc .t{font-size:14.5px;font-weight:650}
+.A .pc .m{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:5px;font-size:12.5px;color:var(--muted)}
+.A .pc .r{display:flex;flex-direction:column;align-items:flex-end;gap:6px}
+.A .pc .amt{font-weight:700;font-size:15px}
+.A .pc .amt.w{color:var(--warn);font-size:13px}
+.A .policy{margin-top:16px;padding:16px 18px;display:flex;align-items:center;gap:12px}
+.A .policy b{font-size:14px}.A .policy span{margin-inline-start:auto;font-size:12.5px;color:var(--muted)}
+.phone .A .pc{grid-template-columns:4px 1fr;padding-inline-end:14px}.phone .A .pc .r{grid-column:2;flex-direction:row;align-items:center;justify-content:space-between}
+.phone .A .need{flex-wrap:wrap}.phone .A .need .btn{width:100%;margin:0}
+
+/* ========== B · Inbox split view ========== */
+.B{display:grid;grid-template-columns:340px 1fr;min-height:520px;background:#fff;border-radius:22px;box-shadow:0 14px 36px -22px rgba(15,23,42,.25),inset 0 0 0 1px var(--line);overflow:hidden}
+.B .side{border-inline-end:1px solid var(--line);display:flex;flex-direction:column}
+.B .side .hd{padding:18px 18px 12px}
+.B .side .hd h2{margin:0;font-size:18px}
+.B .search{display:flex;align-items:center;gap:8px;margin-top:12px;padding:9px 12px;border-radius:12px;background:#f5f6f8;color:var(--faint);font-size:13px}
+.B .chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+.B .chips span{padding:4px 10px;border-radius:999px;font-size:12px;font-weight:600;background:#f5f6f8;color:var(--muted)}
+.B .chips span.on{background:var(--ink);color:#fff}
+.B .items{flex:1}
+.B .it{display:block;padding:14px 18px;border-top:1px solid #f3f4f6;cursor:pointer;position:relative}
+.B .it.on{background:#fff7ed}.B .it.on::before{content:"";position:absolute;inset-inline-start:0;top:0;bottom:0;width:3px;background:var(--brand)}
+.B .it .row{display:flex;justify-content:space-between;gap:8px}
+.B .it b{font-size:13.5px;font-weight:650}
+.B .it small{font-size:12px;color:var(--faint);white-space:nowrap}
+.B .it .row2{display:flex;justify-content:space-between;align-items:center;margin-top:6px}
+.B .it .dot{width:8px;height:8px;border-radius:50%;background:var(--brand);display:inline-block}
+.B .main{padding:26px 28px}
+.B .main .top{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.B .main h3{margin:6px 0 0;font-size:22px;letter-spacing:-.02em}
+.B .facts{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:20px 0}
+.B .facts div{padding:12px 14px;border-radius:14px;background:#f8f9fb}
+.B .facts small{display:block;font-size:11.5px;color:var(--muted)}
+.B .facts b{font-size:15px}
+.B .desc{font-size:13.5px;line-height:1.6;color:var(--ink2);padding:14px 16px;border-radius:14px;box-shadow:inset 0 0 0 1px var(--line)}
+.B .ladder{display:flex;gap:6px;margin-top:16px;flex-wrap:wrap}
+.B .ladder span{padding:6px 10px;border-radius:10px;font-size:12px;background:#f5f6f8;color:var(--muted)}
+.B .ladder span.on{background:var(--ink);color:#fff;font-weight:600}
+.B .respond{margin-top:20px;padding:16px;border-radius:16px;background:#fff7ed;box-shadow:inset 0 0 0 1px #fed7aa}
+.B .respond b{display:block;font-size:14px}
+.B .respond p{margin:4px 0 12px;font-size:13px;color:var(--ink2)}
+.B .respond .acts{display:flex;gap:8px;flex-wrap:wrap}
+.B .empty{display:grid;place-items:center;text-align:center;padding:60px 20px;color:var(--muted)}
+.B .empty .ic{width:64px;height:64px;border-radius:20px;display:grid;place-items:center;background:#ecfdf5;color:var(--good);margin:0 auto 14px}
+.B .empty .ic .ico{width:30px;height:30px}
+.B .empty b{display:block;color:var(--ink);font-size:17px;margin-bottom:4px}
+.phone .B{grid-template-columns:1fr}.phone .B .side{border-inline-end:0;border-bottom:1px solid var(--line)}.phone .B .facts{grid-template-columns:1fr 1fr}.phone .B .main{padding:20px 18px}
+
+/* ========== C · Month timeline ========== */
+.C .sum{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:18px}
+.C .sum div{padding:16px 18px;border-radius:18px;background:#fff;box-shadow:inset 0 0 0 1px var(--line)}
+.C .sum small{display:block;font-size:12px;color:var(--muted)}
+.C .sum b{font-size:22px;letter-spacing:-.02em}
+.C .sum .hl{background:var(--ink);color:#fff;box-shadow:none}.C .sum .hl small{color:#94a3b8}
+.C .filters{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px}
+.C .filters span{display:inline-flex;align-items:center;gap:6px;padding:7px 12px;border-radius:12px;background:#fff;box-shadow:inset 0 0 0 1px #e2e8f0;font-size:12.5px;color:var(--ink2);font-weight:500}
+.C .month{display:grid;grid-template-columns:110px 1fr;gap:18px;margin-bottom:8px}
+.C .month .lbl{padding-top:14px;text-align:end}
+.C .month .lbl b{display:block;font-size:14px}
+.C .month .lbl small{font-size:12px;color:var(--muted)}
+.C .month ol{list-style:none;margin:0;padding:0 0 10px;border-inline-start:2px solid #e5e9f0;padding-inline-start:20px}
+.C .ev{position:relative;padding:14px 16px;margin:8px 0;background:#fff;border-radius:16px;box-shadow:inset 0 0 0 1px var(--line)}
+.C .ev::before{content:"";position:absolute;top:20px;inset-inline-start:-28px;width:12px;height:12px;border-radius:50%;background:#fff;box-shadow:inset 0 0 0 3px var(--c)}
+.C .ev .row{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
+.C .ev b{font-size:14px;font-weight:650}
+.C .ev .m{display:flex;flex-wrap:wrap;gap:6px 12px;margin-top:6px;font-size:12.5px;color:var(--muted);align-items:center}
+.C .ev .amt{font-weight:700;white-space:nowrap}
+.C .ev .resp{margin-top:10px;padding:9px 12px;border-radius:10px;background:#f5f3ff;font-size:12.5px;color:#5b21b6}
+.C .ev .need{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:10px;padding:9px 12px;border-radius:10px;background:#fff7ed;font-size:12.5px;color:#9a3412;font-weight:500;flex-wrap:wrap}
+.C .none{padding:40px 20px;text-align:center;border-radius:20px;background:#fff;box-shadow:inset 0 0 0 1px var(--line)}
+.C .none b{display:block;font-size:17px;margin:12px 0 4px}
+.C .none .streak{display:inline-flex;gap:4px}
+.C .none .streak i{width:22px;height:22px;border-radius:7px;background:#d1fae5}
+.C .none .streak i:last-child{background:var(--good)}
+.phone .C .sum{grid-template-columns:1fr 1fr 1fr;gap:8px}.phone .C .sum div{padding:12px}.phone .C .sum b{font-size:16px}
+.phone .C .month{grid-template-columns:1fr;gap:4px}.phone .C .month .lbl{text-align:start;padding:6px 0 0}
+
+/* ========== D · Refined table ========== */
+.D{background:#fff;border-radius:22px;box-shadow:0 14px 36px -22px rgba(15,23,42,.25),inset 0 0 0 1px var(--line);overflow:hidden}
+.D .hd{padding:22px 24px 0}
+.D .tabs{display:flex;gap:2px;border-bottom:1px solid var(--line);padding:0 16px;margin-top:16px;overflow-x:auto;scrollbar-width:none}
+.D .tabs button{border:0;background:none;cursor:pointer;padding:12px 10px;font:600 13px Inter;color:var(--muted);border-bottom:2px solid transparent;white-space:nowrap;display:inline-flex;align-items:center;gap:6px}
+.D .tabs button.on{color:var(--ink);border-bottom-color:var(--brand)}
+.D .tabs em{font-style:normal;font-size:11px;padding:1px 7px;border-radius:999px;background:#f1f5f9;color:var(--muted)}
+.D .tabs button.on em{background:#fff7ed;color:var(--brand)}
+.D .fbar{display:flex;gap:8px;flex-wrap:wrap;padding:14px 24px}
+.D .fbar .s{flex:1;min-width:200px;display:flex;align-items:center;gap:8px;padding:9px 12px;border-radius:12px;background:#f5f6f8;color:var(--faint);font-size:13px}
+.D .fbar .f{display:inline-flex;align-items:center;gap:6px;padding:9px 12px;border-radius:12px;box-shadow:inset 0 0 0 1px #e2e8f0;font-size:13px;color:var(--ink2)}
+.D table{width:100%;border-collapse:collapse;font-size:13.5px}
+.D th{text-align:start;font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--faint);font-weight:600;padding:10px 24px;background:#fafbfc;border-block:1px solid var(--line)}
+.D td{padding:14px 24px;border-bottom:1px solid #f3f4f6;vertical-align:middle}
+.D td .t{font-weight:600}
+.D td .sub{font-size:12px;color:var(--faint);margin-top:2px}
+.D td.amt{font-weight:700;text-align:end;white-space:nowrap}
+.D th.amt{text-align:end}
+.D tr.need td:first-child{box-shadow:inset 3px 0 0 var(--brand)}
+.D .warnchip{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;color:var(--warn)}
+.D .empty{padding:56px 20px;text-align:center}
+.D .empty .ic{width:60px;height:60px;border-radius:18px;display:grid;place-items:center;background:#ecfdf5;color:var(--good);margin:0 auto 12px}
+.D .empty .ic .ico{width:28px;height:28px}
+.D .empty b{display:block;font-size:16px;margin-bottom:4px}
+.D .foot{display:flex;justify-content:space-between;align-items:center;padding:14px 24px;background:#fafbfc;border-top:1px solid var(--line);font-size:13px;color:var(--muted)}
+.D .mcards{display:none}
+.phone .D table{display:none}.phone .D .mcards{display:grid;gap:0}
+.D .mc{padding:14px 18px;border-bottom:1px solid #f3f4f6}
+.D .mc .row{display:flex;justify-content:space-between;gap:10px;align-items:center;margin-top:6px}
+.phone .D .fbar .s{min-width:100%}.phone .D .hd,.phone .D .fbar{padding-inline:18px}
+
+/* ========== E · Record health ========== */
+.E .grid{display:grid;grid-template-columns:320px 1fr;gap:16px}
+.E .health{padding:24px;text-align:center}
+.E .ring{position:relative;width:170px;height:170px;margin:4px auto 14px}
+.E .ring svg{transform:rotate(-90deg)}
+.E .ring .mid{position:absolute;inset:0;display:grid;place-items:center}
+.E .ring .mid b{display:block;font-size:40px;letter-spacing:-.03em;line-height:1}
+.E .ring .mid small{font-size:12px;color:var(--muted)}
+.E .health h3{margin:0;font-size:16px}
+.E .health p{margin:6px 0 0;font-size:13px;color:var(--muted)}
+.E .stats{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:18px;text-align:start}
+.E .stats div{padding:12px;border-radius:14px;background:#f8f9fb}
+.E .stats small{display:block;font-size:11.5px;color:var(--muted)}
+.E .stats b{font-size:16px}
+.E .recent{padding:20px 22px}
+.E .recent h3,.E .pol h3{margin:0 0 6px;font-size:15px;display:flex;justify-content:space-between;align-items:center}
+.E .rr{display:grid;grid-template-columns:40px 1fr auto;gap:12px;align-items:center;padding:12px 0;border-bottom:1px solid #f3f4f6}
+.E .rr:last-child{border-bottom:0}
+.E .rr .d{text-align:center;border-radius:12px;background:#f5f6f8;padding:5px 0;line-height:1.1}
+.E .rr .d b{display:block;font-size:15px}.E .rr .d small{font-size:10.5px;color:var(--muted);text-transform:uppercase}
+.E .rr .t{font-size:13.5px;font-weight:600}
+.E .rr .t span{display:block;font-weight:400;font-size:12px;color:var(--muted);margin-top:2px}
+.E .rr .r{text-align:end;display:flex;flex-direction:column;align-items:flex-end;gap:5px}
+.E .pol{padding:20px 22px;margin-top:16px}
+.E .pcat{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:10px}
+.E .pcat div{padding:14px;border-radius:14px;background:#f8f9fb;border-top:3px solid var(--c)}
+.E .pcat b{display:block;font-size:13.5px}.E .pcat small{font-size:12px;color:var(--muted)}
+.E .lad{margin-top:14px;padding:14px;border-radius:14px;box-shadow:inset 0 0 0 1px var(--line)}
+.E .lad .h{font-size:13px;font-weight:600;margin-bottom:10px}
+.E .steps{display:flex;gap:4px}
+.E .steps span{flex:1;padding:8px 6px;border-radius:10px;text-align:center;font-size:11.5px;font-weight:600;background:#f5f6f8;color:var(--muted)}
+.E .steps span.w{background:#fef3c7;color:#92400e}.E .steps span.d1{background:#fed7aa;color:#9a3412}.E .steps span.d2{background:#fdba74;color:#7c2d12}.E .steps span.d3{background:#fb923c;color:#fff}
+.E .steps span small{display:block;font-weight:500;opacity:.8}
+.phone .E .grid{grid-template-columns:1fr}.phone .E .pcat{grid-template-columns:1fr}
+
+/* ========== F · Midnight command ========== */
+.F{border-radius:24px;padding:24px;color:#e2e8f0;background:radial-gradient(90% 70% at 100% 0%,rgba(234,88,12,.22),transparent 60%),linear-gradient(160deg,#0b1220,#141c2f);box-shadow:0 24px 50px -24px rgba(2,6,23,.6)}
+.F h2{margin:0;font-size:22px;color:#fff;letter-spacing:-.02em}
+.F .sub{font-size:13px;color:#94a3b8;margin-top:3px}
+.F .kp{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:20px 0}
+.F .kp div{padding:14px;border-radius:16px;background:rgba(255,255,255,.05);box-shadow:inset 0 0 0 1px rgba(255,255,255,.08)}
+.F .kp small{display:block;font-size:11.5px;color:#94a3b8;letter-spacing:.04em;text-transform:uppercase}
+.F .kp b{font-size:26px;color:#fff;letter-spacing:-.03em}
+.F .kp .hot{background:linear-gradient(135deg,rgba(234,88,12,.35),rgba(234,88,12,.08));box-shadow:inset 0 0 0 1px rgba(251,146,60,.45)}
+.F .kp .hot b{color:#fdba74}
+.F .srch{display:flex;align-items:center;gap:8px;padding:10px 14px;border-radius:12px;background:rgba(255,255,255,.06);color:#64748b;font-size:13px;margin-bottom:10px}
+.F .row{display:grid;grid-template-columns:10px 1fr auto auto;gap:14px;align-items:center;padding:14px 4px;border-bottom:1px solid rgba(255,255,255,.06)}
+.F .row:last-child{border-bottom:0}
+.F .row .g{width:10px;height:10px;border-radius:50%;background:var(--c);box-shadow:0 0 12px var(--c)}
+.F .row b{color:#f8fafc;font-size:14px;font-weight:600}
+.F .row .m{font-size:12px;color:#94a3b8;margin-top:2px}
+.F .row .a{font-weight:700;color:#fff;white-space:nowrap}
+.F .row .a.w{color:#fbbf24;font-size:12.5px}
+.F .pill{background:rgba(255,255,255,.08)}
+.F .s-issued{color:#fdba74}.F .s-disputed{color:#c4b5fd}.F .s-applied{color:#fda4af}.F .s-waived{color:#94a3b8}.F .s-pending_hr_mark{color:#93c5fd}
+.F .clean{text-align:center;padding:36px 10px}
+.F .clean .orb{width:84px;height:84px;margin:0 auto 14px;border-radius:50%;display:grid;place-items:center;color:#06281d;background:radial-gradient(circle at 30% 30%,#6ee7b7,#059669);box-shadow:0 0 40px rgba(16,185,129,.5)}
+.F .clean .orb .ico{width:36px;height:36px}
+.F .clean b{display:block;color:#fff;font-size:18px}
+.F .clean span{font-size:13px;color:#94a3b8}
+.F .pol{display:flex;align-items:center;gap:10px;margin-top:16px;padding:12px 14px;border-radius:12px;background:rgba(255,255,255,.04);font-size:13px;color:#cbd5e1}
+.F .pol span{margin-inline-start:auto;color:#64748b}
+.phone .F .kp{grid-template-columns:1fr 1fr}.phone .F .row{grid-template-columns:10px 1fr auto}.phone .F .row .pill{grid-column:2}
+
+/* ========== G · Status board ========== */
+.G .cols{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;align-items:start}
+.G .col{border-radius:18px;background:#eef0f4;padding:10px}
+.G .col h4{display:flex;justify-content:space-between;align-items:center;margin:4px 6px 10px;font-size:12.5px;color:var(--ink2)}
+.G .col h4 em{font-style:normal;font-size:11.5px;padding:1px 8px;border-radius:999px;background:#fff;color:var(--muted)}
+.G .col.need{background:#fff1e6}.G .col.need h4{color:#9a3412}
+.G .k{background:#fff;border-radius:14px;padding:12px;margin-bottom:8px;box-shadow:0 1px 2px rgba(15,23,42,.06);border-top:3px solid var(--c)}
+.G .k b{display:block;font-size:13px;font-weight:650;line-height:1.35}
+.G .k .m{display:flex;justify-content:space-between;align-items:center;margin-top:8px;font-size:12px;color:var(--muted)}
+.G .k .a{font-weight:700;color:var(--ink)}
+.G .k .btn{width:100%;margin-top:10px}
+.G .k .resp{margin-top:8px;font-size:12px;color:#5b21b6;background:#f5f3ff;border-radius:8px;padding:6px 8px}
+.G .zero{font-size:12px;color:var(--faint);text-align:center;padding:16px 6px}
+.G .empty{padding:30px;text-align:center;background:#fff;border-radius:20px;box-shadow:inset 0 0 0 1px var(--line);margin-bottom:12px}
+.G .empty b{display:block;font-size:16px;margin:10px 0 2px}
+.phone .G .cols{grid-template-columns:1fr}
+
+/* ========== H · Mobile-first feed ========== */
+.H{max-width:560px;margin:0 auto}
+.H .hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+.H .hd h2{margin:0;font-size:24px;letter-spacing:-.02em}
+.H .round{width:40px;height:40px;border-radius:14px;display:grid;place-items:center;background:#fff;box-shadow:inset 0 0 0 1px #e2e8f0;color:var(--ink2)}
+.H .segc{display:grid;grid-template-columns:repeat(3,1fr);padding:4px;border-radius:14px;background:#e9ecf1;margin-bottom:16px}
+.H .segc span{padding:9px 0;text-align:center;font-size:13px;font-weight:600;color:var(--muted);border-radius:10px}
+.H .segc span.on{background:#fff;color:var(--ink);box-shadow:0 1px 3px rgba(15,23,42,.12)}
+.H .day{font-size:12px;font-weight:600;color:var(--faint);text-transform:uppercase;letter-spacing:.08em;margin:16px 4px 8px}
+.H .n{display:grid;grid-template-columns:44px 1fr;gap:12px;padding:14px;margin-bottom:8px;border-radius:18px;background:#fff;box-shadow:0 1px 2px rgba(15,23,42,.05)}
+.H .n .ic{width:44px;height:44px;border-radius:14px;display:grid;place-items:center;font-size:18px;font-weight:700;color:#fff;background:var(--c)}
+.H .n b{font-size:14px;font-weight:650;line-height:1.35}
+.H .n .m{display:flex;justify-content:space-between;align-items:center;margin-top:6px;font-size:12.5px;color:var(--muted)}
+.H .n .a{font-weight:700;color:var(--ink)}
+.H .n .acts{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}
+.H .n.need{box-shadow:0 0 0 2px #fdba74,0 8px 20px -12px rgba(234,88,12,.6)}
+.H .hero{text-align:center;padding:40px 20px 30px;border-radius:24px;background:linear-gradient(180deg,#ecfdf5,#fff);box-shadow:inset 0 0 0 1px #d1fae5}
+.H .hero .big{font-size:56px;line-height:1}
+.H .hero b{display:block;font-size:20px;margin:14px 0 4px;letter-spacing:-.01em}
+.H .hero span{color:var(--muted);font-size:14px}
+.H .hero .btn{margin-top:18px}
+
+/* ========== I · Year heatmap ========== */
+.I .top{display:grid;grid-template-columns:1fr auto;gap:16px;align-items:end;margin-bottom:14px}
+.I .hm{padding:20px 22px}
+.I .hm h3{margin:0 0 12px;font-size:15px;display:flex;justify-content:space-between}
+.I .hm h3 span{font-weight:500;font-size:12.5px;color:var(--muted)}
+.I .grid{display:grid;grid-template-columns:repeat(12,1fr);gap:6px}
+.I .mo{display:grid;grid-template-columns:repeat(5,1fr);gap:3px}
+.I .mo i{aspect-ratio:1;border-radius:3px;background:#eef1f5}
+.I .mo i.l1{background:#fde68a}.I .mo i.l2{background:#fb923c}.I .mo i.l3{background:#e11d48}.I .mo i.wv{background:#cbd5e1}
+.I .ml{font-size:10.5px;color:var(--faint);text-align:center;margin-top:4px}
+.I .mcol.sel .mo{outline:2px solid var(--ink);outline-offset:3px;border-radius:4px}
+.I .legend{display:flex;gap:12px;flex-wrap:wrap;margin-top:14px;font-size:12px;color:var(--muted)}
+.I .legend span{display:inline-flex;align-items:center;gap:5px}.I .legend i{width:10px;height:10px;border-radius:3px}
+.I .sel-list{margin-top:14px;padding:18px 22px}
+.I .sel-list h3{margin:0 0 4px;font-size:15px}
+.I .li{display:grid;grid-template-columns:1fr auto auto;gap:14px;align-items:center;padding:12px 0;border-bottom:1px solid #f3f4f6;font-size:13.5px}
+.I .li:last-child{border-bottom:0}
+.I .li b{font-weight:600}.I .li small{display:block;color:var(--faint);font-size:12px;margin-top:2px}
+.I .li .a{font-weight:700;white-space:nowrap}
+.phone .I .grid{grid-template-columns:repeat(6,1fr);row-gap:10px}.phone .I .li{grid-template-columns:1fr auto}.phone .I .li .pill{grid-column:1}
+
+/* ========== J · Case files ========== */
+.J .case{background:#fff;border-radius:18px;box-shadow:inset 0 0 0 1px var(--line);margin-bottom:10px;overflow:hidden}
+.J .case.open{box-shadow:0 14px 34px -22px rgba(15,23,42,.35),inset 0 0 0 1px #e2e8f0}
+.J .ch{display:grid;grid-template-columns:auto 1fr auto auto;gap:14px;align-items:center;padding:16px 18px}
+.J .ch .no{font-size:11.5px;font-weight:700;color:var(--faint);letter-spacing:.06em}
+.J .ch b{font-size:14.5px;font-weight:650}
+.J .ch .m{font-size:12.5px;color:var(--muted);margin-top:2px;display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.J .ch .a{font-weight:700;white-space:nowrap}
+.J .ch .chev{color:var(--faint)}
+.J .open .ch .chev{transform:rotate(90deg)}
+.J .cb{padding:4px 18px 20px;border-top:1px solid #f3f4f6}
+.J .steps{display:flex;margin:18px 0 6px}
+.J .st{flex:1;display:flex;flex-direction:column;align-items:center;text-align:center;position:relative;min-width:0}
+.J .st:not(:last-child)::after{content:"";position:absolute;top:13px;inset-inline-start:calc(50% + 16px);width:calc(100% - 32px);height:2px;background:#e5e9f0}
+.J .st.done:not(:last-child)::after{background:var(--good)}
+.J .st .d{width:28px;height:28px;border-radius:9px;display:grid;place-items:center;font-size:12px;font-weight:700;background:#f1f4f8;color:var(--faint);position:relative;z-index:1}
+.J .st.done .d{background:var(--good);color:#fff}.J .st.cur .d{background:var(--brand);color:#fff;box-shadow:0 0 0 4px rgba(234,88,12,.15)}
+.J .st span{margin-top:6px;font-size:11.5px;font-weight:600;color:var(--ink2);padding:0 2px}
+.J .st small{font-size:10.5px;color:var(--faint)}
+.J .kv{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:16px}
+.J .kv div{padding:10px 12px;border-radius:12px;background:#f8f9fb}
+.J .kv small{display:block;font-size:11px;color:var(--muted)}.J .kv b{font-size:13.5px}
+.J .note{margin-top:12px;font-size:13px;line-height:1.55;color:var(--ink2)}
+.J .acts{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
+.J .clean{padding:34px;text-align:center;background:#fff;border-radius:20px;box-shadow:inset 0 0 0 1px var(--line)}
+.J .clean b{display:block;font-size:17px;margin:10px 0 4px}
+.phone .J .ch{grid-template-columns:1fr auto}.phone .J .ch .no,.phone .J .ch .chev{display:none}.phone .J .kv{grid-template-columns:1fr 1fr}.phone .J .st span{font-size:10.5px}.phone .J .st small{display:none}
+</style>
+</head>
+<body>
+<div class="page">
+  <h1>My penalties page styles</h1>
+  <p>Ten directions for the employee's penalties page, in two rounds (A–E first, F–J new). They use only what the page already has: violation, category, date, warning or deduction amount, status, warning letter, your response or dispute, and the penalty policy. Switch the sample and the screen width, then tell me which letter you want.</p>
+  <div class="bar">
+    <span class="seg-label">Round</span><div class="seg" id="rSeg"></div>
+    <span class="seg-label">Sample</span><div class="seg" id="scSeg"></div>
+    <span class="seg-label">Width</span><div class="seg" id="wSeg"></div>
+  </div>
+  <div id="out"></div>
+</div>
+<script>
+const I={
+ check:'<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6l7-3z"/><path d="M8.5 12l2.5 2.5 4.5-5"/></svg>',
+ bell:'<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8v4m0 4h.01"/><circle cx="12" cy="12" r="9"/></svg>',
+ doc:'<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5M10 13h6M10 17h6"/></svg>',
+ search:'<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>',
+ dl:'<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11m0 0l-4.5-4.5M12 15l4.5-4.5M5 19h14"/></svg>',
+ cal:'<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="4" y="5" width="16" height="15" rx="3"/><path d="M8 3v4M16 3v4M4 10h16"/></svg>',
+ chev:'<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>'
+};
+const STATUS={pending_hr_mark:'Waiting for HR decision',issued:'Issued',disputed:'Disputed',waived:'Waived',applied:'Applied'};
+const CAT={work_time:'Work time',work_organization:'Work organization',worker_conduct:'Worker conduct'};
+const REC=[
+ {id:1,t:'Late arrival, more than 15 minutes',cat:'work_time',on:'2026-10-12',mon:'October 2026',occ:'2nd time this year',action:'deduction',amt:'5% of daily wage',sar:46,status:'issued',need:true,desc:'Clock-in recorded at 08:24 against a 08:00 start, without an approved permission.',ladder:['Warning','5%','10%','20%'],step:1},
+ {id:2,t:'Leaving work early without permission',cat:'work_time',on:'2026-10-03',mon:'October 2026',occ:'1st time this year',action:'warning',sar:0,status:'disputed',resp:'I had an approved doctor visit; the permission was submitted the same morning.',ladder:['Warning','10%','25%','1 day'],step:0},
+ {id:3,t:'Not wearing safety equipment on site',cat:'worker_conduct',on:'2026-09-18',mon:'September 2026',occ:'1st time this year',action:'warning',sar:0,status:'applied',letter:'WN-2026-0412',ladder:['Warning','1 day','2 days','3 days'],step:0},
+ {id:4,t:'Absence without valid excuse (1 day)',cat:'work_organization',on:'2026-08-27',mon:'August 2026',occ:'1st time this year',action:'deduction',amt:'1 day wage',sar:367,status:'applied',payroll:'Deducted in September 2026 payroll',ladder:['1 day','2 days','3 days','Final warning'],step:0},
+ {id:5,t:'Late arrival, up to 15 minutes',cat:'work_time',on:'2026-08-10',mon:'August 2026',occ:'1st time this year',action:'warning',sar:0,status:'waived',ladder:['Warning','5%','10%','20%'],step:0}
+];
+const SC={none:{label:'No penalties (your screenshot)',recs:[]},some:{label:'Some penalties',recs:REC}};
+let sc='some',width='desktop',round='2';
+const dfmt=s=>{const d=new Date(s+'T00:00:00');return d.toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})};
+const pill=s=>`<span class="pill s-${s}"><i></i>${STATUS[s]}</span>`;
+const cat=c=>`<span class="cat c-${c}"><i></i>${CAT[c]}</span>`;
+const amount=r=>r.action==='warning'?'Warning':`${r.sar} SAR`;
+function m(){const recs=SC[sc].recs;const cnt=s=>recs.filter(r=>r.status===s).length;return {recs,cnt,need:recs.filter(r=>r.need),year:recs.filter(r=>r.status==='applied').reduce((a,r)=>a+r.sar,0)}}
+
+const V={
+A:{name:'Action-first cards',desc:'Tells you first if something needs your response (or that your record is clean), then status tabs and one card per penalty',r(d){
+ const top=d.need.length?`<div class="need"><span class="ic">${I.bell}</span><div><b>${d.need.length} penalty needs your response</b><span>Read it, then acknowledge it or dispute it.</span></div><button class="btn btn-p">Review now</button></div>`
+  :d.recs.length?'':`<div class="clean"><span class="ic">${I.check}</span><div><b>Your record is clean</b><span>You have no penalties. Keep it up!</span></div></div>`;
+ const tabs=[['All',d.recs.length],['Needs response',d.need.length],['Disputed',d.cnt('disputed')],['Applied',d.cnt('applied')],['Waived',d.cnt('waived')]];
+ return `<div class="A"><div class="ttl"><div><h2>My penalties</h2><small>Review your penalties and respond to them.</small></div></div>${top}
+ ${d.recs.length?`<div class="tabs">${tabs.map((x,i)=>`<button class="${i?'':'on'}">${x[0]}<em>${x[1]}</em></button>`).join('')}</div>
+ <div class="list">${d.recs.map(r=>`<div class="pc c-${r.cat}"><span class="strip"></span><div><div class="t">${r.t}</div><div class="m">${cat(r.cat)}<span>${dfmt(r.on)}</span><span>${r.occ}</span></div></div><div class="r">${r.action==='warning'?`<span class="amt w">Warning</span>`:`<span class="amt num">${r.sar} SAR</span>`}${r.need?`<button class="btn btn-p btn-s">Respond</button>`:pill(r.status)}</div></div>`).join('')}</div>`:''}
+ <div class="card policy">${I.doc}<b>Penalty policy</b><span>51 violations · tap to read</span>${I.chev}</div></div>`}},
+
+B:{name:'Inbox split view',desc:'Email-style: the list on the left, the selected penalty on the right with its details, the warning ladder and the respond buttons',r(d){
+ if(!d.recs.length) return `<div class="B"><div class="side"><div class="hd"><h2>My penalties</h2><div class="search">${I.search}Search violation</div></div></div><div class="main"><div class="empty"><div><div class="ic">${I.check}</div><b>No penalties</b>Your record is clean. Nothing to review.<div style="margin-top:16px"><button class="btn btn-g">${I.doc}Read the penalty policy</button></div></div></div></div></div>`;
+ const s=d.recs[0];
+ return `<div class="B"><div class="side"><div class="hd"><h2>My penalties</h2><div class="search">${I.search}Search violation</div><div class="chips"><span class="on">All ${d.recs.length}</span><span>Open ${d.need.length+d.cnt('disputed')}</span><span>Closed ${d.cnt('applied')+d.cnt('waived')}</span></div></div>
+ <div class="items">${d.recs.map((r,i)=>`<div class="it ${i?'':'on'}"><div class="row"><b>${r.t}</b><small>${dfmt(r.on)}</small></div><div class="row2">${pill(r.status)}${r.need?'<span class="dot" title="Needs your response"></span>':`<small>${amount(r)}</small>`}</div></div>`).join('')}</div></div>
+ <div class="main"><div class="top"><div>${cat(s.cat)}<h3>${s.t}</h3></div>${pill(s.status)}</div>
+ <div class="facts"><div><small>Occurred on</small><b>${dfmt(s.on)}</b></div><div><small>Action</small><b>${s.action==='warning'?'Warning':s.amt}</b></div><div><small>Deduction</small><b>${s.sar?s.sar+' SAR':'—'}</b></div></div>
+ <div class="desc">${s.desc}</div>
+ <div class="ladder">${s.ladder.map((x,i)=>`<span class="${i===s.step?'on':''}">${i+1}. ${x}</span>`).join('')}</div>
+ <div class="respond"><b>Your response is needed</b><p>Acknowledge that you received it. If something is wrong, dispute it and explain why; HR will review.</p><div class="acts"><button class="btn btn-p">Acknowledge</button><button class="btn btn-g">Dispute</button></div></div></div></div>`}},
+
+C:{name:'Month timeline',desc:'Penalties grouped by month on a timeline, with totals on top and filters as chips; disputes and needed responses show inline',r(d){
+ const sum=`<div class="sum"><div><small>Open</small><b>${d.need.length+d.cnt('disputed')+d.cnt('pending_hr_mark')}</b></div><div><small>This year</small><b>${d.recs.length}</b></div><div class="hl"><small>Deducted this year</small><b class="num">${d.year} SAR</b></div></div>`;
+ if(!d.recs.length) return `<div class="C"><div class="ttl"><div><h2>My penalties</h2><small>Your penalty history, month by month.</small></div><button class="btn btn-g">${I.doc}Penalty policy</button></div>${sum}<div class="none"><div class="streak"><i></i><i></i><i></i><i></i><i></i><i></i></div><b>6 months with no penalties</b><span class="muted">Nothing to show. Your record is clean.</span></div></div>`;
+ const months=[...new Set(d.recs.map(r=>r.mon))];
+ return `<div class="C"><div class="ttl"><div><h2>My penalties</h2><small>Your penalty history, month by month.</small></div><button class="btn btn-g">${I.doc}Penalty policy</button></div>${sum}
+ <div class="filters"><span>${I.search}Search</span><span>Status: All</span><span>Category: All</span><span>${I.cal}2026</span></div>
+ ${months.map(mo=>{const rs=d.recs.filter(r=>r.mon===mo);return `<div class="month"><div class="lbl"><b>${mo.split(' ')[0]}</b><small>${rs.length} ${rs.length>1?'penalties':'penalty'}</small></div><ol>${rs.map(r=>`<li class="ev c-${r.cat}"><div class="row"><b>${r.t}</b><span class="amt ${r.action==='warning'?'muted':''}">${amount(r)}</span></div><div class="m">${pill(r.status)}${cat(r.cat)}<span>${dfmt(r.on)}</span>${r.letter?`<a class="btn btn-g btn-s">${I.dl}Warning letter</a>`:''}${r.payroll?`<span>${r.payroll}</span>`:''}</div>${r.resp?`<div class="resp"><b>Your dispute:</b> ${r.resp}</div>`:''}${r.need?`<div class="need">Waiting for your response<button class="btn btn-p btn-s">Respond</button></div>`:''}</li>`).join('')}</ol></div>`}).join('')}</div>`}},
+
+D:{name:'Refined table',desc:'Closest to today but cleaner: the four count boxes become tabs with counts, a slimmer filter bar, and cards instead of a table on phones',r(d){
+ const tabs=[['All',d.recs.length],['Waiting for HR',d.cnt('pending_hr_mark')],['Issued',d.cnt('issued')],['Disputed',d.cnt('disputed')],['Closed',d.cnt('applied')+d.cnt('waived')]];
+ const rows=d.recs.map(r=>`<tr class="${r.need?'need':''}"><td><div class="t">${r.t}</div><div class="sub">${cat(r.cat)}</div></td><td>${dfmt(r.on)}<div class="sub">${r.occ}</div></td><td>${r.action==='warning'?`<span class="warnchip">Warning</span>`:r.amt}</td><td>${pill(r.status)}</td><td class="amt num">${r.sar?r.sar+' SAR':'—'}</td><td>${r.need?'<button class="btn btn-p btn-s">Respond</button>':'<button class="btn btn-g btn-s">View</button>'}</td></tr>`).join('');
+ const cards=d.recs.map(r=>`<div class="mc"><div class="t" style="font-weight:600;font-size:14px">${r.t}</div><div class="row">${cat(r.cat)}<span class="muted" style="font-size:12px">${dfmt(r.on)}</span></div><div class="row">${pill(r.status)}<b class="num">${r.sar?r.sar+' SAR':'Warning'}</b></div></div>`).join('');
+ const empty=`<div class="empty"><div class="ic">${I.check}</div><b>No penalties found</b><span class="muted">You have no penalty records. Your record is clean.</span></div>`;
+ return `<div class="D"><div class="hd"><div class="ttl" style="margin:0"><div><h2>My penalties</h2><small>Review your issued penalties and respond to them.</small></div><button class="btn btn-g">${I.doc}Penalty policy · 51</button></div></div>
+ <div class="tabs">${tabs.map((x,i)=>`<button class="${i?'':'on'}">${x[0]}<em>${x[1]}</em></button>`).join('')}</div>
+ <div class="fbar"><span class="s">${I.search}Search violation</span><span class="f">Category</span><span class="f">${I.cal}Date range</span></div>
+ ${d.recs.length?`<table><thead><tr><th>Violation</th><th>Occurred on</th><th>Action</th><th>Status</th><th class="amt">Deduction</th><th></th></tr></thead><tbody>${rows}</tbody></table><div class="mcards">${cards}</div><div class="foot"><span>${d.recs.length} records</span><span>Page 1 of 1</span></div>`:empty}</div>`}},
+
+E:{name:'Record health',desc:'A friendly overview: a clean-record ring and totals, recent penalties, and the policy explained by category with the warning-to-deduction steps',r(d){
+ const clean=d.recs.length?1:6;const C=2*Math.PI*72;
+ return `<div class="E"><div class="ttl"><div><h2>My penalties</h2><small>Your record, recent penalties and how the policy works.</small></div></div>
+ <div class="grid"><div class="card health"><div class="ring"><svg width="170" height="170" viewBox="0 0 170 170"><circle cx="85" cy="85" r="72" fill="none" stroke="#f1f4f8" stroke-width="12"/><circle cx="85" cy="85" r="72" fill="none" stroke="${d.recs.length?'#f59e0b':'#059669'}" stroke-width="12" stroke-linecap="round" stroke-dasharray="${C}" stroke-dashoffset="${C*(1-clean/6)}"/></svg><div class="mid"><div><b>${clean}</b><small>of 6 months clean</small></div></div></div>
+ <h3>${d.recs.length?'Room to improve':'Spotless record'}</h3><p>${d.recs.length?`${d.need.length} penalty waiting for your response.`:'No penalties in the last 6 months.'}</p>
+ <div class="stats"><div><small>Penalties this year</small><b>${d.recs.length}</b></div><div><small>Deducted this year</small><b class="num">${d.year} SAR</b></div><div><small>Warnings</small><b>${d.recs.filter(r=>r.action==='warning').length}</b></div><div><small>Disputed</small><b>${d.cnt('disputed')}</b></div></div></div>
+ <div><div class="card recent"><h3>Recent penalties ${d.recs.length?'<button class="btn btn-g btn-s">See all</button>':''}</h3>${d.recs.length?d.recs.slice(0,4).map(r=>{const dt=new Date(r.on+'T00:00:00');return `<div class="rr"><div class="d"><b>${dt.getDate()}</b><small>${dt.toLocaleString('en',{month:'short'})}</small></div><div class="t">${r.t}<span>${CAT[r.cat]} · ${r.occ}</span></div><div class="r"><b class="num">${amount(r)}</b>${r.need?'<button class="btn btn-p btn-s">Respond</button>':pill(r.status)}</div></div>`}).join(''):'<p class="muted" style="font-size:13px;margin:8px 0">Nothing here. Keep it up!</p>'}</div>
+ <div class="card pol"><h3>How the penalty policy works <button class="btn btn-g btn-s">${I.doc}All 51 violations</button></h3><div class="pcat"><div class="c-work_time"><b>Work time</b><small>Lateness, early leave, absence</small></div><div class="c-work_organization"><b>Work organization</b><small>Procedures and duties</small></div><div class="c-worker_conduct"><b>Worker conduct</b><small>Safety and behaviour</small></div></div>
+ <div class="lad"><div class="h">Example: late arrival, more than 15 minutes</div><div class="steps"><span class="w">1st<small>Warning</small></span><span class="d1">2nd<small>5%</small></span><span class="d2">3rd<small>10%</small></span><span class="d3">4th<small>20%</small></span></div></div></div></div></div></div>`}},
+F:{round:2,name:'Midnight command',desc:'A dark premium panel: glowing counters (the one that needs you lights up), a dark list with coloured category dots, and a glowing clean-record badge when empty',r(d){
+ const kp=`<div class="kp"><div class="${d.need.length?'hot':''}"><small>Needs you</small><b>${d.need.length}</b></div><div><small>Disputed</small><b>${d.cnt('disputed')}</b></div><div><small>Waiting HR</small><b>${d.cnt('pending_hr_mark')}</b></div><div><small>Deducted</small><b class="num">${d.year}<span style="font-size:13px;color:#94a3b8"> SAR</span></b></div></div>`;
+ return `<div class="F"><h2>My penalties</h2><div class="sub">Review your penalties and respond to them.</div>${kp}
+ ${d.recs.length?`<div class="srch">${I.search}Search violation</div>${d.recs.map(r=>`<div class="row c-${r.cat}"><span class="g"></span><div><b>${r.t}</b><div class="m">${CAT[r.cat]} · ${dfmt(r.on)}</div></div>${r.need?'<button class="btn btn-p btn-s">Respond</button>':pill(r.status)}<span class="a ${r.action==='warning'?'w':''}">${amount(r)}</span></div>`).join('')}`
+ :`<div class="clean"><div class="orb">${I.check}</div><b>Clean record</b><span>No penalties. Nothing needs your attention.</span></div>`}
+ <div class="pol">${I.doc}Penalty policy<span>51 violations ›</span></div></div>`}},
+
+G:{round:2,name:'Status board',desc:'Kanban-style columns by stage: Needs your response, Disputed, Waiting for HR, Closed. You see at a glance where every penalty stands',r(d){
+ const cols=[['Needs your response',d.recs.filter(r=>r.need),'need'],['Disputed',d.recs.filter(r=>r.status==='disputed'),''],['Waiting for HR',d.recs.filter(r=>r.status==='pending_hr_mark'),''],['Closed',d.recs.filter(r=>r.status==='applied'||r.status==='waived'),'']];
+ const card=r=>`<div class="k c-${r.cat}"><b>${r.t}</b><div class="m"><span>${dfmt(r.on)}</span><span class="a">${amount(r)}</span></div>${r.resp?`<div class="resp">“${r.resp}”</div>`:''}${r.need?'<button class="btn btn-p btn-s">Respond</button>':(r.status==='applied'||r.status==='waived')?`<div class="m">${pill(r.status)}</div>`:''}</div>`;
+ return `<div class="G"><div class="ttl"><div><h2>My penalties</h2><small>Where each penalty stands right now.</small></div><button class="btn btn-g">${I.doc}Penalty policy</button></div>
+ ${d.recs.length?'':`<div class="empty">${I.check}<b>Nothing on your board</b><span class="muted">You have no penalties.</span></div>`}
+ <div class="cols">${cols.map(([h,rs,cl])=>`<div class="col ${cl}"><h4>${h}<em>${rs.length}</em></h4>${rs.length?rs.map(card).join(''):'<div class="zero">Empty</div>'}</div>`).join('')}</div></div>`}},
+
+H:{round:2,name:'Mobile-first feed',desc:'Built like a phone app (also on desktop, in a narrow column): Open / Closed / All switch, penalties as a dated feed, Acknowledge and Dispute right on the card',r(d){
+ const groups=[...new Set(d.recs.map(r=>r.mon))];
+ const icon=r=>r.action==='warning'?'!':'−';
+ return `<div class="H"><div class="hd"><h2>Penalties</h2><span class="round">${I.doc}</span></div>
+ <div class="segc"><span class="on">Open ${d.recs.length?d.need.length+d.cnt('disputed'):''}</span><span>Closed</span><span>All</span></div>
+ ${d.recs.length?groups.map(g=>`<div class="day">${g}</div>${d.recs.filter(r=>r.mon===g).map(r=>`<div class="n c-${r.cat} ${r.need?'need':''}"><span class="ic">${icon(r)}</span><div><b>${r.t}</b><div class="m"><span>${dfmt(r.on)} · ${pill(r.status)}</span><span class="a">${amount(r)}</span></div>${r.need?'<div class="acts"><button class="btn btn-p">Acknowledge</button><button class="btn btn-g">Dispute</button></div>':''}</div></div>`).join('')}`).join('')
+ :`<div class="hero"><div class="big">🎉</div><b>No penalties</b><span>You're all clear. Keep up the good work.</span><br><button class="btn btn-g">${I.doc}Read the policy</button></div>`}</div>`}},
+
+I:{round:2,name:'Year heatmap',desc:'A year map of penalty days (like GitHub contributions) coloured by severity; pick a month to list its penalties below',r(d){
+ const months=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+ const hits={};d.recs.forEach(r=>{const dt=new Date(r.on+'T00:00:00');const k=dt.getMonth()+'-'+Math.min(19,Math.floor((dt.getDate()-1)/1.55));hits[k]=r.status==='waived'?'wv':r.action==='warning'?'l1':r.sar>100?'l3':'l2'});
+ const grid=months.map((mo,mi)=>`<div class="mcol ${mi===9&&d.recs.length?'sel':''}"><div class="mo">${Array.from({length:20},(_,c)=>`<i class="${hits[mi+'-'+c]||''}"></i>`).join('')}</div><div class="ml">${mo}</div></div>`).join('');
+ const oct=d.recs.filter(r=>r.on.startsWith('2026-10'));
+ return `<div class="I"><div class="top"><div class="ttl" style="margin:0"><div><h2>My penalties</h2><small>Your year at a glance. ${d.recs.length} penalties in 2026.</small></div></div><button class="btn btn-g">${I.doc}Penalty policy</button></div>
+ <div class="card hm"><h3>2026 <span>${d.recs.length?`${d.year} SAR deducted`:'No penalties this year'}</span></h3><div class="grid">${grid}</div>
+ <div class="legend"><span><i style="background:#eef1f5"></i>None</span><span><i style="background:#fde68a"></i>Warning</span><span><i style="background:#fb923c"></i>Deduction</span><span><i style="background:#e11d48"></i>Large deduction</span><span><i style="background:#cbd5e1"></i>Waived</span></div></div>
+ ${d.recs.length?`<div class="card sel-list"><h3>October 2026</h3>${oct.map(r=>`<div class="li"><div><b>${r.t}</b><small>${dfmt(r.on)} · ${CAT[r.cat]}</small></div>${r.need?'<button class="btn btn-p btn-s">Respond</button>':pill(r.status)}<span class="a">${amount(r)}</span></div>`).join('')}</div>`:''}</div>`}},
+
+J:{round:2,name:'Case files',desc:'Each penalty is a folded case; open one to see its life cycle as a stepper (same style as your approval cards), the facts and the actions',r(d){
+ if(!d.recs.length) return `<div class="J"><div class="ttl"><div><h2>My penalties</h2><small>Each penalty as a case you can open.</small></div><button class="btn btn-g">${I.doc}Penalty policy</button></div><div class="clean">${I.check}<b>No cases</b><span class="muted">You have no penalties.</span></div></div>`;
+ const life=r=>{const s=r.status;const steps=[['Occurred',dfmt(r.on)],['Issued',''],[s==='disputed'?'Disputed':'Your response',''],['HR decision',''],[r.action==='warning'?'Closed':'Payroll','']];const reached=s==='issued'?2:s==='disputed'?3:s==='pending_hr_mark'?1:5;return `<div class="steps">${steps.map((x,i)=>`<div class="st ${i<reached-(s==='issued'||s==='disputed'?1:0)?'done':''} ${(s==='issued'&&i===2)||(s==='disputed'&&i===3)||(s==='pending_hr_mark'&&i===1)?'cur':''}"><span class="d">${i+1}</span><span>${x[0]}</span><small>${x[1]}</small></div>`).join('')}</div>`};
+ return `<div class="J"><div class="ttl"><div><h2>My penalties</h2><small>Each penalty as a case you can open.</small></div><button class="btn btn-g">${I.doc}Penalty policy</button></div>
+ ${d.recs.map((r,i)=>`<div class="case ${i===0?'open':''}"><div class="ch"><span class="no">#${String(r.id).padStart(3,'0')}</span><div><b>${r.t}</b><div class="m">${cat(r.cat)}<span>${dfmt(r.on)}</span>${pill(r.status)}</div></div><span class="a">${amount(r)}</span><span class="chev">${I.chev}</span></div>
+ ${i===0?`<div class="cb">${life(r)}<div class="kv"><div><small>Occurrence</small><b>${r.occ}</b></div><div><small>Action</small><b>${r.action==='warning'?'Warning':r.amt}</b></div><div><small>Deduction</small><b>${r.sar?r.sar+' SAR':'—'}</b></div></div><div class="note">${r.desc}</div>${r.need?'<div class="acts"><button class="btn btn-p">Acknowledge</button><button class="btn btn-g">Dispute</button></div>':''}</div>`:''}</div>`).join('')}</div>`}}
+};
+
+function seg(id,opts,val,set){const el=document.getElementById(id);el.innerHTML=opts.map(([k,l])=>`<button class="${k===val?'on':''}" data-k="${k}">${l}</button>`).join('');el.onclick=e=>{const k=e.target.closest('button')?.dataset.k;if(k){set(k);render();}};}
+function render(){
+ seg('scSeg',Object.entries(SC).map(([k,v])=>[k,v.label]),sc,v=>sc=v);
+ seg('wSeg',[['desktop','Desktop'],['phone','Phone']],width,v=>width=v);
+ seg('rSeg',[['2','Round 2 (F–J)'],['1','Round 1 (A–E)'],['all','All']],round,v=>round=v);
+ document.body.classList.toggle('phone',width==='phone');
+ const d=m();
+ document.getElementById('out').innerHTML=Object.entries(V).filter(([,v])=>round==='all'||String(v.round||1)===round).map(([k,v])=>`<section class="opt"><div class="opt-label"><b>${k}</b><span>${v.name}</span><em>${v.desc}</em></div><div class="frame">${v.r(d)}</div></section>`).join('');
+}
+render();
+</script>
+</body>
+</html>
