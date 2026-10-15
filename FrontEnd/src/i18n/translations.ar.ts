@@ -6045,6 +6045,10 @@ const ar: TranslationMap = {
   "payroll.ux.executiveExempt": "تنفيذي - فحوص الحضور غير منطبقة",
   "payroll.ux.executiveExemptHelp":
     "إعفاء تنفيذي مسجل في حساب هذا المسير. تظل فحوص التحقق الأخرى من API منطبقة.",
+  "payroll.ux.legacyUnavailable": "غير متاح - النظام السابق",
+  "payroll.finalize_state.finalized": "معتمد",
+  "payroll.validation_severity.info": "معلومة",
+  "payroll.finalize_state.not_finalized": "غير معتمد",
 };
 
 export default ar;

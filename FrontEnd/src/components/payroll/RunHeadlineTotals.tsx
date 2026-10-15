@@ -38,6 +38,18 @@ export default function RunHeadlineTotals({
   const [open, setOpen] = useState(false);
   const panelId = useId();
   const incomplete = summary?.cost_incomplete ?? run.cost_incomplete;
+  const displayMoney = (amount: Money | null, headline = false) =>
+    run.legacy_calculation && amount === null ? (
+      <Typography.Text type="secondary">
+        {t("payroll.ux.legacyUnavailable")}
+      </Typography.Text>
+    ) : (
+      <MoneyText
+        amount={amount}
+        strong={headline}
+        size={headline ? 20 : undefined}
+      />
+    );
   const line = (key: string, amount: Money | null, unknown = 0) => (
     <li
       key={key}
@@ -57,7 +69,7 @@ export default function RunHeadlineTotals({
           </Typography.Text>
         )}
       </span>
-      <MoneyText amount={amount} />
+      {displayMoney(amount)}
     </li>
   );
   return (
@@ -87,7 +99,7 @@ export default function RunHeadlineTotals({
           ],
           [
             "payroll.field.total_company_cost",
-            summary?.total_company_cost ?? run.total_company_cost,
+            summary ? summary.total_company_cost : run.total_company_cost,
             t(
               incomplete
                 ? "payroll.ux.knownSubtotal"
@@ -98,7 +110,7 @@ export default function RunHeadlineTotals({
           <div key={label} className="payroll-kpi">
             <Typography.Text type="secondary">{t(label!)}</Typography.Text>
             <div className="payroll-kpi-number">
-              <MoneyText amount={amount} strong size={20} />
+              {displayMoney(amount ?? null, true)}
             </div>
             <Typography.Text type="secondary" style={{ fontSize: 12 }}>
               {hint}

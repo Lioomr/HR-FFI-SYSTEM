@@ -6166,6 +6166,10 @@ const en: TranslationMap = {
   "payroll.ux.executiveExempt": "Executive - attendance checks not applicable",
   "payroll.ux.executiveExemptHelp":
     "Executive exemption recorded in this payroll calculation. Other API validation checks still apply.",
+  "payroll.ux.legacyUnavailable": "Not available - previous system",
+  "payroll.finalize_state.finalized": "Finalized",
+  "payroll.validation_severity.info": "Informational",
+  "payroll.finalize_state.not_finalized": "Not finalized",
 };
 
 export default en;

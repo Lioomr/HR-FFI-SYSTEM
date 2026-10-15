@@ -88,6 +88,12 @@ msgstr "Total Company Cost"
 msgid "payroll.field.total_deductions"
 msgstr "Total Deductions"
 
+msgid "payroll.finalize_state.finalized"
+msgstr "Finalized"
+
+msgid "payroll.finalize_state.not_finalized"
+msgstr "Not finalized"
+
 msgid "payroll.history.assignment_change"
 msgstr "Assignment change"
 
@@ -423,6 +429,9 @@ msgstr "A zero-pay reason is required."
 
 msgid "payroll.validation_severity.error"
 msgstr "Error"
+
+msgid "payroll.validation_severity.info"
+msgstr "Information"
 
 msgid "payroll.validation_severity.warning"
 msgstr "Warning"

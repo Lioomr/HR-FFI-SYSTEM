@@ -312,14 +312,14 @@ class PayrollRunViewSet(PayrollApiMixin, viewsets.GenericViewSet):
     def validation_report(self, request, pk=None):
         report = dto.validation(self.get_object())
         params = request.query_params
-        if "severity" in params and params["severity"] not in ("error", "warning"):
+        if "severity" in params and params["severity"] not in ("error", "warning", "info"):
             raise PayrollDomainError("invalid_choice", field="severity")
         if "code" in params and params["code"] not in [r["value"] for r in ENUMS["validation_codes"]]:
             raise PayrollDomainError("invalid_choice", field="code")
         employee = (
             integer(params["employee_profile_id"], "employee_profile_id") if "employee_profile_id" in params else None
         )
-        for key, level in (("errors", "error"), ("warnings", "warning")):
+        for key, level in (("errors", "error"), ("warnings", "warning"), ("infos", "info")):
             report[key] = [
                 i
                 for i in report[key]

@@ -1,3 +1,9 @@
+import { legacyRunPresentation } from "../../../../services/api/payrollMocks/contractExamples";
+import type {
+  PayrollRunDto,
+  PayrollRunSummaryDto,
+  ValidationReport,
+} from "../../../../services/api/payrollTypes";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   act,
@@ -89,6 +95,52 @@ afterEach(() => {
 });
 
 describe("PayrollRunPage", () => {
+  it.each(["COMPLETED", "PAID"] as const)(
+    "renders the production-shaped legacy %s run without finalization gates",
+    async (status) => {
+      const fixture = structuredClone(legacyRunPresentation);
+      const run = { ...fixture.run, status } as unknown as PayrollRunDto;
+      const state = payrollMockState();
+      state.runs.push(run);
+      state.summaries.set(
+        run.id,
+        fixture.summary as unknown as PayrollRunSummaryDto,
+      );
+      state.validation.set(
+        run.id,
+        fixture.validation as unknown as ValidationReport,
+      );
+      state.items.set(run.id, []);
+      renderRun("/hr/payroll/8");
+      await screen.findAllByText("62,439", {}, FIND);
+      expect(screen.getAllByText("57,239").length).toBeGreaterThan(0);
+      expect(
+        screen.getAllByText("Not available - previous system").length,
+      ).toBeGreaterThan(0);
+      expect(
+        screen.getByText(en("payroll.ui.legacyRunHelp")),
+      ).toBeInTheDocument();
+      expect(screen.getByText("Finalized")).toBeInTheDocument();
+      expect(screen.queryByText(en("payroll.ui.cannotFinalize"))).toBeNull();
+      expect(
+        screen.queryByRole("button", { name: /^lock Finalize$|^Finalize$/ }),
+      ).toBeNull();
+      fireEvent.click(screen.getByRole("tab", { name: /Validation/ }));
+      expect(screen.queryByRole("progressbar")).toBeNull();
+      expect(
+        document.querySelector(".payroll-confirmation-progress"),
+      ).toBeNull();
+      expect(screen.queryByText(en("payroll.ui.canFinalize"))).toBeNull();
+      expect(screen.getAllByText("Finalized")).toHaveLength(2);
+      fireEvent.click(
+        screen.getByRole("button", { name: en("payroll.ui.showBreakdown") }),
+      );
+      expect(
+        screen.getAllByText("Not available - previous system").length,
+      ).toBeGreaterThanOrEqual(3);
+    },
+  );
+
   it("shows Gross, Net and Total Company Cost exactly as the summary sends them", async () => {
     renderRun();
     await ready();

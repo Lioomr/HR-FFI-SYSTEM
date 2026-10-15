@@ -86,11 +86,15 @@ function groupKey(issue: ValidationIssue, information: boolean) {
 }
 
 export function groupValidationIssues(
-  report: Pick<ValidationReport, "errors" | "warnings">,
+  report: Pick<ValidationReport, "errors" | "warnings" | "infos">,
   items: PayrollRunItemDto[] | null = null,
 ): ValidationGroup[] {
   const groups = new Map<string, ValidationGroup>();
-  for (const issue of [...report.errors, ...report.warnings]) {
+  for (const issue of [
+    ...report.errors,
+    ...report.warnings,
+    ...(report.infos ?? []),
+  ]) {
     const information = isManualInformation(issue, items);
     const { key, manual } = groupKey(issue, information);
     let group = groups.get(key);

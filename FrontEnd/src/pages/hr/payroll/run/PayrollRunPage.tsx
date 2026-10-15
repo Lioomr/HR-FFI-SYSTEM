@@ -363,7 +363,13 @@ export default function PayrollRunPage() {
   }
 
   const isDraft = run.status === "DRAFT";
-  const canFinalize = isDraft && !loading && report?.can_finalize === true;
+  const finalized =
+    run.status === "COMPLETED" ||
+    run.status === "PAID" ||
+    report?.finalize_state === "finalized";
+  const showFinalizeGating = !run.legacy_calculation && !finalized;
+  const canFinalize =
+    showFinalizeGating && isDraft && !loading && report?.can_finalize === true;
   const finalizeBlockedReason = !report
     ? t("payroll.ui.validationUnavailable")
     : t("payroll.ui.cannotFinalizeHelp", { count: report.counts.errors });
@@ -440,18 +446,20 @@ export default function PayrollRunPage() {
                 >
                   {t("payroll.ui.recalculate")}
                 </Button>
-                <Tooltip
-                  title={canFinalize ? undefined : finalizeBlockedReason}
-                >
-                  <Button
-                    type="primary"
-                    icon={<LockOutlined />}
-                    disabled={!canFinalize}
-                    onClick={() => openAction("finalize")}
+                {showFinalizeGating && (
+                  <Tooltip
+                    title={canFinalize ? undefined : finalizeBlockedReason}
                   >
-                    {t("payroll.ui.finalize")}
-                  </Button>
-                </Tooltip>
+                    <Button
+                      type="primary"
+                      icon={<LockOutlined />}
+                      disabled={!canFinalize}
+                      onClick={() => openAction("finalize")}
+                    >
+                      {t("payroll.ui.finalize")}
+                    </Button>
+                  </Tooltip>
+                )}
               </>
             )}
             {run.status === "COMPLETED" && (
@@ -526,7 +534,7 @@ export default function PayrollRunPage() {
           style={{ marginBottom: 16 }}
         />
       )}
-      {blockingErrors.length > 0 && (
+      {showFinalizeGating && blockingErrors.length > 0 && (
         <Alert
           type="error"
           showIcon
@@ -581,15 +589,19 @@ export default function PayrollRunPage() {
                 })
               : t("payroll.ux.unavailable")}
           </Text>
-          <Text strong>
-            {report && !loading
-              ? t(
-                  report.can_finalize
-                    ? "payroll.ui.canFinalize"
-                    : "payroll.ui.cannotFinalize",
-                )
-              : t("payroll.ux.unavailable")}
-          </Text>
+          {(finalized || showFinalizeGating) && (
+            <Text type="secondary">
+              {finalized
+                ? t("payroll.finalize_state.finalized")
+                : report && !loading
+                  ? t(
+                      report.can_finalize
+                        ? "payroll.ui.canFinalize"
+                        : "payroll.ui.cannotFinalize",
+                    )
+                  : t("payroll.ux.unavailable")}
+            </Text>
+          )}
         </Space>
         <Space wrap size={12}>
           <Text type="secondary">
@@ -633,6 +645,7 @@ export default function PayrollRunPage() {
                   refreshKey={gridKey}
                   report={loading ? null : report}
                   runStatus={run.status}
+                  legacy={run.legacy_calculation}
                   revision={run.revision}
                   onChanged={loadAll}
                   initialState={listState}
@@ -679,6 +692,8 @@ export default function PayrollRunPage() {
               children: report ? (
                 <ValidationPanel
                   report={report}
+                  legacy={run.legacy_calculation}
+                  finalized={finalized}
                   index={recordIndex}
                   onQuickNone={quickNone}
                   onOpenItem={(id, target) => openItem(id, undefined, target)}

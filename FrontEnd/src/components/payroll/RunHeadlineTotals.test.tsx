@@ -29,3 +29,27 @@ it("uses a neutral three-cell strip with no colored top border and one shared di
   expect(controls[0]).toHaveAttribute("aria-expanded", "true");
   expect(document.querySelectorAll(".payroll-breakdown")).toHaveLength(1);
 });
+
+it("does not fall back to a stored legacy zero when the summary total is null", () => {
+  const run = {
+    ...examples.legacyRunPresentation.run,
+    total_company_cost: "0.00",
+  } as unknown as PayrollRunDto;
+  render(
+    <PayrollTheme>
+      <RunHeadlineTotals
+        run={run}
+        summary={
+          examples.legacyRunPresentation
+            .summary as unknown as PayrollRunSummaryDto
+        }
+        costIncompleteReasons={[]}
+      />
+    </PayrollTheme>,
+  );
+  expect(
+    screen.getByText("Not available - previous system"),
+  ).toBeInTheDocument();
+  expect(screen.getByText("62,439")).toBeInTheDocument();
+  expect(screen.getByText("57,239")).toBeInTheDocument();
+});

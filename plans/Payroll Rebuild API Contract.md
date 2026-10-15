@@ -1,6 +1,6 @@
 # Payroll Rebuild API Contract
 
-Version: 0.6.0. Date: 2026-10-14 (Africa/Cairo). Delivery: **Phase 2 implemented; full backend verification has five failures outside payroll (see handoff)**.
+Version: 0.6.1. Date: 2026-10-15 (Africa/Cairo). Delivery: **Phase 2 implemented; full backend verification has five failures outside payroll (see handoff)**.
 
 **Status: v0.3.0 was approved; the user authorized Phase 1 and then instructed “continue with phase 2”.** Phase 2 wires the transactional writer, source/carry/loan lifecycle, approved endpoints, employee itemized JSON/PDF, HR exports and integration/security tests. Provision proration remains FULL_MONTH by default, configurable and snapshotted. CFO remains in the single PAYROLL_MANAGER_ROLES constant. The original task ended at the Phase 2 handoff and did not authorize Phase 3. This is historical task scope, not a standing limit on later user-authorized work. Contract changes in this version are listed below and in the Phase 2 handoff.
 
@@ -143,7 +143,7 @@ Only for executive_exempt=true:
 
 All other rules are unchanged: salary and employment proration, both configurable provision modes, GOSI bearing party, earned pay/Net/company totals, loans and previously authorized carry balances, medical costs, validation/reconciliation and audit/revision guards. Never suppress other errors, including missing_hire_date, zero-pay reasons/details, suspended_pay_decision_required, attendance_calendar_missing, rent_value_missing or stale_revision. Compute issue counts, can_finalize and totals from the exempt-adjusted result; an exempt employee never contributes to manual-absence confirmation requirements.
 
-Visibility uses the additive readonly HR Item field executive_exempt. The existing validation schema exposes only error/warning channels; no informational entry or executive_attendance_exempt code is added, so error/warning counts, response channels and can_finalize semantics retain their shapes. I.warnings still contains warnings only. Employee payslip JSON/PDF do not expose the flag. Executive subjects do not gain HR API access from this calculation flag.
+Visibility uses the additive readonly HR Item field executive_exempt. No executive_attendance_exempt code or informational entry is emitted for this exemption; draft error/warning counts and finalization requirements are unchanged. The v0.6.1 finalized-report projection in section6 applies to all completed/paid runs independently of this flag. I.warnings still contains warnings only. Employee payslip JSON/PDF do not expose the flag. Executive subjects do not gain HR API access from this calculation flag.
 
 ## 3. Proposed models and migration strategy
 
@@ -317,7 +317,8 @@ Every table entry is the exact wire value. Label keys are translated in English/
 | accommodation_status | assigned, none, unknown; `payroll.accommodation_status.<value>`; none label **No company accommodation**, unknown **Accommodation unknown** |
 | suspended_pay_decision | FULL_PAY, ZERO_PAY; `payroll.suspended_pay_decision.<lowercase>` |
 | provision_proration | FULL_MONTH, PRORATED_BY_DAYS; `payroll.provision_proration.<lowercase>`; default FULL_MONTH |
-| validation severity | error, warning; `payroll.validation_severity.<value>` |
+| validation severity | error, warning, info; `payroll.validation_severity.<value>` |
+| finalize_state | finalized, not_finalized; `payroll.finalize_state.<value>`; presentation state only, not run status |
 | adjustment_type | ABSENCE_OVERRIDE, ADDITION_ENTRY, OTHER_DEDUCTION_ENTRY, SALARY_ADJUSTMENT, ZERO_SALARY_REASON, OVERTIME_ELIGIBILITY_OVERRIDE, LEAVE_INPUT_CHANGE, EMPLOYMENT_INPUT_CHANGE, MANUAL_ADJUSTMENT, SETTINGS_REFRESH; `payroll.adjustment.<lowercase>` |
 | carry status | PENDING, SETTLED; collection state CLAIMED, APPLIED, RELEASED; `payroll.carry_status.<lowercase>`, `payroll.collection_state.<lowercase>` |
 | source_kind | employee_salary, attendance_absence, unpaid_leave, manual_adjustment, loan, attendance_penalty, penalty, carry_forward, company_settings, rent_allocation, legacy; machine values, no user label |
@@ -762,6 +763,23 @@ Subsequent endpoint tables reference these exact JSON examples by name, to avoid
         "value": "warning",
         "label": "Warning",
         "label_key": "payroll.validation_severity.warning"
+      },
+      {
+        "value": "info",
+        "label": "Information",
+        "label_key": "payroll.validation_severity.info"
+      }
+    ],
+    "finalize_state": [
+      {
+        "value": "finalized",
+        "label": "Finalized",
+        "label_key": "payroll.finalize_state.finalized"
+      },
+      {
+        "value": "not_finalized",
+        "label": "Not finalized",
+        "label_key": "payroll.finalize_state.not_finalized"
       }
     ],
     "carry_status": [
@@ -1591,12 +1609,16 @@ Settings/config/assignment histories use the same values/audit/actor/time shape,
       "item_count": 10,
       "payslip_count": 10,
       "matches": true
-    }
+    },
+    "finalize_state": "not_finalized",
+    "infos": []
   }
 }
 ```
 
-The issue `field` property is optional and omitted when no corresponding field is present; it is not a required or null placeholder. Excluded archived/PREHIRE/TERMINATED profiles use employee.item_id null. Run-level errors use employee null. Absence capping, pending fines, claim_unaffordable, unknown overtime and cost incomplete are warnings; missing dates/linkage/reconciliation are errors. This endpoint is nonpaginated to guarantee the entire pre-finalize report. Optional filters change returned issue arrays/counts, **not** can_finalize, reconciliation or global blocking decision.
+V adds `finalize_state` (`finalized` for COMPLETED/PAID; `not_finalized` otherwise) and `infos` (issue objects with severity `info`, empty when none). For COMPLETED/PAID only, project any blocking issue as info without changing its code, message, params or stored snapshot; return errors [], counts.errors 0 and can_finalize true. Existing warnings/counts.warnings remain unchanged. `can_finalize` here means no outstanding finalization barrier; finalized state is not permission to edit or repeat a transition. Draft blocking issues remain errors. The existing counts object has only errors/warnings; infos do not increment either. Run/summary validation_counts use that same projection. Reconciliation.matches still reports the actual match result, including false on a finalized run; such a failure is informational in V, while publication still enforces reconciliation through its existing guard. CANCELLED and other nonfinalized behavior is unchanged.
+
+The issue `field` property is optional and omitted when no corresponding field is present; it is not a required or null placeholder. Excluded archived/PREHIRE/TERMINATED profiles use employee.item_id null. Run-level errors use employee null. Absence capping, pending fines, claim_unaffordable, unknown overtime and cost incomplete are warnings; missing dates/linkage/reconciliation are errors. This endpoint is nonpaginated to guarantee the entire pre-finalize report. Optional filters select errors/warnings/infos by employee, code and projected severity; they do **not** change global counts, can_finalize, finalize_state, reconciliation or the blocking decision. Counts retain the unfiltered report values (existing behavior).
 
 ### A: accommodation assignment
 
@@ -1750,7 +1772,7 @@ Legacy run fields and item basic/allowances/deductions/net remain read-only and 
 | Method + exact path | Permission; query | Request JSON example | Response example; domain status |
 |---|---|---|---|
 | GET `/payroll-runs/{run_id}/summary/` | P; none | No body | Summary JSON below; 200/404, nonpaginated. |
-| GET `/payroll-runs/{run_id}/validation-report/` | P; employee_profile_id, severity error/warning, code from section 5 | No body; `?severity=warning` | V; 200/404/422. Read-only calculation evidence at current revision; does not mutate claims on GET. |
+| GET `/payroll-runs/{run_id}/validation-report/` | P; employee_profile_id, severity error/warning/info, code from section 5 | No body; `?severity=warning` | V; 200/404/422. Read-only calculation evidence at current revision; does not mutate claims on GET. |
 | POST `/payroll-runs/{run_id}/recalculate/` | P; none | `{"expected_revision":1,"refresh_settings":false,"reason":"Attendance and employee dates corrected"}` | `{"status":"success","data":{"message":"Payroll run recalculated.","message_key":"payroll.message.recalculated","run_id":7,"revision":2,"status":"DRAFT","settings_revision":2,"total_net":"102670.00","total_company_cost":"122350.00","cost_incomplete":false,"changed_items":0,"validation_counts":{"errors":0,"warnings":0}}}`; 200, 422 locked/invalid, 409 stale. Revision may advance for refreshed evidence/audit even if money unchanged; repeated same-input calls must not duplicate collections. |
 | POST `/payroll-runs/{run_id}/finalize/` | P; PayrollFinalizeThrottle; none | `{"confirm":true,"expected_revision":2,"reason":"HR reconciliation complete"}`; compatible `{"confirm":true}` also accepted | `{"status":"success","data":{"message":"Payroll run finalized.","message_key":"payroll.message.finalized","run_id":7,"revision":3,"status":"COMPLETED","validation_counts":{"errors":0,"warnings":0}}}`; 200; already COMPLETED/PAID returns legacy message `Payroll run already finalized.` and current state without additional transition; blocking report/confirm/cancelled 422, stale 409. |
 | POST `/payroll-runs/{run_id}/generate-payslips/` | P; PayrollGeneratePayslipsThrottle; none | `{}` | `{"status":"success","data":{"message":"Payslips generated","message_key":"payroll.message.generated","generated_count":10,"total_payslips":10,"run_status":"PAID","download_pdf_url":"/payroll-runs/7/export/?file_format=pdf"}}`; 200; not finalized 422. Repeating gives generated_count 0; count includes accountless slips, notifications only linked users. |
@@ -2070,6 +2092,161 @@ Manual history must show both original automatic value and previous effective ov
 
 ## 9. Backward compatibility and deliberate changes
 
+
+### Legacy-run read projections (v0.6.1)
+
+When legacy_calculation is true, reconciliation checks **only** the sum of active item net_salary against run.total_net and the active item count against run.total_employees. Active payslip_count, item_count and payslips_net stay in the response as informational coverage; fewer payslips or different payslip net never produce payroll_reconciliation_failed for a legacy run. Historic payroll issued payslips only to employees with a login. Nonlegacy reconciliation remains strict, including payslip coverage, paired item money, lines and rent.
+
+R.total_gross and summary.total_gross_salary are exact Decimal sums of active item.basic_salary + item.total_allowances, preserving historic halalas without rerounding or using current profiles. In both R and summary, total_additions, total_provisions and total_company_cost are null (unknown), and cost_incomplete is true. Existing net/deduction values and category breakdowns are retained; missing legacy line coverage cannot establish complete additions or provisions, even where a breakdown sum is zero. These are read-only projections: do not backfill run columns, recalculate historical payroll, change items/payslips or write snapshots on GET. Modern totals are unchanged.
+
+Complete production-shaped example: 52 active items with basic1000.25 + allowances200.50, each net1100.75, and 33 login-linked payslips. Stored run.total_gross/unknown totals are0, total_net57239 and total_employees52. The combined R/summary/V response data below derives gross62439 while reporting incomplete company cost. No missing-payslip validation issue is emitted.
+
+```json
+{
+  "run": {
+    "id": 8,
+    "year": 2026,
+    "month": 8,
+    "status": "COMPLETED",
+    "total_net": "57239.00",
+    "total_employees": 52,
+    "company_id": 1,
+    "company_name": "Example Company",
+    "period_start": "2026-08-01",
+    "period_end": "2026-08-31",
+    "revision": 1,
+    "total_gross": "62439.00",
+    "total_additions": null,
+    "total_deductions": "0.00",
+    "total_provisions": null,
+    "total_company_cost": null,
+    "cost_incomplete": true,
+    "settings_revision": 0,
+    "settings_snapshot": {},
+    "calculator_version": "legacy",
+    "legacy_calculation": true,
+    "calculated_at": null,
+    "finalized_at": null,
+    "paid_at": null,
+    "cancelled_at": null,
+    "cancel_reason": null,
+    "validation_counts": {
+      "errors": 0,
+      "warnings": 0
+    },
+    "cancelled_by": null
+  },
+  "summary": {
+    "run_id": 8,
+    "year": 2026,
+    "month": 8,
+    "total_employees": 52,
+    "employees_with_deductions": 52,
+    "total_basic_salary": "52013.00",
+    "total_allowances": "10426.00",
+    "total_gross_salary": "62439.00",
+    "total_deductions": "0.00",
+    "total_net_salary": "57239.00",
+    "average_net_salary": "1100.75",
+    "total_additions": null,
+    "total_provisions": null,
+    "total_company_cost": null,
+    "cost_incomplete": true,
+    "salary_components": {
+      "basic_salary": "0.00",
+      "accommodation_allowance": "0.00",
+      "transportation_allowance": "0.00",
+      "telephone_allowance": "0.00",
+      "petrol_allowance": "0.00",
+      "other_allowance": "0.00"
+    },
+    "additions": {
+      "overtime_normal": "0.00",
+      "weekly_rest_work": "0.00",
+      "official_holiday_work": "0.00",
+      "bonus": "0.00",
+      "incentive": "0.00",
+      "other_addition": "0.00"
+    },
+    "deductions": {
+      "absence": "0.00",
+      "gosi_employee": "0.00",
+      "attendance_penalty": "0.00",
+      "penalty_fine": "0.00",
+      "penalty_wage_withholding": "0.00",
+      "loan": "0.00",
+      "other_deduction": "0.00",
+      "previous_total_deductions": "0.00"
+    },
+    "provisions": {
+      "medical": "0.00",
+      "id_cost": "0.00",
+      "air_ticket": "0.00",
+      "leave": "0.00",
+      "eos": "0.00",
+      "accommodation_cost": "0.00",
+      "gosi_company": "0.00"
+    },
+    "carry_forward": {
+      "carried_in": "0.00",
+      "requested": "0.00",
+      "collected": "0.00",
+      "uncollected": "0.00",
+      "by_category": []
+    },
+    "rent_rounding_difference": {
+      "numerator": "0.00",
+      "denominator": 1,
+      "decimal": "0"
+    },
+    "validation_counts": {
+      "errors": 0,
+      "warnings": 0
+    },
+    "reconciliation": {
+      "items_net": "57239.00",
+      "payslips_net": "36324.75",
+      "item_count": 52,
+      "payslip_count": 33,
+      "matches": true
+    },
+    "unknown_provision_counts": {
+      "MEDICAL": 0,
+      "ID_COST": 0,
+      "AIR_TICKET": 0,
+      "LEAVE_PROVISION": 0,
+      "EOS_PROVISION": 0,
+      "ACCOMMODATION_COST": 0,
+      "GOSI_COMPANY": 0
+    }
+  },
+  "validation": {
+    "run_id": 8,
+    "revision": 1,
+    "can_finalize": true,
+    "finalize_state": "finalized",
+    "errors": [],
+    "warnings": [],
+    "infos": [],
+    "counts": {
+      "errors": 0,
+      "warnings": 0
+    },
+    "employees_checked": 52,
+    "excluded_employees_checked": 0,
+    "reconciliation": {
+      "total_net": "57239.00",
+      "items_net": "57239.00",
+      "payslips_net": "36324.75",
+      "item_count": 52,
+      "payslip_count": 33,
+      "matches": true
+    }
+  }
+}
+```
+
+
 Retain every existing payroll path and optional trailing slash, export compatibility routes (including the root explicit PayrollRunExportView), CSV and format aliases, success/error helper envelope, pagination, run year/month/status values, run total_net/total_employees/company fields, item IDs and existing scalar fields, employee list/detail old salary fields/payment_mode/status, finalize confirm requirement and data.message, generate counts/download_pdf_url, protected download headers, existing audits/source models and original loan selector.
 
 Additive paths are settings/config/enums/history; nested item detail/edit/history; run validation/history/recalculate/cancel/accommodation report; accommodation assignment CRUD/history. Additive fields include salary/addition/deduction lines, full monthly vs earned gross, provision/company totals, settings/input versions, carry-forward, unknown cost flag/status, validation/adjustment histories and accountless linkage. PREVIOUS_TOTAL_DEDUCTIONS preserves old employee money transparently.
@@ -2152,6 +2329,8 @@ Phase 1: pure calculator/model/settings/migration tests, including every row bel
 | Portable overlap enforcement |Service create/update rejects inclusive overlapping active employee ranges with assignment_overlap on PostgreSQL and SQLite, including none/unknown statuses; adjacent nonoverlapping ranges succeed. PostgreSQL exclusion/extension DDL only executes when connection vendor is postgresql; forward/reverse SQLite migration skips it cleanly. Exercise service path and both migration vendors. |
 | Feb29 anniversary |Feb29,2020->Feb28,2025;new tier March2025. Feb28 and March1 hires switch in following respective months. |
 | Salary bases/zero |Every fixed enum incl FIXED_AMOUNT;no formulas/floats;rate finite validation;zero/negative/overflow sources;mandatory zero reason/detail; profile total null/different not used. |
+| Legacy run presentation |52 active items/33 payslips with equal item net/run net and stored gross0: matches true, no payroll_reconciliation_failed; R/summary gross equals exact active paid basic+allowances, unknown additions/provisions/company cost null and incomplete true; reads leave stored run/items/slips unchanged. Wrong item net/count still fails reconciliation. Nonlegacy missing/mismatching payslips still fail. |
+| Finalized validation presentation |COMPLETED/PAID reports finalize_state finalized and can_finalize true; historic blocking issues remain visible under infos with severity info, errors/counts.errors0, warnings unchanged; DRAFT errors still block. Severity/code filters include infos without changing global counts/state. |
 | Snapshots |Settings change does not mutate completed/paid or silently replace draft snapshot; explicit refresh audited. |
 | Monthly inputs vs paid lines |June16 joiner: monthly Basic6,000/Housing3,000/Transport1,500/Telephone500, other two0; monthly DTO stays6,000/3,000/1,500/500/0/0 while paid scalars are3,000/1,500/750/250/0/0. Active run-local Basic6,100 gives monthly6,100, paid3,050 and salary_adjusted true; no override gives false. Profile edits after calculation do not change these frozen monthly defaults. |
 | Monthly prefill no-op |PATCH the unchanged monthly prefill: existing422 field_not_editable, unchanged paid values/snapshot/revision/audit/adjustments. Repeat with an active salary override. Prefill plus a bonus change updates only the bonus and creates no salary adjustment. Legacy missing monthly snapshot exposes null rather than fabricated input. |
@@ -2198,3 +2377,5 @@ Same-version verifier addition v0.5.3 (2026-10-13): DTO I adds only `manual_inpu
 Verifier F4 corrections v0.5.4 (2026-10-13): ExactShare.numerator is a two-decimal string in every response/export, including old rent snapshots and summary.rent_rounding_difference. Denominator, decimal approximation, exact allocation/reconciliation and posted money are unchanged. `Backend/payroll/calculator.py` formats new ExactShares; `Backend/payroll/dto.py` normalizes rent responses/summary and parses both integer/decimal numerator strings exactly. Existing XLSX/PDF exports consume the normalized rent DTO; no export layout change. Sections2.5/6 and the amendment record describe the format. Wording-only corrections: issue.field is optional/omitted when absent (section6 V); zero_salary_detail_required blocks finalization, while otherwise valid item PATCH accepts the change without422 for this condition (sections2.3/5); I.warnings contains only warnings and blocking errors appear only in the validation report (section6 I); CFO retains accommodation API write access although the v1 UI is read-only for CFO (section7.5). No validation/permission/UI behavior or code was changed for these wording corrections. No paths, DTO field names, enum values, implemented status codes/error responses, defaults, migrations, catalog keys or other rules changed; the wording corrections document existing field optionality and validation behavior. All16 JSON examples and10 stored fixtures remain unchanged;121 enum entries,44 validation codes and148 bilingual keys remain. Regression/command evidence: `plans/Payroll Rebuild v0.5.4 Handoff.md`.
 
 Verifier user rule v0.6.0 (2026-10-14): added the executive exemption in section2.7 and the readonly HR I.executive_exempt boolean in section6/example, plus executive golden rows in section10. Engine normalization uses only core.executives.is_executive_profile; private input_snapshot.source flags executive_exempt/accommodation_assignment_present preserve calculation evidence. Exemption changes only attendance absence/source-confirmation requirements, normal overtime caps/warnings, unassigned accommodation applicability and AttendancePayrollDeduction late-fine selection; all other financial rules/errors remain. Existing draft attendance claims release through the audited service on reclassification. No info validation channel/code was added: executive_attendance_exempt is not emitted; visibility relies on the permitted DTO fallback. Paths, settings, roles, enum values, status codes and error shapes are unchanged. Exactly44 validation codes,121 enum entries,148 bilingual keys and16 JSON examples remain; only I gains executive_exempt and its stored fixture is updated. Existing upstream executive request/penalty creation restrictions are outside this payroll change; eligible approved leave/issued disciplinary claims remain payroll inputs. Evidence: plans/Payroll Rebuild v0.6.0 Handoff.md.
+
+Verifier legacy presentation v0.6.1 (2026-10-15): sections2.7/5/6/7.3/9/10/12 and the version header changed. Section2.7 only clarifies that the newer finalized-report schema applies independently of executive classification; no exemption rule changed. R.total_gross and summary.total_gross_salary derive from active legacy paid basic+allowances; R/summary total_additions, total_provisions and total_company_cost are nullable/unknown and cost_incomplete true for legacy runs only. No database writes, money recalculation or migration. Legacy reconciliation compares item net/count only; payslip coverage/net remains informational. Nonlegacy checks are unchanged. V adds finalize_state and infos; finalized blockers project severity info, leave the immutable source untouched, and do not contribute to blocking counts. can_finalize remains boolean and is true for finalized runs; action/status guards and HTTP error envelopes/codes are unchanged. The validation-report severity filter accepts info. Enums add finalize_state(finalized,not_finalized) and validation_severity.info, with the three matching bilingual catalog keys; exactly44 validation codes,124 enum entries and151 bilingual keys. Examples: enum and V updated; one combined legacy R/summary/V example added (17 JSON blocks,11 stored fixtures). All other settings, roles, executive rules, endpoints and DTO fields are unchanged. Evidence: plans/Payroll Rebuild v0.6.1 Handoff.md.

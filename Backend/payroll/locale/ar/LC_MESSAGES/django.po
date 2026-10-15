@@ -88,6 +88,12 @@ msgstr "إجمالي تكلفة الشركة"
 msgid "payroll.field.total_deductions"
 msgstr "إجمالي الخصومات"
 
+msgid "payroll.finalize_state.finalized"
+msgstr "تم الاعتماد"
+
+msgid "payroll.finalize_state.not_finalized"
+msgstr "لم يتم الاعتماد"
+
 msgid "payroll.history.assignment_change"
 msgstr "تغيير تخصيص السكن"
 
@@ -423,6 +429,9 @@ msgstr "يلزم سبب لراتب صفري."
 
 msgid "payroll.validation_severity.error"
 msgstr "خطأ"
+
+msgid "payroll.validation_severity.info"
+msgstr "معلومة"
 
 msgid "payroll.validation_severity.warning"
 msgstr "تحذير"

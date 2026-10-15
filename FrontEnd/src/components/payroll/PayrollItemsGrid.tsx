@@ -75,6 +75,7 @@ export default function PayrollItemsGrid({
   summary,
   report,
   runStatus,
+  legacy = false,
   revision,
   refreshKey,
   onOpenItem,
@@ -86,6 +87,7 @@ export default function PayrollItemsGrid({
   summary: PayrollRunSummaryDto | null;
   report: ValidationReport | null;
   runStatus: PayrollStatus;
+  legacy?: boolean;
   revision: number;
   refreshKey: number;
   initialState?: PayrollListState;
@@ -942,7 +944,11 @@ export default function PayrollItemsGrid({
                         : "right"
                     }
                   >
-                    {typeof node === "string" ? (
+                    {node === null && legacy ? (
+                      <Text type="secondary">
+                        {t("payroll.ux.legacyUnavailable")}
+                      </Text>
+                    ) : typeof node === "string" ? (
                       <MoneyText amount={node} strong />
                     ) : (
                       node

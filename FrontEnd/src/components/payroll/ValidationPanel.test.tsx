@@ -62,6 +62,42 @@ afterEach(() => {
 });
 
 describe("ValidationPanel", () => {
+  it("hides gating and progress for a legacy run even before finalization", () => {
+    render(
+      <MemoryRouter>
+        <ValidationPanel
+          report={report({ can_finalize: false })}
+          legacy
+          onOpenItem={vi.fn()}
+        />
+      </MemoryRouter>,
+    );
+    expect(screen.queryByText(en("payroll.ui.cannotFinalize"))).toBeNull();
+    expect(screen.queryByText(en("payroll.ux3.finalizeState"))).toBeNull();
+    expect(document.querySelector(".payroll-confirmation-progress")).toBeNull();
+  });
+  it("retains finalized historical issues as information without confirmation gating", () => {
+    renderPanel(
+      report({
+        finalize_state: "finalized",
+        infos: [
+          {
+            ...attendanceIssue(1),
+            severity: "info",
+            params: { manual_confirmation_required: true },
+          },
+        ],
+      }),
+    );
+    expect(screen.getByText("Finalized")).toBeInTheDocument();
+    expect(screen.queryByRole("progressbar")).toBeNull();
+    expect(document.querySelector(".payroll-confirmation-progress")).toBeNull();
+    expect(
+      screen.queryByText(/need confirmed absence days before finalizing/),
+    ).toBeNull();
+    expect(screen.queryByText(/Confirmed manually/)).toBeNull();
+    expect(screen.getByText("Informational")).toBeInTheDocument();
+  });
   it("renders 30 uncovered employees as ONE grouped card, not 30 rows", async () => {
     const warnings = Array.from({ length: 30 }, (_, i) =>
       attendanceIssue(i + 1),

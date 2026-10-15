@@ -96,7 +96,7 @@ export type ZeroSalaryReason =
 export type AccommodationStatus = "assigned" | "none" | "unknown";
 export type SuspendedPayDecision = "FULL_PAY" | "ZERO_PAY";
 export type ProvisionProration = "FULL_MONTH" | "PRORATED_BY_DAYS";
-export type ValidationSeverity = "error" | "warning";
+export type ValidationSeverity = "error" | "warning" | "info";
 export type AdjustmentType =
   | "ABSENCE_OVERRIDE"
   | "ADDITION_ENTRY"
@@ -356,10 +356,10 @@ export interface PayrollRunDto {
   period_end: string;
   revision: number;
   total_gross: Money;
-  total_additions: Money;
+  total_additions: Money | null;
   total_deductions: Money;
-  total_provisions: Money;
-  total_company_cost: Money;
+  total_provisions: Money | null;
+  total_company_cost: Money | null;
   cost_incomplete: boolean;
   settings_revision: number;
   settings_snapshot: SettingsSnapshot;
@@ -624,9 +624,9 @@ export interface PayrollRunSummaryDto {
   total_net_salary: Money;
   /** Diagnostic value, not a payroll line. */
   average_net_salary: Money;
-  total_additions: Money;
-  total_provisions: Money;
-  total_company_cost: Money;
+  total_additions: Money | null;
+  total_provisions: Money | null;
+  total_company_cost: Money | null;
   cost_incomplete: boolean;
   salary_components: Record<
     | "basic_salary"
@@ -702,6 +702,8 @@ export interface ValidationIssue {
 }
 
 export interface ValidationReport {
+  finalize_state?: "finalized" | "not_finalized";
+  infos?: ValidationIssue[];
   run_id: number;
   revision: number;
   can_finalize: boolean;

@@ -141,6 +141,9 @@ EN = {
     "payroll.adjustment.settings_refresh": "Settings Refresh",
     "payroll.validation_severity.error": "Error",
     "payroll.validation_severity.warning": "Warning",
+    "payroll.validation_severity.info": "Information",
+    "payroll.finalize_state.finalized": "Finalized",
+    "payroll.finalize_state.not_finalized": "Not finalized",
     "payroll.carry_status.pending": "Pending",
     "payroll.carry_status.settled": "Settled",
     "payroll.collection_state.claimed": "Claimed",
@@ -292,6 +295,9 @@ AR = {
     "payroll.adjustment.settings_refresh": "تحديث الإعدادات",
     "payroll.validation_severity.error": "خطأ",
     "payroll.validation_severity.warning": "تحذير",
+    "payroll.validation_severity.info": "معلومة",
+    "payroll.finalize_state.finalized": "تم الاعتماد",
+    "payroll.finalize_state.not_finalized": "لم يتم الاعتماد",
     "payroll.carry_status.pending": "معلق",
     "payroll.carry_status.settled": "مسدد",
     "payroll.collection_state.claimed": "محجوز",
@@ -439,6 +445,11 @@ ENUMS = {
     "validation_severity": [
         {"value": "error", "label": "Error", "label_key": "payroll.validation_severity.error"},
         {"value": "warning", "label": "Warning", "label_key": "payroll.validation_severity.warning"},
+        {"value": "info", "label": "Information", "label_key": "payroll.validation_severity.info"},
+    ],
+    "finalize_state": [
+        {"value": "finalized", "label": "Finalized", "label_key": "payroll.finalize_state.finalized"},
+        {"value": "not_finalized", "label": "Not finalized", "label_key": "payroll.finalize_state.not_finalized"},
     ],
     "carry_status": [
         {"value": "PENDING", "label": "Pending", "label_key": "payroll.carry_status.pending"},

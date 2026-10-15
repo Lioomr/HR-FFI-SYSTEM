@@ -528,7 +528,7 @@ def test_rent_non_payroll_resident_rounding_report_frozen_and_exports(ctx):
 
 def test_approved_contract_dto_fields_and_nested_shapes(ctx):
     examples = json.loads(Path(__file__).with_name("contract_examples.json").read_text(encoding="utf-8"))
-    assert sum(len(values) for values in enum_directory().values()) == 121
+    assert sum(len(values) for values in enum_directory().values()) == 124
     assert len(enum_directory()["validation_codes"]) == 44
     run = create(ctx)
     edit(ctx, run, {"absence_days_override": "2.00", "bonus": "50.00"})

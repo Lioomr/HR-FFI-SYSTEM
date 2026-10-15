@@ -138,8 +138,12 @@ export default function ValidationPanel({
   onOpenItem,
   index = null,
   onQuickNone,
+  legacy = false,
+  finalized = report.finalize_state === "finalized",
 }: {
   report: ValidationReport;
+  legacy?: boolean;
+  finalized?: boolean;
   onOpenItem: (itemId: number, target?: string) => void;
   index?: PayrollRunItemDto[] | null;
   onQuickNone?: (
@@ -158,9 +162,10 @@ export default function ValidationPanel({
     [report, view.items],
   );
   const title = (group: ValidationGroup) =>
-    group.severity === "info"
+    group.severity === "info" &&
+    group.issues.some((issue) => isManualInformation(issue, view.items))
       ? t("payroll.ux3.confirmedGroup", { count: group.employeeCount })
-      : group.code === ATTENDANCE_SOURCE_CODE
+      : group.severity !== "info" && group.code === ATTENDANCE_SOURCE_CODE
         ? t(
             group.manualConfirmation
               ? "payroll.ui.attendanceManualGroup"
@@ -231,7 +236,10 @@ export default function ValidationPanel({
           <Text>{issue.message}</Text>
           <IssueDetails
             issue={issue}
-            informational={isManualInformation(issue, view.items)}
+            informational={
+              issue.severity === "info" ||
+              isManualInformation(issue, view.items)
+            }
           />
         </Space>
       ),
@@ -261,16 +269,23 @@ export default function ValidationPanel({
           <Text type="secondary">{t("payroll.ux3.actionableWarnings")}</Text>
           <strong>{view.warnings}</strong>
         </div>
-        <div>
-          <Text type="secondary">{t("payroll.ux3.finalizeState")}</Text>
-          <strong>
-            {t(
-              report.can_finalize
-                ? "payroll.ui.canFinalize"
-                : "payroll.ui.cannotFinalize",
-            )}
-          </strong>
-        </div>
+        {(!legacy || finalized) && (
+          <div>
+            <Text type="secondary">{t("payroll.ux3.finalizeState")}</Text>
+            <Text
+              strong={!finalized}
+              type={finalized ? "secondary" : undefined}
+            >
+              {t(
+                finalized
+                  ? "payroll.finalize_state.finalized"
+                  : report.can_finalize
+                    ? "payroll.ui.canFinalize"
+                    : "payroll.ui.cannotFinalize",
+              )}
+            </Text>
+          </div>
+        )}
         <Tag>
           {t(
             report.reconciliation.matches
@@ -287,45 +302,47 @@ export default function ValidationPanel({
           </Button>
         </Tooltip>
       </div>
-      <div className="payroll-confirmation-progress">
-        <Text>
-          {view.progress
-            ? t("payroll.ux3.progress", { confirmed: "{C}", total: "{M}" })
-                .split(/(\{C\}|\{M\})/)
-                .map((part, i) =>
-                  part === "{C}" || part === "{M}" ? (
-                    <bdi dir="ltr" key={i}>
-                      {part === "{C}"
-                        ? view.progress!.confirmed
-                        : view.progress!.total}
-                    </bdi>
-                  ) : (
-                    part
-                  ),
-                )
-            : t("payroll.ux.unavailable")}
-        </Text>
-        {view.progress ? (
-          <Progress
-            percent={
-              view.progress && view.progress.total
-                ? (view.progress.confirmed / view.progress.total) * 100
-                : 0
-            }
-            showInfo={false}
-            aria-label={
-              view.progress
-                ? t("payroll.ux3.progress", view.progress)
-                : t("payroll.ux.unavailable")
-            }
-          />
-        ) : (
-          <div className="payroll-progress-placeholder" aria-hidden="true" />
-        )}
-        {!view.items && (
-          <Text type="secondary">{t("payroll.ux.indexUnavailable")}</Text>
-        )}
-      </div>
+      {!legacy && !finalized && (
+        <div className="payroll-confirmation-progress">
+          <Text>
+            {view.progress
+              ? t("payroll.ux3.progress", { confirmed: "{C}", total: "{M}" })
+                  .split(/(\{C\}|\{M\})/)
+                  .map((part, i) =>
+                    part === "{C}" || part === "{M}" ? (
+                      <bdi dir="ltr" key={i}>
+                        {part === "{C}"
+                          ? view.progress!.confirmed
+                          : view.progress!.total}
+                      </bdi>
+                    ) : (
+                      part
+                    ),
+                  )
+              : t("payroll.ux.unavailable")}
+          </Text>
+          {view.progress ? (
+            <Progress
+              percent={
+                view.progress && view.progress.total
+                  ? (view.progress.confirmed / view.progress.total) * 100
+                  : 0
+              }
+              showInfo={false}
+              aria-label={
+                view.progress
+                  ? t("payroll.ux3.progress", view.progress)
+                  : t("payroll.ux.unavailable")
+              }
+            />
+          ) : (
+            <div className="payroll-progress-placeholder" aria-hidden="true" />
+          )}
+          {!view.items && (
+            <Text type="secondary">{t("payroll.ux.indexUnavailable")}</Text>
+          )}
+        </div>
+      )}
       {groups.length === 0 ? (
         <EmptyState
           title={t("payroll.ui.noIssuesTitle")}
@@ -356,11 +373,14 @@ export default function ValidationPanel({
             ),
             children: (
               <>
-                {group.severity === "info" && (
-                  <Text type="secondary">
-                    {t("payroll.ux3.confirmedNoCoverage")}
-                  </Text>
-                )}
+                {group.severity === "info" &&
+                  group.issues.some((issue) =>
+                    isManualInformation(issue, view.items),
+                  ) && (
+                    <Text type="secondary">
+                      {t("payroll.ux3.confirmedNoCoverage")}
+                    </Text>
+                  )}
                 <Table
                   size="small"
                   rowKey={(issue, i) =>

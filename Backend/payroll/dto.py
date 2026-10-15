@@ -134,8 +134,9 @@ def reconciliation(run):
     )
     item_net = items.aggregate(value=Sum("net_salary"))["value"] or ZERO
     slip_net = slips.aggregate(value=Sum("net_salary"))["value"] or ZERO
-    matches = item_net == slip_net == run.total_net and items.count() == slips.count() == run.total_employees
+    matches = item_net == run.total_net and items.count() == run.total_employees
     if not run.legacy_calculation:
+        matches &= item_net == slip_net and items.count() == slips.count()
         for run_field, item_field in (
             ("total_gross", "gross_salary"),
             ("total_additions", "total_additions"),
@@ -146,9 +147,9 @@ def reconciliation(run):
             matches &= getattr(run, run_field) == sum((getattr(i, item_field) for i in items), ZERO)
     # Each pair must agree too: equal aggregates cannot hide opposite individual errors.
     for item in items:
-        slip = slips.filter(payroll_run_item=item).first()
         if run.legacy_calculation:
             continue
+        slip = slips.filter(payroll_run_item=item).first()
         matches &= bool(
             slip
             and slip.net_salary == item.net_salary
@@ -193,18 +194,44 @@ def validation(run):
                 run,
             )
         )
-    errors, warnings = ([i for i in issues if i["severity"] == level] for level in ("error", "warning"))
+    finalized = run.status in ("COMPLETED", "PAID")
+    if finalized:
+        issues = [{**i, "severity": "info"} if i["severity"] == "error" else i for i in issues]
+    errors, warnings, infos = ([i for i in issues if i["severity"] == level] for level in ("error", "warning", "info"))
     return {
         "run_id": run.pk,
         "revision": run.revision,
         "can_finalize": not errors,
+        "finalize_state": "finalized" if finalized else "not_finalized",
         "errors": errors,
         "warnings": warnings,
+        "infos": infos,
         "counts": {"errors": len(errors), "warnings": len(warnings)},
         "employees_checked": run.validation_snapshot.get("employees_checked", run.total_employees),
         "excluded_employees_checked": len(run.validation_snapshot.get("excluded", [])),
         "reconciliation": check,
     }
+
+
+def run_totals(run, items=None):
+    data = {
+        key: amount(getattr(run, key))
+        for key in (
+            "total_net",
+            "total_gross",
+            "total_additions",
+            "total_deductions",
+            "total_provisions",
+            "total_company_cost",
+        )
+    }
+    data["cost_incomplete"] = run.cost_incomplete
+    if run.legacy_calculation:
+        if items is None:
+            items = run.items.filter(is_active=True)
+        data["total_gross"] = amount(sum((item.basic_salary + item.total_allowances for item in items), ZERO))
+        data.update(total_additions=None, total_provisions=None, total_company_cost=None, cost_incomplete=True)
+    return data
 
 
 def run_dto(run):
@@ -218,24 +245,11 @@ def run_dto(run):
             "status",
             "total_employees",
             "revision",
-            "cost_incomplete",
             "calculator_version",
             "legacy_calculation",
         )
     }
-    data.update(
-        {
-            k: amount(getattr(run, k))
-            for k in (
-                "total_net",
-                "total_gross",
-                "total_additions",
-                "total_deductions",
-                "total_provisions",
-                "total_company_cost",
-            )
-        }
-    )
+    data.update(run_totals(run))
     data.update(
         company_id=run.company_id,
         company_name=run.company.name if run.company_id else None,
@@ -589,6 +603,7 @@ def rent_reconciles(allocation):
 
 def summary(run):
     items = list(run.items.filter(is_active=True))
+    totals = run_totals(run, items)
     lines = list(PayrollLine.objects.filter(item__in=items))
     sums = {kind: sum((line.amount or ZERO for line in lines if line.type == kind), ZERO) for kind in LINE_KEYS}
 
@@ -603,17 +618,14 @@ def summary(run):
         "employees_with_deductions": sum(item.total_deductions > 0 for item in items),
         "total_basic_salary": amount(sum((i.basic_salary for i in items), ZERO)),
         "total_allowances": amount(sum((i.total_allowances for i in items), ZERO)),
-        "total_gross_salary": amount(run.total_gross),
+        "total_gross_salary": totals["total_gross"],
         "total_net_salary": amount(run.total_net),
         "average_net_salary": amount(run.total_net / len(items) if items else ZERO),
-        "cost_incomplete": run.cost_incomplete,
+        "cost_incomplete": totals["cost_incomplete"],
         "reconciliation": reconciliation(run),
     }
     data.update(
-        {
-            k: amount(getattr(run, k))
-            for k in ("total_additions", "total_deductions", "total_provisions", "total_company_cost")
-        }
+        {k: totals[k] for k in ("total_additions", "total_deductions", "total_provisions", "total_company_cost")}
     )
     data["salary_components"] = values(SALARY_COMPONENTS)
     data["additions"] = values(
