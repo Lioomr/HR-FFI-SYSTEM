@@ -1,14 +1,20 @@
 from datetime import date
 
+from django.db import transaction
+from django.db.models import Q
+from django.http import FileResponse
+from django.utils import timezone
+from rest_framework import mixins, status, viewsets
+from rest_framework.decorators import action
+from rest_framework.exceptions import PermissionDenied, ValidationError
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.views import APIView
+
 from accounts.permissions import get_role
 from audit.utils import audit
 from core.executives import executive_profile_q, is_executive_profile
 from core.pagination import StandardPagination
 from core.responses import error, success
-from django.db import transaction
-from django.db.models import Q
-from django.http import FileResponse
-from django.utils import timezone
 from employees.models import EmployeeProfile
 from employees.permissions import IsHRManagerOrAdmin
 from organization.services import (
@@ -17,11 +23,6 @@ from organization.services import (
     get_active_company_for_request,
     get_requested_company_id,
 )
-from rest_framework import mixins, status, viewsets
-from rest_framework.decorators import action
-from rest_framework.exceptions import PermissionDenied, ValidationError
-from rest_framework.permissions import IsAuthenticated
-from rest_framework.views import APIView
 
 from .models import PenaltyCatalog, PenaltyDeduction, PenaltyRecord
 from .notifications import queue_penalty_notification
@@ -267,8 +268,8 @@ class PenaltyViewSet(
                     transaction.set_rollback(True)
                     return error(str(exc), status=422)
             event = "issued" if choice != "excused" else "waived"
-            queue_penalty_notification(record, event)
             if choice != "excused":
+                queue_penalty_notification(record, event)
                 queue_penalty_notification(record, event, hr=True)
         return success(self._fresh_data(record.pk))
 
@@ -469,8 +470,8 @@ class PenaltyViewSet(
                     deduction.status = PenaltyDeduction.Status.PENDING_REVIEW
                     deduction.save(update_fields=["status", "updated_at"])
                 audit(request, "penalty_dispute_upheld", "PenaltyRecord", record.pk, {"note": note})
-            queue_penalty_notification(record, "resolved")
             if decision != "waive":
+                queue_penalty_notification(record, "resolved")
                 queue_penalty_notification(record, "resolved", hr=True)
         return success(self._fresh_data(record.pk))
 

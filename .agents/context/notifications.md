@@ -188,3 +188,10 @@ job title / position is "Chief Executive Officer" or "General Manager". SystemAd
 
 - The persistent notification inbox uses authenticated REST polling; WebSocket delivery is deferred and every handshake is rejected with `4403`.
 - Delivery status is read from the nested `deliveries` array; later worker outcomes are visible on REST refresh.
+
+## Penalty notification rules
+
+- Waivers, HR excuses and automatic withdrawals never notify employees, including withdrawal of an issued warning. HR notifications and audit history are preserved.
+- W01/W03/W05/W07 recorded late arrivals notify employees after attendance commits, without HR issuance or payroll changes, from incident date `PENALTY_LATE_NOTIFICATIONS_EFFECTIVE_FROM` (default `2026-10-15`; empty disables). Historical incidents before the cutoff remain silent even if reprocessed later.
+- `penalties.notifications.notify_late_arrival` rechecks eligibility under profile/record locks and persists `PenaltyRecord.late_arrival_notified_at` only after notification creation. This durable marker prevents repeats even after inbox cleanup. Hourly `penalties.tasks.notify_late_arrivals` retries eligible unsent candidates at minute 10; external delivery retries use the shared worker.
+- This recorded-attendance message is separate from the optional automatic PDF warning issuance controlled by `PENALTY_AUTO_WARNINGS_EFFECTIVE_FROM`; it leaves records pending HR review. See `plans/Penalties API.md` for the full behavior and rollout migration.

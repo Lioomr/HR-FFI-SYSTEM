@@ -33,6 +33,9 @@ def _env_bool(name, default=False):
 PENALTY_AUTO_WARNINGS_EFFECTIVE_FROM = os.environ.get("PENALTY_AUTO_WARNINGS_EFFECTIVE_FROM", "")
 # Hours after the shift ends before a candidate is issued, so late punches can still arrive.
 PENALTY_AUTO_WARNING_SETTLE_HOURS = os.environ.get("PENALTY_AUTO_WARNING_SETTLE_HOURS", "12")
+# Notify measured late arrivals without issuing a penalty or changing payroll.
+# The incident date is the cutoff; historical incidents must never be backfilled.
+PENALTY_LATE_NOTIFICATIONS_EFFECTIVE_FROM = os.environ.get("PENALTY_LATE_NOTIFICATIONS_EFFECTIVE_FROM", "2026-10-15")
 
 
 def _env_list(name, default=None):
@@ -462,7 +465,7 @@ DOCUMENT_SIGNING_SEAL_CHAIN_PATH = os.environ.get("DOCUMENT_SIGNING_SEAL_CHAIN_P
 DOCUMENT_SIGNING_CA_CERT_PATH = os.environ.get("DOCUMENT_SIGNING_CA_CERT_PATH", "")
 DOCUMENT_SIGNING_CA_KEY_PATH = os.environ.get("DOCUMENT_SIGNING_CA_KEY_PATH", "")
 DOCUMENT_SIGNING_CA_KEY_PASSWORD = os.environ.get("DOCUMENT_SIGNING_CA_KEY_PASSWORD", "")
-DOCUMENT_SIGNING_SEAL_NAME =os.environ.get("DOCUMENT_SIGNING_SEAL_NAME", "FFI HR Document Seal")
+DOCUMENT_SIGNING_SEAL_NAME = os.environ.get("DOCUMENT_SIGNING_SEAL_NAME", "FFI HR Document Seal")
 DOCUMENT_SIGNING_ORGANIZATION = os.environ.get("DOCUMENT_SIGNING_ORGANIZATION", "FFI")
 # AWS KMS seal (DOCUMENT_SIGNING_BACKEND=aws_kms): asymmetric RSA_2048+ SIGN_VERIFY key and its certificate.
 DOCUMENT_SIGNING_KMS_KEY_ID = os.environ.get("DOCUMENT_SIGNING_KMS_KEY_ID", "")

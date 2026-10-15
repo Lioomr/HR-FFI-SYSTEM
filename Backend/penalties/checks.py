@@ -1,7 +1,12 @@
 from django.core.checks import Error, register
 from django.core.exceptions import ImproperlyConfigured
 
-from .services import auto_warning_settle_hours, auto_warnings_effective_from, effective_from
+from .services import (
+    auto_warning_settle_hours,
+    auto_warnings_effective_from,
+    effective_from,
+    late_notifications_effective_from,
+)
 
 
 @register()
@@ -11,6 +16,7 @@ def check_penalties_effective_from(app_configs, **kwargs):
         (effective_from, "penalties.E001"),
         (auto_warnings_effective_from, "penalties.E002"),
         (auto_warning_settle_hours, "penalties.E003"),
+        (late_notifications_effective_from, "penalties.E004"),
     ):
         try:
             check()

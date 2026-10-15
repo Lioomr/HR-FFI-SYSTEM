@@ -40,6 +40,10 @@ app.conf.beat_schedule = {
         "task": "employees.tasks.cleanup_unattached_profile_change_attachments",
         "schedule": crontab(minute=int(os.environ.get("PROFILE_CHANGE_ATTACHMENT_CLEANUP_MINUTE", "40"))),
     },
+    "notify-recorded-late-arrivals-hourly": {
+        "task": "penalties.tasks.notify_late_arrivals",
+        "schedule": crontab(minute=10),
+    },
     # Automatic late warnings; a no-op while PENALTY_AUTO_WARNINGS_EFFECTIVE_FROM is empty.
     "issue-penalty-auto-warnings-hourly": {
         "task": "penalties.tasks.issue_auto_warnings",

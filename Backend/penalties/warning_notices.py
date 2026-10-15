@@ -38,7 +38,6 @@ logger = logging.getLogger(__name__)
 
 NOTICE_LEVEL = 1
 EVENT_KEY = "penalty.auto_warning"
-WITHDRAWN_EVENT_KEY = "penalty.warning_withdrawn"
 #: Arabic only: mixed-direction text breaks the field's punctuation.
 AUTOMATED_REASON = "إشعار آلي صادر من النظام بناءً على سجل الحضور المسجل."
 #: The WhatsApp template requires every variable; the count itself is never sent.
@@ -193,37 +192,3 @@ def deliver(notice):
         notice.pk,
         {"penalty_id": record.pk, "notification_id": getattr(notification, "id", None)},
     )
-
-
-def notify_warning_withdrawn(record):
-    """Tell the employee an automatic warning was withdrawn (once per record)."""
-    employee = record.employee_profile.user
-    if employee is None or not employee.is_active:
-        return
-    action_url = f"/employee/penalties/{record.pk}"
-    try:
-        dispatch_notification_channels(
-            recipient=employee,
-            company=record.company,
-            related_object=record,
-            event_key=WITHDRAWN_EVENT_KEY,
-            **notification_text(WITHDRAWN_EVENT_KEY, date=record.occurred_on.isoformat()),
-            category=Notification.Category.ATTENDANCE,
-            action_url=action_url,
-            whatsapp_template="request_status_update",
-            whatsapp_variables={
-                "employee_name": getattr(employee, "full_name", "") or employee.email,
-                "request_type": "Late attendance warning",
-                "request_type_ar": "إنذار التأخر في الحضور",
-                "request_id": str(record.pk),
-                "status_label": "Withdrawn",
-                "status_label_ar": "تم سحب الإنذار",
-                "status_icon": "",
-                "reason": "",
-                "details": "No action is needed.",
-                "action_url": action_url,
-            },
-            deduplication_key=f"{WITHDRAWN_EVENT_KEY}:{record.pk}",
-        )
-    except Exception:
-        logger.exception("penalty_notification_failed", extra={"penalty_id": record.pk, "event": "warning_withdrawn"})

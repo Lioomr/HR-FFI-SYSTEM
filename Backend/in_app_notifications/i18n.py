@@ -414,6 +414,13 @@ MESSAGES: dict[str, dict[str, tuple[str, str]]] = {
         ),
     },
     # Automatic late warnings never state how many warnings preceded them.
+    "penalty.late_arrival_recorded": {
+        "title": ("Late attendance recorded", "تم تسجيل تأخر في الحضور"),
+        "message": (
+            "Late attendance was recorded on {date}. View the attendance details in the secure app. HR review is pending.",
+            "تم تسجيل تأخر في الحضور بتاريخ {date}. راجع تفاصيل الحضور في التطبيق الآمن. السجل بانتظار مراجعة الموارد البشرية.",
+        ),
+    },
     "penalty.auto_warning": {
         "title": ("Late attendance warning", "إنذار التأخر في الحضور"),
         "message": (

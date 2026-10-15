@@ -1,5 +1,6 @@
 from django.db import models
 from django.db.models import Q
+
 from employees.storage import PrivateUploadStorage
 
 
@@ -73,6 +74,9 @@ class PenaltyRecord(models.Model):
     created_by = models.ForeignKey("accounts.User", null=True, blank=True, on_delete=models.PROTECT)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    # Durable even after notification retention cleanup; recalculation must not resend.
+    late_arrival_notified_at = models.DateTimeField(null=True, blank=True, editable=False)
 
     class Meta:
         ordering = ["-occurred_on", "-id"]

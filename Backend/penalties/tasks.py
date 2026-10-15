@@ -4,10 +4,11 @@ import logging
 from collections import Counter
 from datetime import datetime, time, timedelta
 
-from audit.utils import audit
 from celery import shared_task
 from django.db import transaction
 from django.utils import timezone
+
+from audit.utils import audit
 from employees.models import EmployeeProfile
 
 from .models import PenaltyRecord
@@ -26,6 +27,30 @@ logger = logging.getLogger("penalties.monitoring")
 
 MAX_AUTO_WARNING_FAILURES = 3
 Automation = PenaltyRecord.Automation
+
+
+@shared_task
+def notify_late_arrivals():
+    """Retry unsent, eligible incident notifications independently of HR issuance."""
+    from .notifications import notify_late_arrival
+    from .services import LATE_NOTIFICATION_ROWS, late_notifications_effective_from
+
+    start = late_notifications_effective_from()
+    if start is None:
+        return {"notified": 0}
+    ids = (
+        PenaltyRecord.objects.filter(
+            source=PenaltyRecord.Source.AUTOMATIC,
+            source_kind="late_arrival",
+            catalog__code__in=LATE_NOTIFICATION_ROWS,
+            status=PenaltyRecord.Status.PENDING_HR_MARK,
+            occurred_on__gte=start,
+            late_arrival_notified_at__isnull=True,
+        )
+        .order_by("occurred_on", "pk")
+        .values_list("pk", flat=True)
+    )
+    return {"notified": sum(notify_late_arrival(pk) for pk in ids.iterator())}
 
 
 def _settles_at(record):

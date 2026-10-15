@@ -7,22 +7,23 @@ from io import BytesIO, StringIO
 from unittest.mock import patch
 
 import pymupdf
-from attendance.late_notices import MAPPED_TEXT_FIELDS, WHATSAPP_VARIABLES, load_notice_assets
-from attendance.models import BioTimeEmployeeMap
-from audit.models import AuditLog
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.core.files.base import ContentFile
 from django.core.management import call_command
 from django.test import TestCase, override_settings
 from django.utils import timezone
+from PIL import Image
+from rest_framework.test import APIClient
+
+from attendance.late_notices import MAPPED_TEXT_FIELDS, WHATSAPP_VARIABLES, load_notice_assets
+from attendance.models import BioTimeEmployeeMap
+from audit.models import AuditLog
 from employees.models import EmployeeProfile
 from in_app_notifications.dispatcher import _load_whatsapp_document
 from in_app_notifications.i18n import notification_text
 from organization.models import OrganizationNode, UserOrganizationAccess
 from payroll.models import PayrollRun, PayrollRunItem
-from PIL import Image
-from rest_framework.test import APIClient
 
 from .catalog import CATALOG
 from .models import PenaltyCatalog, PenaltyDeduction, PenaltyRecord, PenaltyWarningNotice
@@ -391,7 +392,7 @@ class AutomaticWarningTests(TestCase):
 
     @patch("penalties.notifications.notify_penalty")
     @patch("penalties.warning_notices.dispatch_notification_channels")
-    def test_dispute_shows_hr_and_waiver_sends_one_withdrawn_notice(self, dispatch, notify):
+    def test_dispute_shows_hr_and_waiver_does_not_notify_employee(self, dispatch, notify):
         record = self._late(date(2026, 10, 1))
         self._run()
         dispatch.reset_mock()
@@ -409,19 +410,13 @@ class AutomaticWarningTests(TestCase):
         self.assertEqual(waived.status_code, 200, waived.content)
         record.refresh_from_db()
         self.assertEqual((record.status, record.automation), (PenaltyRecord.Status.WAIVED, AUTO.WARNING_ISSUED))
-        dispatch.assert_called_once()
-        payload = dispatch.call_args.kwargs
-        self.assertEqual(payload["event_key"], "penalty.warning_withdrawn")
-        self.assertEqual(payload["deduplication_key"], f"penalty.warning_withdrawn:{record.pk}")
-        self.assertEqual(
-            payload["message"], "The late attendance warning dated 2026-10-01 has been withdrawn. No action is needed."
-        )
+        dispatch.assert_not_called()
         self.assertNotIn(record.pk, self._hr_list_ids())
-        # The waiver reaches HR, while the employee receives the withdrawn notice once.
+        # Only HR receives dispute and waiver events.
         self.assertEqual([call.args[1] for call in notify.call_args_list], ["disputed", "waived"])
 
     @patch("penalties.warning_notices.dispatch_notification_channels")
-    def test_disappeared_evidence_waives_and_sends_withdrawn_notice_once(self, dispatch):
+    def test_disappeared_evidence_waives_without_employee_notification(self, dispatch):
         record = self._late(date(2026, 10, 1))
         self._run()
         dispatch.reset_mock()
@@ -433,8 +428,7 @@ class AutomaticWarningTests(TestCase):
             sync_attendance_candidates(result)
         record.refresh_from_db()
         self.assertEqual(record.status, PenaltyRecord.Status.WAIVED)
-        self.assertEqual(dispatch.call_count, 1)
-        self.assertEqual(dispatch.call_args.kwargs["event_key"], "penalty.warning_withdrawn")
+        dispatch.assert_not_called()
         # Evidence returning reopens it for HR; the withdrawn letter is never re-sent.
         result.first_check_in_at = result.shift_start_at + timedelta(minutes=5)
         result.save(update_fields=["first_check_in_at"])

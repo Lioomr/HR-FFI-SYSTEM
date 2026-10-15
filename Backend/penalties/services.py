@@ -3,13 +3,14 @@
 from datetime import date, datetime, timedelta
 from decimal import ROUND_HALF_UP, Decimal
 
-from audit.utils import audit
-from core.executives import executive_profile_q, is_executive_profile
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
 from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
+
+from audit.utils import audit
+from core.executives import executive_profile_q, is_executive_profile
 from employees.models import EmployeeProfile
 
 from .catalog import monetary_amount
@@ -29,6 +30,18 @@ def effective_from():
 # automatically. Occurrence 4 onward uses the printed levels shifted by two.
 AUTO_WARNING_ROWS = frozenset({"W01", "W02", "W07"})
 EXTRA_AUTO_WARNINGS = 2
+
+LATE_NOTIFICATION_ROWS = frozenset({"W01", "W03", "W05", "W07"})
+
+
+def late_notifications_effective_from():
+    raw = str(getattr(settings, "PENALTY_LATE_NOTIFICATIONS_EFFECTIVE_FROM", "") or "").strip()
+    if not raw:
+        return None
+    try:
+        return date.fromisoformat(raw)
+    except ValueError as exc:
+        raise ImproperlyConfigured("PENALTY_LATE_NOTIFICATIONS_EFFECTIVE_FROM must be YYYY-MM-DD or empty.") from exc
 
 
 def auto_warnings_effective_from():
@@ -512,10 +525,6 @@ def waive(record, *, reason, request=None, decision="waive"):
     if previous != PenaltyRecord.Status.PENDING_HR_MARK:
         _review_recurrence(record)
         _review_absence_allocation(record, deduction)
-    if record.automation == PenaltyRecord.Automation.WARNING_ISSUED and previous != PenaltyRecord.Status.WAIVED:
-        from .warning_notices import notify_warning_withdrawn
-
-        transaction.on_commit(lambda: notify_warning_withdrawn(record))
     if previous != PenaltyRecord.Status.WAIVED:
         from .notifications import queue_penalty_notification
 
@@ -664,6 +673,18 @@ def _candidate(
         from .notifications import queue_penalty_notification
 
         queue_penalty_notification(record, "reopened" if reopened else "candidate_ready", hr=True)
+    start = late_notifications_effective_from()
+    if (
+        start is not None
+        and occurred_on >= start
+        and source_kind == "late_arrival"
+        and catalog_code in LATE_NOTIFICATION_ROWS
+        and record.status == PenaltyRecord.Status.PENDING_HR_MARK
+        and record.late_arrival_notified_at is None
+    ):
+        from .notifications import notify_late_arrival
+
+        transaction.on_commit(lambda: notify_late_arrival(record.pk))
     return record
 
 
