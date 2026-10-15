@@ -4,7 +4,7 @@ Recorded: 15 October 2026.
 
 ## Task 1: Suppress employee notifications when penalties are waived
 
-Status: Implemented and verified locally; production update pending.
+Status: Implemented, verified locally and deployed to production on 15 October 2026.
 
 Do not notify the employee when a penalty is waived or marked excused. Cover HR decisions, automatic withdrawal after attendance evidence changes, and withdrawal of an automatically issued warning. Suppress employee in-app, WhatsApp, email, SMS and push messages for those waiver or withdrawal events wherever supported. This task does not suppress initial warning issuance notifications.
 
@@ -21,7 +21,7 @@ Acceptance checks:
 
 ## Task 2: Automatically notify late arrivals from 15 October 2026
 
-Status: Implemented and verified locally; production update pending.
+Status: Implemented, verified locally and deployed to production on 15 October 2026.
 
 Automatically notify employees about late-arrival records without waiting for HR for these codes:
 
@@ -64,4 +64,14 @@ Completed locally on 15 October 2026:
 - Added migration `penalties.0008_penaltyrecord_late_arrival_notified_at`, applied to the local development database.
 - Penalties and payroll phase 2 regression suite: 162 tests passed, with 28 subtests passed. Tests used the local PostgreSQL test database, in-memory Celery transport and in-memory Channels; external provider delivery was not exercised.
 - Rebuilt the local backend, notification worker and Celery Beat. In the rebuilt container, 30 automatic-warning and late-notification tests passed, with 28 subtests passed. Django system checks passed and `makemigrations penalties --check --dry-run` reported no pending changes.
-- Production has not been modified. Production deployment must apply migration 0008 and update backend, notification worker and Beat together. The new recorded-arrival cutoff defaults to `2026-10-15`; do not replace it with the later deployment date or move it earlier.
+- Production was unchanged at the end of local verification. Deployment requires migration 0008 and matching backend, notification worker and Beat images. The new recorded-arrival cutoff defaults to `2026-10-15`; do not replace it with the later deployment date or move it earlier.
+
+## Production deployment verification
+
+Deployed code commit `f39ecaca` to `/opt/hr-ffi` on 15 October 2026. Only the verified penalty notification commit was transferred; unrelated local payroll work was excluded. A PostgreSQL custom-format backup, prior commit and image references, and Compose backup were saved under `/home/ubuntu/deployment-backups/penalty-f39ecaca-20261015T080613Z` before migration. The dump's table of contents was verified with `pg_restore --list`.
+
+Migration `penalties.0008_penaltyrecord_late_arrival_notified_at` applied successfully before the backend, notification worker and notification Beat were recreated. All three containers serve the same notification/task source hashes. Runtime settings retain the inclusive incident cutoff `2026-10-15`; the separate legacy PDF-warning activation remains empty.
+
+The production worker processed two eligible late-arrival candidates dated 15 October 2026. Two employee notifications were persisted and both WhatsApp deliveries reached `sent`. The two penalty records remain `pending_hr_mark`; the new penalties deduction table remains empty. No incidents before 15 October received the new notification marker.
+
+The public API `/healthz/` returned `{"status":"ok"}`, the worker responded to ping, and the configured Healthchecks monitor accepted a heartbeat. Existing untracked server backup files were preserved. No frontend, database service or messaging-provider service was rebuilt.
