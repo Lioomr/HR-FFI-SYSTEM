@@ -2,7 +2,6 @@ from django.conf import settings
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
 from django.db import models
-
 from organization.models import OrganizationNode
 
 
@@ -128,9 +127,15 @@ class WorkflowAction(models.Model):
         OVERRIDE = "override", "Override"
         DISBURSE = "disburse", "Disburse"
         DEDUCT = "deduct", "Deduct"
+        EDIT = "edit", "Edit"
+        # The employee asked HR to cancel an approved request; HR declined, or the employee withdrew it.
+        # HR's confirmation is recorded as the module's usual ``cancel``.
+        CANCELLATION_REQUESTED = "cancellation_requested", "Cancellation Requested"
+        CANCELLATION_DECLINED = "cancellation_declined", "Cancellation Declined"
+        CANCELLATION_WITHDRAWN = "cancellation_withdrawn", "Cancellation Withdrawn"
 
     workflow = models.ForeignKey(WorkflowInstance, on_delete=models.CASCADE, related_name="actions")
-    action = models.CharField(max_length=20, choices=Action.choices)
+    action = models.CharField(max_length=32, choices=Action.choices)
     actor = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
@@ -395,6 +400,72 @@ class RequestObligation(models.Model):
 
     def __str__(self) -> str:
         return f"{self.type}:{self.status}:{self.parent_content_type_id}:{self.parent_object_id}"
+
+
+class CancellationRequest(models.Model):
+    """An employee's request that HR cancel one of their already approved requests.
+
+    One row per attempt, linked to the request through a generic FK. HR confirms it
+    (the module's HR cancel runs and reverses the side effects) or declines it (the
+    request stays approved). At most one row per request is ``pending`` at a time.
+    Orchestrated by ``core.services.cancellation_requests``.
+    """
+
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending"
+        CONFIRMED = "confirmed", "Confirmed"
+        DECLINED = "declined", "Declined"
+        WITHDRAWN = "withdrawn", "Withdrawn"
+
+    content_type = models.ForeignKey(ContentType, on_delete=models.CASCADE, related_name="+")
+    object_id = models.PositiveIntegerField()
+    target = GenericForeignKey("content_type", "object_id")
+    kind = models.CharField(max_length=40)
+    company = models.ForeignKey(
+        OrganizationNode,
+        on_delete=models.PROTECT,
+        related_name="cancellation_requests",
+        null=True,
+        blank=True,
+    )
+    requested_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="cancellation_requests_made",
+    )
+    reason = models.TextField()
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
+    requested_at = models.DateTimeField(auto_now_add=True)
+    decided_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="cancellation_requests_decided",
+    )
+    decided_at = models.DateTimeField(null=True, blank=True)
+    decision_note = models.TextField(blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-requested_at", "-id"]
+        indexes = [
+            models.Index(fields=["content_type", "object_id"], name="core_cancelreq_target_idx"),
+            models.Index(fields=["company", "status"], name="core_cancelreq_comp_stat_idx"),
+            models.Index(fields=["status", "kind"], name="core_cancelreq_stat_kind_idx"),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["content_type", "object_id"],
+                condition=models.Q(status="pending"),
+                name="core_cancelreq_one_pending_per_target",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.kind}:{self.object_id}:{self.status}"
 
 
 class UserPreference(models.Model):

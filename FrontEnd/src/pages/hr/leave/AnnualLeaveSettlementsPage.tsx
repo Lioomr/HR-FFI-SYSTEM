@@ -236,12 +236,13 @@ export default function AnnualLeaveSettlementsPage() {
         .then((res) => (isApiError(res) ? [] : res.data.results || []))
         .catch(() => [] as Employee[]);
     Promise.all([
-      load({ page: 1, page_size: 300 }),
+      load({ page: 1, page_size: 300, executives: "exclude" }),
       load({
         page: 1,
         page_size: 300,
         archive_state: "archived",
         status: "TERMINATED",
+        executives: "exclude",
       }),
     ]).then(([current, archived]) => {
       if (cancelled) return;

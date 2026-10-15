@@ -1,14 +1,24 @@
 import csv
-import io
 import logging
 from decimal import Decimal
 from html import escape
 
-import openpyxl
-from django.db import IntegrityError, transaction
-from django.db.models import Avg, Q, Sum
+from audit.utils import audit
+from core.pagination import StandardPagination
+from core.pdf import (
+    PALETTE,
+    build_corporate_header,
+    build_platypus_story_pdf,
+    build_signature_stamp_block,
+    font_pair,
+    shape_ar,
+)
+from core.responses import error, success
 from django.http import HttpResponse
-from django.shortcuts import get_object_or_404
+from organization.services import (
+    filter_queryset_by_company_scope,
+    get_active_company_for_request,
+)
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
@@ -18,42 +28,12 @@ from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
-from rest_framework.views import APIView
-
-from audit.utils import audit
-from core.pagination import StandardPagination
-from core.pdf import (
-    PALETTE,
-    build_corporate_header,
-    build_platypus_story_pdf,
-    build_signature_stamp_block,
-)
-from core.responses import error, success
-from employees.permissions import IsHRManagerOrAdmin
-from in_app_notifications.dispatcher import dispatch_notification_channels
-from in_app_notifications.models import Notification
-from organization.services import (
-    ensure_company_write_allowed,
-    filter_queryset_by_accessible_companies,
-    filter_queryset_by_company_scope,
-    get_active_company_for_request,
-)
-from penalties.payroll import finalize_penalty_deductions, sync_penalty_deductions
 
 from .models import PayrollRun, PayrollRunItem, Payslip
 from .permissions import IsEmployeeOnly
 from .serializers import (
-    PayrollRunCreateSerializer,
-    PayrollRunItemSerializer,
-    PayrollRunSerializer,
     PayslipDetailSerializer,
     PayslipListSerializer,
-)
-from .services import finalize_attendance_deductions, sync_attendance_deductions
-from .throttles import (
-    PayrollExportThrottle,
-    PayrollFinalizeThrottle,
-    PayrollGeneratePayslipsThrottle,
 )
 
 logger = logging.getLogger(__name__)
@@ -96,8 +76,10 @@ def _first_two_names(full_name):
 
 
 def _cell_paragraph(value, style):
-    text = escape(str(value or "-"))
-    return Paragraph(text, style)
+    text = escape(shape_ar(str(value or "-")))
+    regular, bold = font_pair()
+    localized = ParagraphStyle("PayrollLocalized", parent=style, fontName=bold if "Bold" in style.fontName else regular)
+    return Paragraph(text, localized)
 
 
 def _short_text(value, max_chars):
@@ -110,145 +92,52 @@ def _short_text(value, max_chars):
 
 
 def _build_payslip_pdf(payslip):
+    from .dto import employee_dto
+    from .i18n import translated
+
+    value = employee_dto(payslip)
     styles = getSampleStyleSheet()
-    palette = PALETTE
-    primary_orange = palette["primary_orange"]
-    light_orange = palette["light_orange"]
-    soft_orange = palette["soft_orange"]
-    dark_text = palette["dark_text"]
-
-    title_style = ParagraphStyle(
-        "PayslipTitle",
-        parent=styles["Heading1"],
-        fontName="Helvetica-Bold",
-        fontSize=15,
-        textColor=dark_text,
-        spaceAfter=2,
-    )
-    value_style = ParagraphStyle(
-        "PayslipValue",
-        parent=styles["Normal"],
-        fontName="Helvetica-Bold",
-        fontSize=10,
-        textColor=dark_text,
-    )
-
-    employee_name = getattr(getattr(payslip, "employee", None), "full_name", "") or getattr(
-        getattr(payslip, "employee", None), "email", "-"
-    )
-    header_table = build_corporate_header(
-        title="Employee Payslip",
-        period_text=f"Period {payslip.year}-{payslip.month:02d}",
-        second_col_width=138 * mm,
-    )
-
-    details_table = Table(
+    name = getattr(payslip.payroll_run_item, "employee_name", "") or getattr(payslip.employee, "full_name", "") or "-"
+    rows = [[_cell_paragraph(translated("payroll.pdf.earnings"), styles["Normal"]), "SAR"]]
+    for category in ("salary_components", "additions", "deductions"):
+        for line in value[category]:
+            rows.append([_cell_paragraph(line["label"], styles["Normal"]), line["amount"]])
+    rows.extend(
         [
-            [
-                "Employee",
-                Paragraph(_short_text(employee_name, 34), value_style),
-                "Status",
-                Paragraph(payslip.status, value_style),
-            ],
-            [
-                "Payment Mode",
-                Paragraph(str(payslip.payment_mode), value_style),
-                "Payslip ID",
-                Paragraph(str(payslip.id), value_style),
-            ],
-        ],
-        colWidths=[30 * mm, 58 * mm, 30 * mm, 58 * mm],
+            [_cell_paragraph(translated("payroll.field." + name), styles["Normal"]), value[name]]
+            for name in ("gross_salary", "total_additions", "total_deductions", "net_salary")
+        ]
     )
-    details_table.setStyle(
+    table = Table(rows, colWidths=[120 * mm, 55 * mm], repeatRows=1)
+    table.setStyle(
         TableStyle(
             [
-                ("BACKGROUND", (0, 0), (-1, -1), soft_orange),
-                ("BOX", (0, 0), (-1, -1), 0.7, primary_orange),
-                ("INNERGRID", (0, 0), (-1, -1), 0.4, palette["grid_orange"]),
-                ("FONTNAME", (0, 0), (-1, -1), "Helvetica"),
-                ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
-                ("FONTNAME", (2, 0), (2, -1), "Helvetica-Bold"),
-                ("FONTSIZE", (0, 0), (-1, -1), 9),
-                ("TEXTCOLOR", (0, 0), (-1, -1), dark_text),
-                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-                ("LEFTPADDING", (0, 0), (-1, -1), 6),
-                ("RIGHTPADDING", (0, 0), (-1, -1), 6),
-                ("TOPPADDING", (0, 0), (-1, -1), 5),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
-            ]
-        )
-    )
-
-    earnings_table = Table(
-        [
-            ["Basic Salary", _fmt_amount(payslip.basic_salary)],
-            ["Transportation", _fmt_amount(payslip.transportation_allowance)],
-            ["Accommodation", _fmt_amount(payslip.accommodation_allowance)],
-            ["Telephone", _fmt_amount(payslip.telephone_allowance)],
-            ["Petrol", _fmt_amount(payslip.petrol_allowance)],
-            ["Other", _fmt_amount(payslip.other_allowance)],
-            ["Total Salary", _fmt_amount(payslip.total_salary)],
-        ],
-        colWidths=[58 * mm, 40 * mm],
-    )
-    earnings_table.setStyle(
-        TableStyle(
-            [
-                ("BACKGROUND", (0, 0), (-1, 0), primary_orange),
-                ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-                ("FONTNAME", (0, 0), (-1, -1), "Helvetica"),
-                ("FONTNAME", (0, 6), (-1, 6), "Helvetica-Bold"),
+                ("BACKGROUND", (0, 0), (-1, 0), PALETTE["light_orange"]),
+                ("GRID", (0, 0), (-1, -1), 0.3, PALETTE["grid_orange"]),
                 ("ALIGN", (1, 0), (1, -1), "RIGHT"),
-                ("BOX", (0, 0), (-1, -1), 0.6, colors.HexColor("#fdba74")),
-                ("INNERGRID", (0, 0), (-1, -1), 0.25, palette["grid_orange"]),
-                ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, soft_orange]),
-                ("LEFTPADDING", (0, 0), (-1, -1), 6),
-                ("RIGHTPADDING", (0, 0), (-1, -1), 6),
-                ("TOPPADDING", (0, 0), (-1, -1), 5),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
-                ("FONTSIZE", (0, 0), (-1, -1), 9),
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
             ]
         )
     )
-
-    net_table = Table(
-        [
-            ["Total Deductions", _fmt_amount(payslip.total_deductions)],
-            ["Net Salary", _fmt_amount(payslip.net_salary)],
-        ],
-        colWidths=[58 * mm, 40 * mm],
-    )
-    net_table.setStyle(
-        TableStyle(
-            [
-                ("BACKGROUND", (0, 0), (-1, -1), light_orange),
-                ("FONTNAME", (0, 0), (-1, -1), "Helvetica-Bold"),
-                ("ALIGN", (1, 0), (1, -1), "RIGHT"),
-                ("BOX", (0, 0), (-1, -1), 0.7, primary_orange),
-                ("INNERGRID", (0, 0), (-1, -1), 0.4, palette["grid_orange"]),
-                ("TEXTCOLOR", (0, 0), (-1, -1), dark_text),
-                ("LEFTPADDING", (0, 0), (-1, -1), 6),
-                ("RIGHTPADDING", (0, 0), (-1, -1), 6),
-                ("TOPPADDING", (0, 0), (-1, -1), 6),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
-                ("FONTSIZE", (0, 0), (-1, -1), 10),
-            ]
-        )
-    )
-
     story = [
-        header_table,
+        build_corporate_header(
+            title=translated("payroll.pdf.payslip"),
+            period_text=f"{translated('payroll.pdf.period')} {payslip.year}-{payslip.month:02d}",
+            second_col_width=138 * mm,
+        ),
         Spacer(1, 8),
-        details_table,
-        Spacer(1, 10),
-        Paragraph("Earnings Breakdown", title_style),
-        earnings_table,
+        _cell_paragraph(name, styles["Heading2"]),
+        _cell_paragraph(
+            f"{translated('payroll.status.' + payslip.status.lower())}; {translated('payroll.pdf.payment_mode')}: "
+            f"{payslip.payment_mode}; {translated('payroll.pdf.payslip_id')}: {payslip.pk}",
+            styles["Normal"],
+        ),
         Spacer(1, 8),
-        net_table,
+        table,
         Spacer(1, 10),
         build_signature_stamp_block(total_width=182 * mm),
     ]
-    return build_platypus_story_pdf(story, f"Payslip {payslip.id}")
+    return build_platypus_story_pdf(story, f"Payslip {payslip.pk}")
 
 
 def _build_payroll_report_pdf(run, items):
@@ -402,6 +291,10 @@ def _build_payroll_report_pdf(run, items):
         )
     )
     story.append(details_table)
+    if hasattr(run, "settings_snapshot"):
+        from .exporting import detail_pages
+
+        story.extend(detail_pages(run, items))
     story.extend([Spacer(1, 10), build_signature_stamp_block(total_width=269 * mm)])
 
     return build_platypus_story_pdf(story, "Payroll Run Report", pagesize=landscape(A4))
@@ -414,7 +307,7 @@ def _export_payroll_run_response(request, run):
         or request.query_params.get("format")
         or "pdf"
     ).lower()
-    items = list(PayrollRunItem.objects.filter(payroll_run=run).order_by("employee_name", "id"))
+    items = list(PayrollRunItem.objects.filter(payroll_run=run, is_active=True).order_by("employee_name", "id"))
 
     if export_format == "csv":
         response = HttpResponse(content_type="application/octet-stream")
@@ -422,71 +315,16 @@ def _export_payroll_run_response(request, run):
         response["X-Content-Type-Options"] = "nosniff"
         response["Cache-Control"] = "private, no-store"
         writer = csv.writer(response)
-        writer.writerow(
-            [
-                "employee_id",
-                "employee_name",
-                "department",
-                "position",
-                "basic_salary",
-                "allowances",
-                "deductions",
-                "net_salary",
-            ]
-        )
-        for item in items:
-            writer.writerow(
-                [
-                    item.employee_id,
-                    item.employee_name,
-                    item.department,
-                    item.position,
-                    str(item.basic_salary),
-                    str(item.total_allowances),
-                    str(item.total_deductions),
-                    str(item.net_salary),
-                ]
-            )
+        from .exporting import payroll_rows
+
+        writer.writerows(payroll_rows(run, items))
         audit(request, "payroll_exported_csv", entity="PayrollRun", entity_id=run.id)
         return response
 
     if export_format == "xlsx":
-        wb = openpyxl.Workbook()
-        ws = wb.active
-        ws.title = "Payroll"
-        ws.append(
-            [
-                "Employee ID",
-                "Employee Name",
-                "Department",
-                "Position",
-                "Basic Salary",
-                "Allowances",
-                "Deductions",
-                "Net Salary",
-            ]
-        )
-        for item in items:
-            ws.append(
-                [
-                    item.employee_id,
-                    item.employee_name,
-                    item.department,
-                    item.position,
-                    float(item.basic_salary),
-                    float(item.total_allowances),
-                    float(item.total_deductions),
-                    float(item.net_salary),
-                ]
-            )
+        from .exporting import workbook
 
-        output = io.BytesIO()
-        wb.save(output)
-        output.seek(0)
-        response = HttpResponse(
-            output.getvalue(),
-            content_type="application/octet-stream",
-        )
+        response = HttpResponse(workbook(run, items), content_type="application/octet-stream")
         response["Content-Disposition"] = f'attachment; filename="payroll_run_{run.id}.xlsx"'
         response["X-Content-Type-Options"] = "nosniff"
         response["Cache-Control"] = "private, no-store"
@@ -511,383 +349,12 @@ def _export_payroll_run_response(request, run):
 
 
 def _generate_payroll_items(run, request=None):
-    """
-    Generates PayrollRunItems and Payslips for all active employees.
-    Calculates totals and updates the PayrollRun.
-    """
-    from employees.models import EmployeeProfile
+    from .engine import recalculate
 
-    # 1. Fetch active employees
-    employees = EmployeeProfile.objects.select_related("user").filter(
-        employment_status=EmployeeProfile.EmploymentStatus.ACTIVE,
-        is_archived=False,
-        company=run.company,
-    )
-
-    items_to_create = []
-    payslips_to_create = []
-
-    total_net_run = Decimal(0)
-    count = 0
-
-    for emp in employees:
-        # 2. Calculate components
-        basic = emp.basic_salary or Decimal(0)
-        transport = emp.transportation_allowance or Decimal(0)
-        accommodation = emp.accommodation_allowance or Decimal(0)
-        telephone = emp.telephone_allowance or Decimal(0)
-        petrol = emp.petrol_allowance or Decimal(0)
-        other = emp.other_allowance or Decimal(0)
-
-        total_allowances = transport + accommodation + telephone + petrol + other
-        gross_salary = basic + total_allowances
-
-        # Open-loan deduction policy:
-        # - Deduct in current payroll month target.
-        # - If target month was missed, deduct in the next available run (overdue carry-forward).
-        total_deductions = Decimal(0)
-        loan_to_deduct = None
-        if emp.user:
-            from loans.models import LoanRequest
-
-            due_for_run_q = (
-                Q(target_deduction_year__lt=run.year)
-                | Q(target_deduction_year=run.year, target_deduction_month__lte=run.month)
-                | Q(target_deduction_year__isnull=True, target_deduction_month__isnull=True)
-            )
-            loan_to_deduct = (
-                LoanRequest.objects.select_for_update()
-                .filter(
-                    employee=emp.user,
-                    status=LoanRequest.RequestStatus.APPROVED,
-                    deduction_payroll_run__isnull=True,
-                    is_active=True,
-                )
-                .filter(due_for_run_q)
-                .order_by("target_deduction_year", "target_deduction_month", "created_at")
-                .first()
-            )
-            if loan_to_deduct:
-                deduction_amount = loan_to_deduct.approved_amount or loan_to_deduct.requested_amount
-                total_deductions += deduction_amount
-
-        net_salary = gross_salary - total_deductions
-
-        # 3. Create Run Item
-        item = PayrollRunItem(
-            payroll_run=run,
-            employee_id=emp.employee_id,
-            employee_name=emp.full_name,
-            department=emp.department or "",
-            position=emp.job_title or "",
-            basic_salary=basic,
-            total_allowances=total_allowances,
-            total_deductions=total_deductions,
-            net_salary=net_salary,
-        )
-        items_to_create.append(item)
-
-        # 4. Persist deducted loan state
-        if loan_to_deduct:
-            from loans.services import apply_payroll_deduction
-
-            apply_payroll_deduction(loan_to_deduct, run=run)
-            if request:
-                audit(
-                    request,
-                    "loan_deducted_in_payroll",
-                    entity="LoanRequest",
-                    entity_id=loan_to_deduct.id,
-                    metadata={"payroll_run_id": run.id, "amount": str(loan_to_deduct.deducted_amount)},
-                )
-
-        # 5. Create Payslip (if user linked)
-        if emp.user:
-            payslip = Payslip(
-                employee=emp.user,
-                payroll_run=run,
-                year=run.year,
-                month=run.month,
-                basic_salary=basic,
-                transportation_allowance=transport,
-                accommodation_allowance=accommodation,
-                telephone_allowance=telephone,
-                petrol_allowance=petrol,
-                other_allowance=other,
-                total_salary=gross_salary,
-                total_deductions=total_deductions,
-                net_salary=net_salary,
-                payment_mode="Bank Transfer",  # Default
-                status="PAID",  # Default for now
-                is_active=True,
-            )
-            payslips_to_create.append(payslip)
-
-        total_net_run += net_salary
-        count += 1
-
-    # Bulk create
-    PayrollRunItem.objects.bulk_create(items_to_create)
-    Payslip.objects.bulk_create(payslips_to_create)
-
-    # Update Run Totals
-    run.total_net = total_net_run
-    run.total_employees = count
-    run.save(update_fields=["total_net", "total_employees"])
-
-    # Attendance penalties are claimed by the draft after its items exist; the
-    # same sync runs again at finalization for penalties that arrive later.
-    sync_attendance_deductions(run, request=request)
-    sync_penalty_deductions(run, request=request)
+    return recalculate(run, request=request)
 
 
-class PayrollRunViewSet(
-    mixins.ListModelMixin,
-    mixins.CreateModelMixin,
-    mixins.RetrieveModelMixin,
-    viewsets.GenericViewSet,
-):
-    permission_classes = [IsAuthenticated, IsHRManagerOrAdmin]
-    pagination_class = StandardPagination
-
-    def get_queryset(self):
-        base_qs = PayrollRun.objects.all()
-        if self.action == "list":
-            qs = filter_queryset_by_company_scope(base_qs, self.request)
-        else:
-            qs = filter_queryset_by_accessible_companies(base_qs, self.request)
-        year = self.request.query_params.get("year")
-        if year:
-            try:
-                qs = qs.filter(year=int(year))
-            except ValueError:
-                pass
-        return qs
-
-    def get_serializer_class(self):
-        if self.action == "create":
-            return PayrollRunCreateSerializer
-        return PayrollRunSerializer
-
-    def list(self, request, *args, **kwargs):
-        return super().list(request, *args, **kwargs)
-
-    def create(self, request, *args, **kwargs):
-        ensure_company_write_allowed(request)
-        company = get_active_company_for_request(request)
-        serializer = self.get_serializer(data=request.data)
-        if not serializer.is_valid():
-            if _is_duplicate_period_error(serializer.errors):
-                return _error_list(
-                    "Payroll run already exists.",
-                    ["Payroll run already exists for this period."],
-                    status.HTTP_409_CONFLICT,
-                )
-            return _error_list(
-                "Validation error",
-                _flatten_errors(serializer.errors),
-                status.HTTP_422_UNPROCESSABLE_ENTITY,
-            )
-        try:
-            with transaction.atomic():
-                run = PayrollRun.objects.create(company=company, **serializer.validated_data)
-                # Keep generation in the same DB transaction because it uses row locking
-                # for loan deductions (select_for_update).
-                _generate_payroll_items(run, request=request)
-                run.refresh_from_db()
-        except IntegrityError:
-            return _error_list(
-                "Payroll run already exists.",
-                ["Payroll run already exists for this period."],
-                status.HTTP_409_CONFLICT,
-            )
-        except Exception as exc:
-            return _error_list(
-                "Failed to create payroll run.",
-                [str(exc)],
-                status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
-
-        audit(request, "payroll_run_created", entity="PayrollRun", entity_id=run.id)
-
-        return success(PayrollRunSerializer(run).data, status=status.HTTP_201_CREATED)
-
-    def retrieve(self, request, *args, **kwargs):
-        instance = self.get_object()
-        return success(PayrollRunSerializer(instance).data)
-
-    @action(detail=True, methods=["get"], url_path="items")
-    def items(self, request, pk=None):
-        run = self.get_object()
-        qs = PayrollRunItem.objects.filter(payroll_run=run).order_by("id")
-        paginator = self.pagination_class()
-        page = paginator.paginate_queryset(qs, request, view=self)
-        if page is not None:
-            serializer = PayrollRunItemSerializer(page, many=True)
-            return paginator.get_paginated_response(serializer.data)
-        serializer = PayrollRunItemSerializer(qs, many=True)
-        return Response(
-            {
-                "status": "success",
-                "data": {
-                    "items": serializer.data,
-                    "page": 1,
-                    "page_size": len(serializer.data),
-                    "count": len(serializer.data),
-                    "total_pages": 1,
-                },
-            }
-        )
-
-    @action(detail=True, methods=["get"], url_path="summary")
-    def summary(self, request, pk=None):
-        run = self.get_object()
-        items_qs = PayrollRunItem.objects.filter(payroll_run=run)
-        aggregates = items_qs.aggregate(
-            total_basic_salary=Sum("basic_salary"),
-            total_allowances=Sum("total_allowances"),
-            total_deductions=Sum("total_deductions"),
-            average_net_salary=Avg("net_salary"),
-        )
-        employees_with_deductions = items_qs.filter(total_deductions__gt=0).count()
-        total_basic_salary = aggregates["total_basic_salary"] or Decimal("0")
-        total_allowances = aggregates["total_allowances"] or Decimal("0")
-        total_deductions = aggregates["total_deductions"] or Decimal("0")
-        average_net_salary = aggregates["average_net_salary"] or Decimal("0")
-        total_gross_salary = total_basic_salary + total_allowances
-
-        return success(
-            {
-                "run_id": run.id,
-                "year": run.year,
-                "month": run.month,
-                "total_employees": run.total_employees,
-                "employees_with_deductions": employees_with_deductions,
-                "total_basic_salary": total_basic_salary,
-                "total_allowances": total_allowances,
-                "total_gross_salary": total_gross_salary,
-                "total_deductions": total_deductions,
-                "total_net_salary": run.total_net,
-                "average_net_salary": average_net_salary,
-            }
-        )
-
-    @action(
-        detail=True,
-        methods=["post"],
-        url_path="finalize",
-        throttle_classes=[PayrollFinalizeThrottle],
-    )
-    def finalize(self, request, pk=None):
-        run = self.get_object()
-        confirm = request.data.get("confirm")
-        if confirm is not True:
-            return _error_list(
-                "Validation error",
-                ["confirm must be true."],
-                status.HTTP_422_UNPROCESSABLE_ENTITY,
-            )
-
-        with transaction.atomic():
-            # Re-read under a row lock so concurrent finalization requests cannot
-            # both observe an open run and emit duplicate transition audits.
-            run = get_object_or_404(self.get_queryset().select_for_update(), pk=run.pk)
-            if run.status in [PayrollRun.Status.COMPLETED, PayrollRun.Status.PAID]:
-                return success({"message": "Payroll run already finalized."})
-
-            if run.status == PayrollRun.Status.CANCELLED:
-                return _error_list(
-                    "Payroll run is cancelled.",
-                    ["Cancelled runs cannot be finalized."],
-                    status.HTTP_422_UNPROCESSABLE_ENTITY,
-                )
-
-            # Include penalties that became pending after draft creation, then
-            # lock every claim together with the run.
-            finalize_attendance_deductions(run, request=request)
-            finalize_penalty_deductions(run, request=request)
-            run.status = PayrollRun.Status.COMPLETED
-            run.save(update_fields=["status", "updated_at"])
-        audit(request, "payroll_run_finalized", entity="PayrollRun", entity_id=run.id)
-        return success({"message": "Payroll run finalized."})
-
-    @action(
-        detail=True,
-        methods=["post"],
-        url_path="generate-payslips",
-        throttle_classes=[PayrollGeneratePayslipsThrottle],
-    )
-    def generate_payslips(self, request, pk=None):
-        run = self.get_object()
-        with transaction.atomic():
-            # Lock the parent run before checking/updating its state. This keeps
-            # concurrent generation requests idempotent at the workflow level.
-            run = get_object_or_404(self.get_queryset().select_for_update(), pk=run.pk)
-            if run.status not in [PayrollRun.Status.COMPLETED, PayrollRun.Status.PAID]:
-                return _error_list(
-                    "Payroll run not finalized.",
-                    ["Finalize the payroll run before generating payslips."],
-                    status.HTTP_422_UNPROCESSABLE_ENTITY,
-                )
-
-            payslips_qs = Payslip.objects.filter(payroll_run=run, is_active=True)
-            total_payslips = payslips_qs.count()
-            generated_count = payslips_qs.exclude(status="PAID").update(status="PAID")
-
-            if run.status != PayrollRun.Status.PAID:
-                run.status = PayrollRun.Status.PAID
-                run.save(update_fields=["status", "updated_at"])
-
-        from in_app_notifications.i18n import notification_text
-
-        payslip_text = notification_text("payroll.payslip_available", period=f"{run.year}-{run.month:02d}")
-        for payslip in Payslip.objects.select_related("employee").filter(payroll_run=run, is_active=True):
-            try:
-                dispatch_notification_channels(
-                    recipient=payslip.employee,
-                    company=run.company,
-                    event_key="payroll.payslip_available",
-                    **payslip_text,
-                    category=Notification.Category.PAYROLL,
-                    action_url=f"/employee/payslips/{payslip.id}",
-                    related_object=payslip,
-                    deduplication_key=f"payroll.payslip:{payslip.id}",
-                )
-            except Exception:
-                logger.exception(
-                    "payroll_payslip_notification_failed",
-                    extra={"entity_id": payslip.id, "notification_type": "payslip_available"},
-                )
-
-        audit(request, "payslips_generated", entity="PayrollRun", entity_id=run.id)
-        return success(
-            {
-                "message": "Payslips generated",
-                "generated_count": generated_count,
-                "total_payslips": total_payslips,
-                "run_status": run.status,
-                "download_pdf_url": f"/payroll-runs/{run.id}/export/?file_format=pdf",
-            }
-        )
-
-    @action(
-        detail=True,
-        methods=["get"],
-        url_path="export",
-        throttle_classes=[PayrollExportThrottle],
-    )
-    def export(self, request, pk=None):
-        run = self.get_object()
-        return _export_payroll_run_response(request, run)
-
-
-class PayrollRunExportView(APIView):
-    permission_classes = [IsAuthenticated, IsHRManagerOrAdmin]
-    throttle_classes = [PayrollExportThrottle]
-
-    def get(self, request, pk):
-        run = get_object_or_404(filter_queryset_by_accessible_companies(PayrollRun.objects.all(), request), pk=pk)
-        return _export_payroll_run_response(request, run)
+from .api import PayrollRunExportView, PayrollRunViewSet  # noqa: E402,F401
 
 
 class EmployeePayslipViewSet(
@@ -898,11 +365,20 @@ class EmployeePayslipViewSet(
     permission_classes = [IsAuthenticated, IsEmployeeOnly]
     pagination_class = StandardPagination
 
+    def finalize_response(self, request, response, *args, **kwargs):
+        response = super().finalize_response(request, response, *args, **kwargs)
+        response["Cache-Control"] = "private, no-store"
+        return response
+
     def get_queryset(self):
-        queryset = Payslip.objects.select_related("payroll_run").filter(
-            employee=self.request.user,
-            is_active=True,
-            payroll_run__status__in=[PayrollRun.Status.COMPLETED, PayrollRun.Status.PAID],
+        queryset = (
+            Payslip.objects.select_related("payroll_run")
+            .order_by("-year", "-month", "-id")
+            .filter(
+                employee=self.request.user,
+                is_active=True,
+                payroll_run__status__in=[PayrollRun.Status.COMPLETED, PayrollRun.Status.PAID],
+            )
         )
         active_company = get_active_company_for_request(self.request)
         if active_company is not None:
@@ -915,7 +391,7 @@ class EmployeePayslipViewSet(
         return PayslipListSerializer
 
     def list(self, request, *args, **kwargs):
-        if "employee_id" in request.query_params:
+        if any(key in request.query_params for key in ("employee_id", "employee_profile_id", "user_id")):
             return _error_list(
                 "Validation error",
                 ["employee_id is not allowed."],

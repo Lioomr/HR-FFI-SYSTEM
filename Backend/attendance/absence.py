@@ -8,7 +8,9 @@ with the ``backfill_absences`` management command.
 Employees without an active ``BioTimeEmployeeMap`` (construction-site and
 visitor staff, for example) are never marked absent: BioTime is the only
 attendance system of record, so a missing punch for someone who was never
-registered on a device carries no information.
+registered on a device carries no information. For the same reason a mapped
+employee is only checked from the mapping's ``attendance_start_date`` onward;
+backfills never create absences for the days before the mapping.
 
 Workflow / audit policy
 -----------------------
@@ -26,11 +28,10 @@ from __future__ import annotations
 import logging
 from datetime import date as date_type
 
+from audit.utils import audit
 from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
-
-from audit.utils import audit
 from employees.models import EmployeeProfile
 from organization.models import OrganizationNode
 
@@ -44,7 +45,8 @@ logger = logging.getLogger(__name__)
 def _active_employee_profiles(target_date: date_type):
     """Profiles eligible for absence marking.
 
-    Eligibility = an active ``BioTimeEmployeeMap``, archived is False, owning
+    Eligibility = an active ``BioTimeEmployeeMap`` whose attendance start date
+    is on/before the target date, archived is False, owning
     company is an active COMPANY node, employment status is ACTIVE, and (no
     linked user OR the user is enabled). The hire date must be absent or
     on/before the target date. Prehire / suspended / terminated / disabled-login
@@ -59,7 +61,7 @@ def _active_employee_profiles(target_date: date_type):
             company__is_active=True,
             employment_status=EmployeeProfile.EmploymentStatus.ACTIVE,
         )
-        .filter(id__in=mapped_employee_profile_ids())
+        .filter(id__in=mapped_employee_profile_ids(on_date=target_date))
         .filter(Q(user__isnull=True) | Q(user__is_active=True))
         .filter(Q(hire_date__isnull=True) | Q(hire_date__lte=target_date))
         .select_related("company", "user")
@@ -125,9 +127,7 @@ def mark_absentees_for_date(target_date: date_type, *, force: bool = False) -> d
 
     # Saturday is a working day for non-Saudi employees only, so the working
     # week is filtered per employee rather than for the date as a whole.
-    profiles = [
-        profile for profile in _active_employee_profiles(target_date) if is_working_day(profile, target_date)
-    ]
+    profiles = [profile for profile in _active_employee_profiles(target_date) if is_working_day(profile, target_date)]
     if not profiles:
         result["non_working_day"] = True
         logger.info("%s is not a working day for any active employee.", target_date)

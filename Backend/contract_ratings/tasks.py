@@ -2,15 +2,16 @@ import logging
 from datetime import datetime, timedelta
 
 from celery import shared_task
+from core.executives import executive_profile_q
+from core.services.workflow_engine import begin_recorded_transition
 from django.db import InterfaceError, OperationalError, transaction
 from django.db.models import Exists, OuterRef
 from django.utils import timezone
-
-from core.services.workflow_engine import begin_recorded_transition
 from employees.contract_expiry import (
     CONTRACT_RATING_CREATION_DAYS,
     _company_ceo_recipients,
     _company_hr_recipients,
+    cancel_stale_contract_decisions,
     mark_employment_terminated,
     notify_hr_termination_settlement,
 )
@@ -29,6 +30,10 @@ logger = logging.getLogger(__name__)
 # A stalled rating nudges the CEO at most twice, a day apart. The daily digest covers the rest.
 CEO_REMINDER_INTERVAL = timedelta(hours=24)
 CEO_REMINDER_MAX = 2
+OPEN_RATING_STATUSES = set(ContractRating.Status.values) - {
+    ContractRating.Status.DECIDED,
+    ContractRating.Status.CANCELLED,
+}
 
 
 def _dispatch(rating, recipient, audience, key, event, message):
@@ -218,17 +223,33 @@ def process_contract_ratings(*, today=None, now=None):
 
     today, now = today or timezone.localdate(), now or timezone.now()
     summary = {"created": 0, "processed": 0, "failures": 0}
-    profiles = EmployeeProfile.objects.filter(
-        is_archived=False,
-        employment_status="ACTIVE",
-        company__is_active=True,
-        contract_expiry__gte=today,
-        contract_expiry__lte=today + timedelta(days=CONTRACT_RATING_CREATION_DAYS),
-    ).exclude(
-        Exists(
-            ContractRating.objects.filter(
-                employee_profile_id=OuterRef("pk"),
-                contract_decision__original_contract_expiry=OuterRef("contract_expiry"),
+    # Executives are never rated: end any rating left from before so it is not processed below.
+    executives = EmployeeProfile.objects.filter(
+        executive_profile_q(), contract_ratings__status__in=OPEN_RATING_STATUSES
+    ).distinct()
+    for profile in executives:
+        try:
+            cancel_stale_contract_decisions(profile)
+        except (OperationalError, InterfaceError):
+            raise
+        except Exception:
+            summary["failures"] += 1
+            logger.exception("contract_rating_executive_cancellation_failed", extra={"profile_id": profile.id})
+    profiles = (
+        EmployeeProfile.objects.filter(
+            is_archived=False,
+            employment_status="ACTIVE",
+            company__is_active=True,
+            contract_expiry__gte=today,
+            contract_expiry__lte=today + timedelta(days=CONTRACT_RATING_CREATION_DAYS),
+        )
+        .exclude(executive_profile_q())
+        .exclude(
+            Exists(
+                ContractRating.objects.filter(
+                    employee_profile_id=OuterRef("pk"),
+                    contract_decision__original_contract_expiry=OuterRef("contract_expiry"),
+                )
             )
         )
     )

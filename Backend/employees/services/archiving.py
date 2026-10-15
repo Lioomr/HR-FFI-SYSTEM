@@ -22,6 +22,7 @@ def retire_biotime_mapping_and_archive_profile(profile, execution_snapshot, acto
     signature uploads.
     """
     from attendance.models import BioTimeEmployeeMap
+
     from employees.models import EmployeeProfile
 
     EmployeeProfile.objects.select_for_update().get(pk=profile.pk)
@@ -43,3 +44,9 @@ def retire_biotime_mapping_and_archive_profile(profile, execution_snapshot, acto
     profile.archived_by = actor
     profile.archive_reason = archive_reason
     profile.updated_at = archived_at
+    from django.utils import timezone
+    from payroll.accommodation import end_profile_assignments
+
+    end_profile_assignments(
+        profile, timezone.localtime(archived_at).date(), actor=actor, reason=archive_reason or "Employee archived"
+    )

@@ -42,6 +42,11 @@ const STATUS_PRESETS: Record<
     icon: <CloseCircleOutlined aria-hidden />,
     labelKey: "annualPayment.status.rejected",
   },
+  cancelled: {
+    color: "default",
+    icon: <CloseCircleOutlined aria-hidden />,
+    labelKey: "annualPayment.status.cancelled",
+  },
   carried_forward: {
     color: "blue",
     icon: <SwapOutlined aria-hidden />,

@@ -55,6 +55,13 @@ import {
   PayrollDashboardPage,
   CreatePayrollRunPage,
   PayrollRunDetailsPage,
+  PayrollSettingsPage,
+  PayrollRunsPage,
+  PayrollRunPage,
+  PayrollEmployeePage,
+  AccommodationAssignmentsPage,
+  MyPayslipsPage,
+  MyPayslipDetailPage,
   HRAssetsPage,
   AssetLookupPage,
   LabelJobsHistoryPage,
@@ -81,6 +88,7 @@ import {
   DashboardPage,
   LeaveInboxPage,
   AnnualLeaveSettlementsPage,
+  CancellationRequestsPage,
   LeaveRequestDetailsPage,
   LoanInboxPage,
   HrLoanRequestDetailsPage,
@@ -154,6 +162,7 @@ const LazyUnauthorized403Page = (
 import RouteErrorBoundary from "./RouteErrorBoundary";
 
 import BaseLayout from "../layouts/BaseLayout";
+import PayrollRebuildSwitch from "./PayrollRebuildSwitch";
 
 export const routes = [
   // Public
@@ -356,13 +365,6 @@ export const routes = [
                 element: <ImportHistoryPage />,
               },
 
-              // Payroll
-              { path: "hr/payroll", element: <PayrollDashboardPage /> },
-              { path: "hr/payroll/create", element: <CreatePayrollRunPage /> },
-              {
-                path: "hr/payroll/:run_id",
-                element: <PayrollRunDetailsPage />,
-              },
               { path: "hr/assets", element: <HRAssetsPage /> },
               { path: "hr/assets/lookup", element: <AssetLookupPage /> },
               {
@@ -393,6 +395,10 @@ export const routes = [
               {
                 path: "hr/annual-leave-payments/:id",
                 element: <AnnualLeaveSettlementsPage />,
+              },
+              {
+                path: "hr/cancellation-requests",
+                element: <CancellationRequestsPage />,
               },
               { path: "hr/loan-requests", element: <LoanInboxPage /> },
               {
@@ -466,9 +472,34 @@ export const routes = [
                     element: <Navigate to="/employee/dashboard" replace />,
                   },
                   { path: "employee/dashboard", element: <DashboardPage /> },
+                  // Request creation. The CEO decides requests and never
+                  // submits one (the backend refuses it as well).
                   {
-                    path: "employee/permission-requests/new",
-                    element: <PermissionRequestFormPage />,
+                    element: (
+                      <RequireRole
+                        roles={[
+                          "Employee",
+                          "SystemAdmin",
+                          "HRManager",
+                          "Manager",
+                          "CFO",
+                        ]}
+                      />
+                    ),
+                    children: [
+                      {
+                        path: "employee/permission-requests/new",
+                        element: <PermissionRequestFormPage />,
+                      },
+                      {
+                        path: "employee/leave/request",
+                        element: <RequestLeavePage />,
+                      },
+                      {
+                        path: "employee/loans/request",
+                        element: <RequestLoanPage />,
+                      },
+                    ],
                   },
                   {
                     path: "employee/contract-ratings/:id",
@@ -481,6 +512,10 @@ export const routes = [
                   {
                     path: "employee/permission-requests/:id",
                     element: <PermissionRequestDetailPage role="employee" />,
+                  },
+                  {
+                    path: "employee/permission-requests/:id/edit",
+                    element: <PermissionRequestFormPage mode="edit" />,
                   },
                   { path: "employee/profile", element: <MyProfilePage /> },
                   {
@@ -498,18 +533,24 @@ export const routes = [
 
                   {
                     path: "employee/payslips",
-                    element: <EmployeePayslipsListPage />,
+                    element: (
+                      <PayrollRebuildSwitch
+                        rebuilt={<MyPayslipsPage />}
+                        legacy={<EmployeePayslipsListPage />}
+                      />
+                    ),
                   },
                   {
                     path: "employee/payslips/:id",
-                    element: <EmployeePayslipDetailsPage />,
+                    element: (
+                      <PayrollRebuildSwitch
+                        rebuilt={<MyPayslipDetailPage />}
+                        legacy={<EmployeePayslipDetailsPage />}
+                      />
+                    ),
                   },
 
                   // Employee Leave
-                  {
-                    path: "employee/leave/request",
-                    element: <RequestLeavePage />,
-                  },
                   {
                     path: "employee/leave/requests",
                     element: <MyLeaveRequestsPage />,
@@ -517,6 +558,10 @@ export const routes = [
                   {
                     path: "employee/leave/requests/:id",
                     element: <EmployeeLeaveRequestDetailsPage />,
+                  },
+                  {
+                    path: "employee/leave/requests/:id/edit",
+                    element: <RequestLeavePage mode="edit" />,
                   },
                   {
                     path: "employee/delegated-approvals",
@@ -530,14 +575,14 @@ export const routes = [
                     path: "employee/leave/balance",
                     element: <MyLeaveBalancePage />,
                   },
-                  {
-                    path: "employee/loans/request",
-                    element: <RequestLoanPage />,
-                  },
                   { path: "employee/loans", element: <MyLoanRequestsPage /> },
                   {
                     path: "employee/loans/:id",
                     element: <EmployeeLoanRequestDetailsPage />,
+                  },
+                  {
+                    path: "employee/loans/:id/edit",
+                    element: <RequestLoanPage mode="edit" />,
                   },
                   { path: "employee/assets", element: <MyAssetsPage /> },
 
@@ -738,6 +783,46 @@ export const routes = [
               {
                 path: "ceo/job-offers/:id",
                 element: <CEOJobOfferDetailPage />,
+              },
+            ],
+          },
+
+          // Payroll rebuild screens: HR, Admin and CFO (backend IsPayrollManager).
+          {
+            element: (
+              <RequireRole roles={["HRManager", "SystemAdmin", "CFO"]} />
+            ),
+            children: [
+              {
+                path: "hr/payroll",
+                element: (
+                  <PayrollRebuildSwitch
+                    rebuilt={<PayrollRunsPage />}
+                    legacy={<PayrollDashboardPage />}
+                  />
+                ),
+              },
+              { path: "hr/payroll/create", element: <CreatePayrollRunPage /> },
+              {
+                path: "hr/payroll/settings",
+                element: <PayrollSettingsPage />,
+              },
+              {
+                path: "hr/payroll/accommodation",
+                element: <AccommodationAssignmentsPage />,
+              },
+              {
+                path: "hr/payroll/:run_id/employees/:item_id",
+                element: <PayrollEmployeePage />,
+              },
+              {
+                path: "hr/payroll/:run_id",
+                element: (
+                  <PayrollRebuildSwitch
+                    rebuilt={<PayrollRunPage />}
+                    legacy={<PayrollRunDetailsPage />}
+                  />
+                ),
               },
             ],
           },

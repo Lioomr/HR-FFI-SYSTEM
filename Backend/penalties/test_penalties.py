@@ -2,19 +2,18 @@ from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 from unittest.mock import patch
 
+from attendance.models import AttendanceAdjustment, AttendanceDailyResult, AttendanceLateViolation, AttendanceRecord
+from attendance.policy import AttendancePolicyService
+from attendance.schedule import is_working_day
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.test import TestCase, override_settings
 from django.utils import timezone
-from rest_framework.test import APIClient
-
-from attendance.models import AttendanceAdjustment, AttendanceDailyResult, AttendanceLateViolation, AttendanceRecord
-from attendance.policy import AttendancePolicyService
-from attendance.schedule import is_working_day
 from employees.models import EmployeeProfile
 from organization.models import OrganizationNode, UserOrganizationAccess
 from payroll.models import AttendancePayrollDeduction, PayrollRun, PayrollRunItem, Payslip
 from payroll.services import sync_attendance_deductions
+from rest_framework.test import APIClient
 
 from .catalog import CATALOG
 from .models import PenaltyCatalog, PenaltyDeduction, PenaltyRecord
@@ -47,6 +46,10 @@ class PenaltyScheduleTests(TestCase):
             basic_salary=Decimal("3000.00"),
             employment_status=EmployeeProfile.EmploymentStatus.ACTIVE,
         )
+        from attendance.models import BioTimeEmployeeMap
+
+        # Attendance penalties only apply to BioTime-mapped employees.
+        BioTimeEmployeeMap.objects.create(employee_profile=cls.profile, biotime_emp_code="PEN-001")
         cls.hr = get_user_model().objects.create_user(email="penalty-hr@ffi.test", password="test")
         cls.hr.groups.add(Group.objects.get_or_create(name="HRManager")[0])
         UserOrganizationAccess.objects.create(user=cls.hr, organization=cls.company)
@@ -453,7 +456,10 @@ class PenaltyScheduleTests(TestCase):
         self.assertEqual(review.status_code, 200, review.content)
         run = self._draft_with_item(9)
         self.assertEqual(sync_penalty_deductions(run)["claimed"], 1)
-        self.assertEqual(PayrollRunItem.objects.get(payroll_run=run).total_deductions, Decimal("0.93"))
+        self.assertEqual(PayrollRunItem.objects.get(payroll_run=run).total_deductions, Decimal("1.00"))
+        claim = PenaltyDeduction.objects.get(penalty=record)
+        self.assertEqual(claim.claimed_exact_amount, Decimal("0.93"))
+        self.assertEqual(claim.claimed_amount, Decimal("1.00"))
 
     def _approved_fine(self, fine, extra=Decimal("0.00")):
         record = PenaltyRecord.objects.create(
@@ -584,19 +590,19 @@ class PenaltyScheduleTests(TestCase):
         )
         self.assertEqual(PayrollRunItem.objects.get(payroll_run=run).total_deductions, Decimal("320.00"))
 
-    def test_legacy_claim_first_reserves_fine_budget_against_new(self):
+    def test_sync_entrypoint_does_not_change_stable_claim_order(self):
         new = self._approved_fine(Decimal("300.00"), Decimal("20.00"))
         legacy = self._pending_legacy_fine(Decimal("250.00"))
         run = self._draft_with_item(9)
-        self.assertEqual(sync_attendance_deductions(run)["claimed"], 1)
+        self.assertEqual(sync_attendance_deductions(run)["claimed"], 0)
         self.assertEqual(sync_penalty_deductions(run)["claimed"], 0)
         self.assertEqual(sync_penalty_deductions(run)["claimed"], 0)
         legacy.refresh_from_db()
         new.refresh_from_db()
         self.assertEqual(
-            (legacy.status, new.status), (AttendancePayrollDeduction.Status.CLAIMED, PenaltyDeduction.Status.APPROVED)
+            (legacy.status, new.status), (AttendancePayrollDeduction.Status.PENDING, PenaltyDeduction.Status.CLAIMED)
         )
-        self.assertEqual(PayrollRunItem.objects.get(payroll_run=run).total_deductions, Decimal("250.00"))
+        self.assertEqual(PayrollRunItem.objects.get(payroll_run=run).total_deductions, Decimal("320.00"))
 
     def test_one_fine_cannot_exceed_five_days_wages(self):
         catalog = PenaltyCatalog.objects.get(code="O01")
@@ -962,6 +968,7 @@ class PenaltyScheduleTests(TestCase):
             self.assertEqual(client.post("/api/penalties/", body, format="json").status_code, 422)
         self.profile.employment_status = EmployeeProfile.EmploymentStatus.ACTIVE
         self.profile.is_archived = True
+        self.profile.biotime_mapping.all().delete()  # Mapped employees cannot be archived.
         self.profile.save(update_fields=["employment_status", "is_archived"])
         self.assertEqual(client.post("/api/penalties/", body, format="json").status_code, 422)
         self.profile.is_archived = False
@@ -1089,7 +1096,8 @@ class PenaltyScheduleTests(TestCase):
             AttendanceRecord.objects.create(
                 employee_profile=self.profile, date=start + timedelta(days=offset), source="SYSTEM", status="ABSENT"
             )
-        with self.assertNumQueries(2):
+        # Mapping start, punch dates and absences: one query each, never per day.
+        with self.assertNumQueries(3):
             self.assertTrue(_eligible_absences(self.profile, start, start + timedelta(days=20)))
 
     def test_frozen_catalog_refresh_updates_existing_rows_and_rollback_preserves_references(self):
@@ -1314,10 +1322,8 @@ class PenaltyScheduleTests(TestCase):
         return issue(record)
 
     def test_lone_opaque_punch_keeps_check_in_but_opens_no_candidate(self):
-        from attendance.models import BioTimeEmployeeMap
         from attendance.services import SyncBioTimeService
 
-        BioTimeEmployeeMap.objects.create(employee_profile=self.profile, biotime_emp_code="PEN-001")
         SyncBioTimeService.ingest_transactions(
             [{"emp_code": "PEN-001", "punch_time": "2026-09-29 17:30:00", "is_attendance": 1, "id": "lone"}]
         )

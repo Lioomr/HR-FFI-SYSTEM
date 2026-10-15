@@ -1,11 +1,8 @@
 import logging
 from copy import deepcopy
 
-from django.db import transaction
-from django.utils import timezone
-from rest_framework.exceptions import PermissionDenied
-
 from audit.utils import audit
+from core.executives import is_executive_profile
 from core.models import WorkflowAction
 from core.permissions import get_role, is_department_ceo_approver_user, is_hr_workflow_approver_user
 from core.services.workflow_engine import (
@@ -14,6 +11,8 @@ from core.services.workflow_engine import (
     record_workflow_transition,
     sync_workflow,
 )
+from django.db import transaction
+from django.utils import timezone
 from employees.contract_expiry import (
     _renewal_dates,
     _resolved_renewal_terms,
@@ -32,6 +31,7 @@ from employees.services.manager_relationships import (
     get_valid_manager_user,
     manager_approval_actor_source,
 )
+from rest_framework.exceptions import PermissionDenied
 
 from .models import ContractRating, ContractRatingResponse
 from .permissions import require_company_access
@@ -124,6 +124,8 @@ def _guard(rating, profile, actor=None):
 
 @transaction.atomic
 def ensure_contract_rating(profile, *, actor=None, only_if_due_on=None):
+    if is_executive_profile(profile):
+        return None, False
     decision, _ = ensure_contract_decision(profile)
     decision = ContractDecision.objects.select_for_update().get(pk=decision.pk)
     profile = EmployeeProfile.objects.select_for_update().get(pk=profile.pk)

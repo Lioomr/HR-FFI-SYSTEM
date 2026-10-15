@@ -5,6 +5,7 @@ import { Card, Space, Tag, Typography } from "antd";
 import { useI18n } from "../../i18n/useI18n";
 import type { WorkflowSnapshot } from "../../types/workflow";
 import { formatDateTime } from "../../utils/dateTime";
+import { actorSentenceKey } from "./workflowPresentation";
 
 const { Text } = Typography;
 
@@ -29,55 +30,63 @@ export default function ApprovalTimeline({
   return (
     <Card style={{ borderRadius: 16 }}>
       <Space direction="vertical" size={12} style={{ width: "100%" }}>
-        {workflow.history.map((item, index) => (
-          <div
-            key={item.id || `${item.action}-${index}`}
-            style={{ display: "flex", gap: 12, alignItems: "flex-start" }}
-          >
+        {workflow.history.map((item, index) => {
+          const actorName =
+            shortEmployeeName(item.actor?.full_name) ||
+            item.actor?.email ||
+            t("workflow.systemActor");
+          return (
             <div
-              style={{
-                width: 28,
-                height: 28,
-                borderRadius: 999,
-                display: "grid",
-                placeItems: "center",
-                background: "#fff7ed",
-                color: "#f97316",
-                border: "1px solid #fdba74",
-                flexShrink: 0,
-              }}
+              key={item.id || `${item.action}-${index}`}
+              style={{ display: "flex", gap: 12, alignItems: "flex-start" }}
             >
-              <ClockCircleOutlined />
-            </div>
-            <div style={{ flex: 1 }}>
-              <Space size={8} wrap>
-                <Tag color="orange">
-                  {t(`workflow.action.${item.action}`, item.action)}
-                </Tag>
-                {item.stage ? (
-                  <Tag>{t(`workflow.role.${item.stage}`, item.stage)}</Tag>
-                ) : null}
-                <Text type="secondary">{formatDateTime(item.at)}</Text>
-              </Space>
-              <div style={{ marginTop: 4 }}>
-                <Text strong>
-                  {shortEmployeeName(item.actor?.full_name) ||
-                    item.actor?.email ||
-                    t("workflow.systemActor")}
-                </Text>
+              <div
+                style={{
+                  width: 28,
+                  height: 28,
+                  borderRadius: 999,
+                  display: "grid",
+                  placeItems: "center",
+                  background: "#fff7ed",
+                  color: "#f97316",
+                  border: "1px solid #fdba74",
+                  flexShrink: 0,
+                }}
+              >
+                <ClockCircleOutlined />
               </div>
-              {item.note ? (
+              <div style={{ flex: 1 }}>
+                <Space size={8} wrap>
+                  <Tag color="orange">
+                    {t(`workflow.action.${item.action}`, item.action)}
+                  </Tag>
+                  {item.stage ? (
+                    <Tag>{t(`workflow.role.${item.stage}`, item.stage)}</Tag>
+                  ) : null}
+                  <Text type="secondary">{formatDateTime(item.at)}</Text>
+                </Space>
                 <div style={{ marginTop: 4 }}>
-                  <Text type="secondary">
-                    {SYSTEM_NOTE_KEYS[item.note]
-                      ? t(SYSTEM_NOTE_KEYS[item.note])
-                      : item.note}
+                  <Text strong>
+                    {actorSentenceKey(item.action)
+                      ? t(actorSentenceKey(item.action) as string, {
+                          name: actorName,
+                        })
+                      : actorName}
                   </Text>
                 </div>
-              ) : null}
+                {item.note ? (
+                  <div style={{ marginTop: 4 }}>
+                    <Text type="secondary">
+                      {SYSTEM_NOTE_KEYS[item.note]
+                        ? t(SYSTEM_NOTE_KEYS[item.note])
+                        : item.note}
+                    </Text>
+                  </div>
+                ) : null}
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </Space>
     </Card>
   );

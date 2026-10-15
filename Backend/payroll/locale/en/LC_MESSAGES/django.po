@@ -1,0 +1,446 @@
+msgid ""
+msgstr "Content-Type: text/plain; charset=UTF-8\nLanguage: en\n"
+
+msgid "payroll.accommodation_status.assigned"
+msgstr "Assigned"
+
+msgid "payroll.accommodation_status.none"
+msgstr "No company accommodation"
+
+msgid "payroll.accommodation_status.unknown"
+msgstr "Accommodation unknown"
+
+msgid "payroll.adjustment.absence_override"
+msgstr "Absence Override"
+
+msgid "payroll.adjustment.addition_entry"
+msgstr "Addition Entry"
+
+msgid "payroll.adjustment.employment_input_change"
+msgstr "Employment Input Change"
+
+msgid "payroll.adjustment.leave_input_change"
+msgstr "Leave Input Change"
+
+msgid "payroll.adjustment.manual_adjustment"
+msgstr "Manual Adjustment"
+
+msgid "payroll.adjustment.other_deduction_entry"
+msgstr "Other Deduction Entry"
+
+msgid "payroll.adjustment.overtime_eligibility_override"
+msgstr "Normal Overtime Hours Limit Override"
+
+msgid "payroll.adjustment.salary_adjustment"
+msgstr "Salary Adjustment"
+
+msgid "payroll.adjustment.settings_refresh"
+msgstr "Settings Refresh"
+
+msgid "payroll.adjustment.zero_salary_reason"
+msgstr "Zero Salary Reason"
+
+msgid "payroll.assumption.missing_hire_date"
+msgstr "Full month and under-five-year tier assumed for this draft only."
+
+msgid "payroll.assumption.overtime_basic"
+msgstr "Overtime defaults to Basic salary; HR may configure the base."
+
+msgid "payroll.assumption.overtime_calendar_month"
+msgstr "Normal overtime limit is per calendar month (assumption)."
+
+msgid "payroll.carry_status.pending"
+msgstr "Pending"
+
+msgid "payroll.carry_status.settled"
+msgstr "Settled"
+
+msgid "payroll.collection_state.applied"
+msgstr "Applied"
+
+msgid "payroll.collection_state.claimed"
+msgstr "Claimed"
+
+msgid "payroll.collection_state.released"
+msgstr "Released"
+
+msgid "payroll.field.carry_forward"
+msgstr "Uncollected, carried forward"
+
+msgid "payroll.field.cost_incomplete"
+msgstr "Company cost incomplete"
+
+msgid "payroll.field.gross_salary"
+msgstr "Gross Salary"
+
+msgid "payroll.field.net_salary"
+msgstr "Net Salary"
+
+msgid "payroll.field.require_manual_absence_confirmation"
+msgstr "Require manual absence confirmation"
+
+msgid "payroll.field.total_additions"
+msgstr "Total Additions"
+
+msgid "payroll.field.total_company_cost"
+msgstr "Total Company Cost"
+
+msgid "payroll.field.total_deductions"
+msgstr "Total Deductions"
+
+msgid "payroll.history.assignment_change"
+msgstr "Assignment change"
+
+msgid "payroll.history.employee_gosi_change"
+msgstr "Employee GOSI change"
+
+msgid "payroll.history.settings_change"
+msgstr "Settings change"
+
+msgid "payroll.line.absence"
+msgstr "Absence"
+
+msgid "payroll.line.accommodation_allowance"
+msgstr "Housing"
+
+msgid "payroll.line.accommodation_cost"
+msgstr "Company accommodation cost"
+
+msgid "payroll.line.air_ticket"
+msgstr "Air Ticket"
+
+msgid "payroll.line.attendance_penalty"
+msgstr "Attendance Penalty"
+
+msgid "payroll.line.basic_salary"
+msgstr "Basic Salary"
+
+msgid "payroll.line.bonus"
+msgstr "Bonus"
+
+msgid "payroll.line.eos_provision"
+msgstr "EOS Provision"
+
+msgid "payroll.line.gosi_company"
+msgstr "Company GOSI"
+
+msgid "payroll.line.gosi_employee"
+msgstr "Employee GOSI"
+
+msgid "payroll.line.id_cost"
+msgstr "ID Cost"
+
+msgid "payroll.line.incentive"
+msgstr "Incentive"
+
+msgid "payroll.line.leave_provision"
+msgstr "Leave Provision"
+
+msgid "payroll.line.loan"
+msgstr "Loan"
+
+msgid "payroll.line.medical"
+msgstr "Medical"
+
+msgid "payroll.line.official_holiday_work"
+msgstr "Official Holiday Work"
+
+msgid "payroll.line.other_addition"
+msgstr "Other Addition"
+
+msgid "payroll.line.other_allowance"
+msgstr "Other Allowance"
+
+msgid "payroll.line.other_deduction"
+msgstr "Other Deduction"
+
+msgid "payroll.line.overtime_normal"
+msgstr "Normal Overtime"
+
+msgid "payroll.line.penalty_fine"
+msgstr "Penalty Fine"
+
+msgid "payroll.line.penalty_wage_withholding"
+msgstr "Penalty Wage Withholding"
+
+msgid "payroll.line.petrol_allowance"
+msgstr "Petrol"
+
+msgid "payroll.line.previous_total_deductions"
+msgstr "Previous total deductions"
+
+msgid "payroll.line.telephone_allowance"
+msgstr "Telephone"
+
+msgid "payroll.line.transportation_allowance"
+msgstr "Transportation"
+
+msgid "payroll.line.weekly_rest_work"
+msgstr "Weekly Rest Work"
+
+msgid "payroll.line_category.addition"
+msgstr "Addition"
+
+msgid "payroll.line_category.deduction"
+msgstr "Deduction"
+
+msgid "payroll.line_category.provision"
+msgstr "Provision"
+
+msgid "payroll.line_category.salary"
+msgstr "Salary"
+
+msgid "payroll.message.already_cancelled"
+msgstr "Payroll run already cancelled."
+
+msgid "payroll.message.already_finalized"
+msgstr "Payroll run already finalized."
+
+msgid "payroll.message.cancelled"
+msgstr "Payroll run cancelled."
+
+msgid "payroll.message.finalized"
+msgstr "Payroll run finalized."
+
+msgid "payroll.message.generated"
+msgstr "Payslips generated"
+
+msgid "payroll.message.recalculated"
+msgstr "Payroll run recalculated."
+
+msgid "payroll.payment_mode.bank_transfer"
+msgstr "Bank Transfer"
+
+msgid "payroll.pdf.additions"
+msgstr "Additions"
+
+msgid "payroll.pdf.deductions"
+msgstr "Deductions"
+
+msgid "payroll.pdf.earnings"
+msgstr "Earnings Breakdown"
+
+msgid "payroll.pdf.employee"
+msgstr "Employee"
+
+msgid "payroll.pdf.payment_mode"
+msgstr "Payment Mode"
+
+msgid "payroll.pdf.payroll_report"
+msgstr "Payroll Report"
+
+msgid "payroll.pdf.payslip"
+msgstr "Employee Payslip"
+
+msgid "payroll.pdf.payslip_id"
+msgstr "Payslip ID"
+
+msgid "payroll.pdf.period"
+msgstr "Period"
+
+msgid "payroll.pdf.provisions"
+msgstr "Company Provisions"
+
+msgid "payroll.provision_proration.full_month"
+msgstr "Full month"
+
+msgid "payroll.provision_proration.prorated_by_days"
+msgstr "Prorated by payable days"
+
+msgid "payroll.rent.not_in_payroll"
+msgstr "Not in payroll"
+
+msgid "payroll.rent.rounding_difference"
+msgstr "Rounding difference"
+
+msgid "payroll.rent.vacant_unallocated"
+msgstr "Vacant, unallocated"
+
+msgid "payroll.salary_base.basic"
+msgstr "Basic"
+
+msgid "payroll.salary_base.basic_housing"
+msgstr "Basic + Housing"
+
+msgid "payroll.salary_base.basic_housing_transport"
+msgstr "Basic + Housing + Transportation"
+
+msgid "payroll.salary_base.fixed_amount"
+msgstr "Fixed amount"
+
+msgid "payroll.salary_base.gross"
+msgstr "Gross"
+
+msgid "payroll.status.cancelled"
+msgstr "Cancelled"
+
+msgid "payroll.status.completed"
+msgstr "Completed"
+
+msgid "payroll.status.draft"
+msgstr "Draft"
+
+msgid "payroll.status.paid"
+msgstr "Paid"
+
+msgid "payroll.suspended_pay_decision.full_pay"
+msgstr "Full pay"
+
+msgid "payroll.suspended_pay_decision.zero_pay"
+msgstr "Zero pay"
+
+msgid "payroll.validation.absence_capped"
+msgstr "Absence deduction was capped at the permitted earned pay."
+
+msgid "payroll.validation.accommodation_unknown"
+msgstr "Accommodation cost is unknown; company cost is incomplete."
+
+msgid "payroll.validation.amount_out_of_range"
+msgstr "Amount exceeds the supported payroll range."
+
+msgid "payroll.validation.archived_without_date"
+msgstr "Archived employee has no archive date."
+
+msgid "payroll.validation.assignment_overlap"
+msgstr "An accommodation assignment overlaps these dates."
+
+msgid "payroll.validation.attendance_calendar_missing"
+msgstr "Working-day evidence is required to determine full-month absence."
+
+msgid "payroll.validation.attendance_source_unavailable"
+msgstr "Attendance source does not cover the employed dates; HR must confirm manual absence days when required."
+
+msgid "payroll.validation.claim_unaffordable"
+msgstr "The full claim is unaffordable and remains pending."
+
+msgid "payroll.validation.company_mismatch"
+msgstr "Referenced records must belong to the same company."
+
+msgid "payroll.validation.confirm_required"
+msgstr "confirm must be true."
+
+msgid "payroll.validation.deductions_capped"
+msgstr "Deductions exceeded available pay; unpaid amounts remain pending."
+
+msgid "payroll.validation.duplicate_period"
+msgstr "Payroll run already exists for this period."
+
+msgid "payroll.validation.field_not_editable"
+msgstr "This field cannot be edited here."
+
+msgid "payroll.validation.invalid_choice"
+msgstr "Select a supported value."
+
+msgid "payroll.validation.invalid_date_range"
+msgstr "The end date must be on or after the start date."
+
+msgid "payroll.validation.invalid_decimal"
+msgstr "Enter a finite nonnegative decimal string."
+
+msgid "payroll.validation.invalid_export_format"
+msgstr "file_format must be one of: csv, pdf, xlsx."
+
+msgid "payroll.validation.invalid_period"
+msgstr "Select a valid payroll year and month."
+
+msgid "payroll.validation.invalid_quantity"
+msgstr "Enter a valid nonnegative day or hour quantity."
+
+msgid "payroll.validation.legacy_link_unresolved"
+msgstr "A legacy payroll employee link needs reconciliation."
+
+msgid "payroll.validation.medical_invoice_missing"
+msgstr "Medical invoice is missing; company cost is incomplete."
+
+msgid "payroll.validation.missing_hire_date"
+msgstr "Hire date is missing; correct the profile and recalculate."
+
+msgid "payroll.validation.overtime_limit_not_set"
+msgstr "No normal-overtime hours limit is configured; entered hours are allowed."
+
+msgid "payroll.validation.overtime_not_allowed"
+msgstr "Paying normal overtime beyond its limit requires an HR override and reason."
+
+msgid "payroll.validation.overtime_over_allowed"
+msgstr "Normal overtime exceeds the monthly hours limit; excess requires an audited HR override to be paid."
+
+msgid "payroll.validation.payroll_reconciliation_failed"
+msgstr "Run, items and payslips do not reconcile."
+
+msgid "payroll.validation.penalty_absence_overlap"
+msgstr "Previously withheld wage dates were excluded from absence."
+
+msgid "payroll.validation.penalty_pending_fine_cap"
+msgstr "The penalty remains pending because of the monthly fine cap."
+
+msgid "payroll.validation.penalty_wage_evidence_missing"
+msgstr "Wage withholding dates require reconciliation before finalization."
+
+msgid "payroll.validation.policy_decision_required"
+msgstr "This calculation needs an approved payroll policy."
+
+msgid "payroll.validation.prehire_status_conflict"
+msgstr "Prehire status conflicts with a hire date in or before this month."
+
+msgid "payroll.validation.reason_required"
+msgstr "A reason is required."
+
+msgid "payroll.validation.rent_reconciliation_failed"
+msgstr "Raw rent allocations do not reconcile."
+
+msgid "payroll.validation.rent_value_missing"
+msgstr "Assigned rent has no annual value."
+
+msgid "payroll.validation.run_cancelled"
+msgstr "Cancelled runs cannot be finalized."
+
+msgid "payroll.validation.run_not_draft"
+msgstr "Only a draft payroll run can be changed or cancelled."
+
+msgid "payroll.validation.run_not_finalized"
+msgstr "Finalize the payroll run before generating payslips."
+
+msgid "payroll.validation.salary_total_mismatch"
+msgstr "Profile total differs from salary components; components were used."
+
+msgid "payroll.validation.stale_revision"
+msgstr "Payroll data changed; reload and retry."
+
+msgid "payroll.validation.suspended_pay_decision_required"
+msgstr "Choose full pay or zero pay with suspended reason for this run."
+
+msgid "payroll.validation.terminated_without_end_date"
+msgstr "Terminated employee has no archived end-of-service date."
+
+msgid "payroll.validation.uncollected_deduction"
+msgstr "An amount of {amount} remains pending for a later run."
+
+msgid "payroll.validation.zero_salary_detail_required"
+msgstr "Provide details for the other zero-pay reason."
+
+msgid "payroll.validation.zero_salary_reason_required"
+msgstr "A zero-pay reason is required."
+
+msgid "payroll.validation_severity.error"
+msgstr "Error"
+
+msgid "payroll.validation_severity.warning"
+msgstr "Warning"
+
+msgid "payroll.zero_salary_reason.full_absence"
+msgstr "Full absence"
+
+msgid "payroll.zero_salary_reason.full_leave"
+msgstr "Full leave"
+
+msgid "payroll.zero_salary_reason.not_joined"
+msgstr "Not joined"
+
+msgid "payroll.zero_salary_reason.other"
+msgstr "Other"
+
+msgid "payroll.zero_salary_reason.suspended"
+msgstr "Suspended"
+
+msgid "payroll.zero_salary_reason.unpaid_leave"
+msgstr "Unpaid leave"

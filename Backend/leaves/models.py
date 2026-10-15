@@ -3,7 +3,6 @@ from django.core.exceptions import ObjectDoesNotExist, ValidationError
 from django.db import models, transaction
 from django.db.models import Max
 from django.utils.translation import gettext_lazy as _
-
 from employees.storage import PrivateUploadStorage
 from organization.models import OrganizationNode
 
@@ -108,7 +107,9 @@ class LeaveRequest(models.Model):
     status = models.CharField(max_length=30, choices=RequestStatus.choices, default=RequestStatus.SUBMITTED)
     source = models.CharField(max_length=20, choices=RequestSource.choices, default=RequestSource.EMPLOYEE)
     manual_entry_reason = models.TextField(blank=True, help_text=_("Reason entered by HR for manual records."))
-    policy_warnings = models.JSONField(default=list, blank=True, help_text=_("Warnings recorded for HR manual entries."))
+    policy_warnings = models.JSONField(
+        default=list, blank=True, help_text=_("Warnings recorded for HR manual entries.")
+    )
     source_document_ref = models.CharField(
         max_length=255,
         blank=True,
@@ -442,6 +443,8 @@ class AnnualLeavePaymentRequest(models.Model):
         APPROVED = "approved", _("Approved")
         REJECTED = "rejected", _("Rejected")
         CARRIED_FORWARD = "carried_forward", _("Carried Forward")
+        # The employee withdrew their own request while it was pending; frees the cycle.
+        CANCELLED = "cancelled", _("Cancelled")
 
     class Resolution(models.TextChoices):
         PAY = "pay", _("Pay")
@@ -523,6 +526,7 @@ class AnnualLeavePaymentRequest(models.Model):
     hr_reviewed_at = models.DateTimeField(null=True, blank=True)
     ceo_decided_at = models.DateTimeField(null=True, blank=True)
     settled_at = models.DateTimeField(null=True, blank=True)
+    cancelled_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         ordering = ["-submitted_at", "-id"]

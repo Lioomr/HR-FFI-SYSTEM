@@ -1,7 +1,7 @@
 Recommended Full-Stack Tools (Production-ready)
 Status: Architecture baseline; current implementation takes precedence (reviewed 2026-07-20).
 
-Current choices: Django 5.2 + DRF + PostgreSQL 16; React 19 + TypeScript + Vite + Ant Design + React Router v7; JWT authentication; Docker; Redis/Channels/Celery where configured. Check `AGENTS.md` and `.agents/context/` before introducing alternatives.
+Current choices: Django and DRF as pinned in Backend/requirements.txt (currently Django 6.1.1) + PostgreSQL 16; React 19 + TypeScript + Vite + Ant Design + React Router v7; JWT authentication; Docker; Redis/Channels/Celery where configured. Check `AGENTS.md` and the relevant `.agents/context/` notes before introducing alternatives.
 Backend (API + Admin)
 
 Python + Django

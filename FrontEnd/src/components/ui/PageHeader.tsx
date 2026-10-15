@@ -13,7 +13,7 @@ export default function PageHeader({
   tags,
   actions,
 }: {
-  title: string;
+  title: ReactNode;
   subtitle?: ReactNode;
   secondarySubtitle?: string;
   breadcrumb?: string;

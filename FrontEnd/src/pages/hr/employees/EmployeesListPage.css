@@ -25,6 +25,14 @@
   line-height: 1.25;
 }
 
+.employees-header__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
 .employees-header__create.ant-btn {
   height: 42px;
   padding-inline: 20px;

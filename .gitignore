@@ -207,3 +207,7 @@ Backend/static/pdf_templates/company_logos/*
 # Local video tutorial experiments and generated media
 /brag-output-2026-10-11-071158/
 /onetake-reset-tutorial-ar/
+
+# Local design experiments and production inspection evidence
+/approval-trail-styles.html
+/docs/reviews/2026-10-11-biotime-mapping-start-penalties-review.md

@@ -3,7 +3,6 @@ from django.core.exceptions import ValidationError
 from django.db import models
 from django.db.models import Q
 from django.utils.translation import gettext_lazy as _
-
 from employees.storage import PrivateUploadStorage
 
 
@@ -307,7 +306,9 @@ class AttendanceLateViolation(models.Model):
 
     class Meta:
         ordering = ["date", "id"]
-        constraints = [models.UniqueConstraint(fields=["employee_profile", "date"], name="unique_att_late_violation_day")]
+        constraints = [
+            models.UniqueConstraint(fields=["employee_profile", "date"], name="unique_att_late_violation_day")
+        ]
         indexes = [models.Index(fields=["company", "date", "lifecycle"], name="att_late_violation_idx")]
 
 
@@ -348,9 +349,7 @@ class AttendanceLateNotice(models.Model):
         blank=True,
         related_name="attendance_late_notices",
     )
-    delivery_status = models.CharField(
-        max_length=16, choices=DeliveryStatus.choices, default=DeliveryStatus.SCHEDULED
-    )
+    delivery_status = models.CharField(max_length=16, choices=DeliveryStatus.choices, default=DeliveryStatus.SCHEDULED)
     delivery_message = models.CharField(max_length=255, blank=True)
     issued_at = models.DateTimeField(auto_now_add=True)
     #: SHA-256 of the exact stored/delivered notice bytes, recorded once at issuance
@@ -535,6 +534,15 @@ class BioTimeEmployeeMap(models.Model):
     )
     biotime_emp_code = models.CharField(
         max_length=50, unique=True, help_text=_("Employee code (ID) as set inside the ZKTeco BioTime device")
+    )
+    # Nullable only for rows created directly through the ORM; the API never accepts or sets null.
+    attendance_start_date = models.DateField(
+        null=True,
+        blank=True,
+        help_text=_(
+            "First day BioTime attendance is enforced for this employee. Absences and penalties are never "
+            "raised for earlier days."
+        ),
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

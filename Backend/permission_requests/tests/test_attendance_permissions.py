@@ -3,13 +3,13 @@ from datetime import datetime, time, timedelta
 from unittest.mock import patch
 
 import pytest
-from django.core.files.uploadedfile import SimpleUploadedFile
-from django.utils import timezone
-
 from admin_portal.models import SystemSettings
 from attendance.calculation import AttendanceCalculationService
 from attendance.models import AttendanceAdjustment, BioTimeRawPunch
 from audit.models import AuditLog
+from django.core.files.uploadedfile import SimpleUploadedFile
+from django.utils import timezone
+
 from permission_requests.models import PermissionRequest, PermissionRequestAttachment
 from permission_requests.tests.helpers import BASE_URL, field_errors, payload
 
@@ -87,6 +87,10 @@ def test_attendance_exempt_and_ceo_profiles_cannot_submit_late_permission(exempt
 
     response = _post_late(client_for, requester)
 
+    if exempt_by == "ceo_role":
+        # The CEO never submits a request at all (core.executives).
+        assert response.status_code == 403
+        return
     assert response.status_code == 422
     assert "permission_type" in field_errors(response)
 

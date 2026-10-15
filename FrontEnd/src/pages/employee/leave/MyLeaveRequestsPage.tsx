@@ -1,3 +1,5 @@
+import EmployeeCancelButton from "../../../components/requests/EmployeeCancelButton";
+import EmployeeEditButton from "../../../components/requests/EmployeeEditButton";
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button, Card, Grid, Tag, Tooltip, notification } from "antd";
@@ -9,6 +11,7 @@ import ResponsiveTable from "../../../components/ui/ResponsiveTable";
 import { useI18n } from "../../../i18n/useI18n";
 import {
   getMyLeaveRequests,
+  cancelLeaveRequest,
   getLeaveRequestPdfBlob,
   type LeaveRequest,
 } from "../../../services/api/leaveApi";
@@ -23,7 +26,6 @@ import { downloadBlob } from "../../../utils/download";
 
 const { useBreakpoint } = Grid;
 
-// Employees cannot cancel their own leave requests; HR cancels them on request.
 export default function MyLeaveRequestsPage() {
   const navigate = useNavigate();
   const { t } = useI18n();
@@ -207,7 +209,7 @@ export default function MyLeaveRequestsPage() {
       title: t("common.actions"),
       key: "actions",
       align: "center",
-      width: 112,
+      width: 144,
       fixed: screens.lg ? "right" : undefined,
       render: (_, record) => {
         return (
@@ -219,6 +221,15 @@ export default function MyLeaveRequestsPage() {
               flexWrap: "wrap",
             }}
           >
+            <EmployeeEditButton
+              request={record}
+              to={`/employee/leave/requests/${record.id}/edit`}
+            />
+            <EmployeeCancelButton
+              request={record}
+              cancelRequest={cancelLeaveRequest}
+              onCancelled={loadData}
+            />
             <Tooltip title={t("common.details")}>
               <Button
                 aria-label={t("common.details")}

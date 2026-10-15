@@ -18,6 +18,13 @@ import re
 from collections.abc import Callable
 from datetime import date, timedelta
 
+from audit.utils import audit
+from core.delegation import is_user_approver_for_role
+from core.executives import EXECUTIVE_REQUEST_ERROR, is_executive_profile
+from core.models import WorkflowAction
+from core.responses import error
+from core.services import get_hr_approver_users, notify_profile_request_status_whatsapp, notify_users_for_pending_status
+from core.services.workflow_engine import begin_recorded_transition, record_workflow_transition
 from django.contrib.auth import get_user_model
 from django.contrib.auth.base_user import BaseUserManager
 from django.core.exceptions import ValidationError as DjangoValidationError
@@ -26,13 +33,6 @@ from django.core.validators import validate_email
 from django.db import IntegrityError, transaction
 from django.db.models import Q
 from django.utils import timezone
-
-from audit.utils import audit
-from core.delegation import is_user_approver_for_role
-from core.models import WorkflowAction
-from core.responses import error
-from core.services import get_hr_approver_users, notify_profile_request_status_whatsapp, notify_users_for_pending_status
-from core.services.workflow_engine import begin_recorded_transition, record_workflow_transition
 
 from ..models import EmployeeDocument, EmployeeProfile, ProfileChangeAttachment, ProfileChangeRequest
 from ..ocr.parsers import normalize_digits, parse_date
@@ -411,6 +411,8 @@ def _parse_attachment_ids(attachment_ids) -> list[int]:
 def submit_change_request(*, user, profile: EmployeeProfile, items, attachment_ids) -> ProfileChangeRequest:
     """Create a PENDING_HR request owned by ``profile``; ownership and company never come from the client."""
 
+    if is_executive_profile(profile):
+        raise ProfileChangeError(EXECUTIVE_REQUEST_ERROR, status=403)
     changes = _normalized_changes(profile, items)
     ids = _parse_attachment_ids(attachment_ids)
     try:

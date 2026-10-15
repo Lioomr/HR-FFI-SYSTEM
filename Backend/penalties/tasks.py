@@ -4,11 +4,10 @@ import logging
 from collections import Counter
 from datetime import datetime, time, timedelta
 
+from audit.utils import audit
 from celery import shared_task
 from django.db import transaction
 from django.utils import timezone
-
-from audit.utils import audit
 from employees.models import EmployeeProfile
 
 from .models import PenaltyRecord
@@ -18,6 +17,7 @@ from .services import (
     _next_occurrence,
     auto_warning_settle_hours,
     auto_warnings_effective_from,
+    invalidate_executive_candidates,
     issue,
 )
 from .warning_notices import create_notice, deliver
@@ -106,6 +106,11 @@ def _issue_for_profile(profile_id, cutoff):
 @shared_task
 def issue_auto_warnings():
     """Idempotent: only settled ``warning_pending`` candidates are issued, each once."""
+    try:
+        # Executives are never penalized; withdraw anything raised for them first.
+        invalidate_executive_candidates()
+    except Exception:
+        logger.exception("penalty_executive_candidates_invalidation_failed")
     if auto_warnings_effective_from() is None:
         return {}
     cutoff = timezone.now() - timedelta(hours=auto_warning_settle_hours())

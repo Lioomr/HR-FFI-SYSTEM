@@ -448,6 +448,13 @@ export default function ManagerLeaveRequestDetailsPage() {
                 />
               </DashboardPanel>
             )}
+
+            <RequestObligationsPanel
+              parentType="leave_request"
+              parentId={request.id}
+              leaveRequest={request as any}
+              onChanged={loadData}
+            />
           </Space>
         </Col>
 
@@ -467,13 +474,6 @@ export default function ManagerLeaveRequestDetailsPage() {
             <DocumentIntegrityPanel
               requestId={request.id}
               isFinal={request.status === "approved"}
-            />
-
-            <RequestObligationsPanel
-              parentType="leave_request"
-              parentId={request.id}
-              leaveRequest={request as any}
-              onChanged={loadData}
             />
           </Space>
         </Col>

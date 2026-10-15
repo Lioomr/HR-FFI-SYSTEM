@@ -1,30 +1,32 @@
 from datetime import date
 from unittest.mock import patch
 
-from django.contrib.auth import get_user_model
-from django.contrib.auth.models import Group
-from django.contrib.contenttypes.models import ContentType
-from rest_framework import status
-from rest_framework.test import APITestCase
-
 from audit.models import AuditLog
 from core.models import WorkflowAction
 from core.services import get_workflow_snapshot
+from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Group
+from django.contrib.contenttypes.models import ContentType
 from employees.models import EmployeeProfile
+from organization.models import UserOrganizationAccess
+from organization.services import get_default_company
+from rest_framework import status
+from rest_framework.test import APITestCase
+
 from leaves.models import LeaveRequest, LeaveType
 from leaves.services import (
     ALREADY_WITH_CEO_MESSAGE,
     COMMENT_REQUIRED_MESSAGE,
-    CONTACT_HR_TO_CANCEL_MESSAGE,
     NOT_CANCELLABLE_MESSAGE,
     NOT_CEO_REFERRABLE_MESSAGE,
+    NOT_REQUESTER_CANCELLABLE_MESSAGE,
+    NOT_REQUESTER_MESSAGE,
     SELF_CANCELLATION_MESSAGE,
     LeaveTransitionError,
     apply_ceo_referral,
     apply_hr_cancellation,
+    apply_requester_cancellation,
 )
-from organization.models import UserOrganizationAccess
-from organization.services import get_default_company
 
 User = get_user_model()
 
@@ -166,19 +168,90 @@ class LeaveReferralAndCancellationTests(APITestCase):
 
     # --- cancellation ---
 
-    def test_employee_cannot_cancel_at_any_stage(self):
+    PENDING_STATUSES = (
+        Status.SUBMITTED,
+        Status.PENDING_DELEGATE,
+        Status.PENDING_MANAGER,
+        Status.PENDING_HR,
+        Status.PENDING_CEO,
+        Status.PENDING_HR_COMPLETION,
+    )
+
+    def test_employee_cancels_own_pending_request_at_any_stage(self):
         self.client.force_authenticate(user=self.employee)
-        for current in (Status.PENDING_DELEGATE, Status.PENDING_MANAGER, Status.PENDING_HR, Status.PENDING_CEO):
+        for current in self.PENDING_STATUSES:
             with self.subTest(status=current):
                 leave = self._leave(status=current)
+                self.assertTrue(get_workflow_snapshot(leave, actor=self.employee)["can_cancel"])
+                # Syncing moves a manager stage with no valid manager on to HR.
+                leave.refresh_from_db()
+                from_status = leave.status
 
                 response = self.client.post(f"{REQUESTS_URL}{leave.id}/cancel/")
 
-                self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
-                self.assertEqual(response.data["errors"], [CONTACT_HR_TO_CANCEL_MESSAGE])
+                self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+                self.assertEqual(response.data["status"], "success")
+                data = response.data["data"]
+                self.assertEqual(data["status"], Status.CANCELLED)
+                self.assertEqual((data["workflow"]["status"], data["workflow"]["can_cancel"]), ("cancelled", False))
+                leave.refresh_from_db()
+                self.assertEqual(leave.status, Status.CANCELLED)
+                cancel = self._actions(leave, Action.CANCEL).get()
+                self.assertEqual(
+                    (cancel.actor, cancel.approver_role, cancel.to_status), (self.employee, "", "cancelled")
+                )
+                audit_log = AuditLog.objects.filter(action="cancel", entity_id=str(leave.id)).last()
+                self.assertEqual(audit_log.metadata["from_status"], from_status)
+
+    def test_employee_cannot_cancel_decided_request(self):
+        self.client.force_authenticate(user=self.employee)
+        for current in (Status.APPROVED, Status.REJECTED, Status.CANCELLED):
+            with self.subTest(status=current):
+                leave = self._leave(status=current)
+                self.assertFalse(get_workflow_snapshot(leave, actor=self.employee)["can_cancel"])
+                cancel_count = self._actions(leave, Action.CANCEL).count()
+
+                response = self.client.post(f"{REQUESTS_URL}{leave.id}/cancel/")
+
+                self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
+                self.assertEqual(response.data["errors"], [NOT_REQUESTER_CANCELLABLE_MESSAGE])
                 leave.refresh_from_db()
                 self.assertEqual(leave.status, current)
-                self.assertFalse(get_workflow_snapshot(leave, actor=self.employee)["can_cancel"])
+                self.assertEqual(self._actions(leave, Action.CANCEL).count(), cancel_count)
+
+    def test_only_the_requester_can_cancel(self):
+        leave = self._leave()
+        self.assertFalse(get_workflow_snapshot(leave, actor=self.colleague)["can_cancel"])
+        self.assertFalse(get_workflow_snapshot(leave, actor=self.hr_user)["can_cancel"])
+
+        for user in (self.colleague, self.hr_user):
+            with self.subTest(user=user.email):
+                self.client.force_authenticate(user=user)
+                response = self.client.post(f"{REQUESTS_URL}{leave.id}/cancel/")
+                self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+        with self.assertRaisesMessage(LeaveTransitionError, NOT_REQUESTER_MESSAGE) as caught:
+            apply_requester_cancellation(leave, actor=self.colleague)
+        self.assertEqual(caught.exception.status, 403)
+        leave.refresh_from_db()
+        self.assertEqual(leave.status, Status.PENDING_HR)
+
+    def test_cancelled_request_leaves_pending_inboxes(self):
+        from core.models import WorkflowInstance
+        from core.services import get_pending_approvals_for_user
+
+        leave = self._leave(status=Status.PENDING_HR)
+        get_workflow_snapshot(leave)
+        content_type = ContentType.objects.get_for_model(LeaveRequest)
+        pending = {(w.content_type_id, w.object_id) for w in get_pending_approvals_for_user(self.hr_user, limit=None)}
+        self.assertIn((content_type.id, leave.id), pending)
+
+        apply_requester_cancellation(leave, actor=self.employee)
+
+        pending = {(w.content_type_id, w.object_id) for w in get_pending_approvals_for_user(self.hr_user, limit=None)}
+        self.assertNotIn((content_type.id, leave.id), pending)
+        workflow = WorkflowInstance.objects.get(content_type=content_type, object_id=leave.id)
+        self.assertEqual(workflow.status, WorkflowInstance.Status.CANCELLED)
 
     def test_hr_cancels_any_request_still_in_progress_and_records_why(self):
         for current in (

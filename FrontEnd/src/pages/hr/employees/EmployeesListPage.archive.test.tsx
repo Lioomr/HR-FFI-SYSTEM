@@ -158,6 +158,20 @@ afterEach(() => {
 });
 
 describe("EmployeesListPage archive modal", () => {
+  it("opens invites and employee import from the page header", async () => {
+    render(<EmployeesListPage />);
+    await screen.findByText("Sara Ahmed");
+
+    fireEvent.click(screen.getByRole("button", { name: "Invites" }));
+    expect(navigateMock).toHaveBeenLastCalledWith("/hr/invites");
+
+    fireEvent.click(screen.getByRole("button", { name: "Import Employees" }));
+    expect(navigateMock).toHaveBeenLastCalledWith("/hr/import/employees");
+    expect(
+      screen.getByRole("button", { name: "Create Employee" }),
+    ).toBeInTheDocument();
+  });
+
   it("explains that the employee and their history are preserved", async () => {
     render(<EmployeesListPage />);
     await screen.findByText("Sara Ahmed");

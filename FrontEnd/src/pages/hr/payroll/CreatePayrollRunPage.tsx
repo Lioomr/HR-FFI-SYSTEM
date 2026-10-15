@@ -87,8 +87,12 @@ export default function CreatePayrollRunPage() {
             });
             if (!isApiError(listRes)) {
               // Find run for this month
+              // A cancelled run keeps its period history; open the live one.
               const existing = listRes.data.items.find(
-                (r) => r.month === values.month && r.year === values.year,
+                (r) =>
+                  r.month === values.month &&
+                  r.year === values.year &&
+                  r.status !== "CANCELLED",
               );
               if (existing) {
                 notification.info({
@@ -159,8 +163,12 @@ export default function CreatePayrollRunPage() {
             page_size: 100,
           });
           if (!isApiError(listRes) && listRes.data?.items) {
+            // A cancelled run keeps its period history; open the live one.
             const existing = listRes.data.items.find(
-              (r) => r.month === values.month && r.year === values.year,
+              (r) =>
+                r.month === values.month &&
+                r.year === values.year &&
+                r.status !== "CANCELLED",
             );
             if (existing) {
               notification.info({

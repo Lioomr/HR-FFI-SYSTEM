@@ -16,7 +16,6 @@ import {
   ApiOutlined,
   AppstoreOutlined,
   AuditOutlined,
-  CloudUploadOutlined,
   ClusterOutlined,
   ContainerOutlined,
   DatabaseOutlined,
@@ -85,6 +84,7 @@ import { useNotificationsRuntime } from "../hooks/useNotificationsRuntime";
 import { buildCeoMenuItems, getCeoOpenKeysForPath } from "./ceoNav";
 import { buildManagerNavGroups } from "./managerNav";
 import { getSelectedKey, sectionLabel } from "./menuUtils";
+import { payrollRebuildEnabled } from "../services/api/payrollTransport";
 
 const { Header, Sider, Content } = Layout;
 const { useBreakpoint } = Grid;
@@ -254,6 +254,8 @@ function getTitle(
   if (pathname.startsWith("/ceo/profile")) return t("layout.profile");
   if (pathname.startsWith("/hr/loan-requests"))
     return t("layout.loanRequests", "Loan Requests");
+  if (pathname.startsWith("/hr/cancellation-requests"))
+    return t("layout.nav.cancellationRequests", "Cancellation Requests");
   if (pathname.startsWith("/hr/assets/lookup"))
     return t("layout.assetLookup", "Asset Lookup");
   if (pathname.startsWith("/hr/assets/label-jobs"))
@@ -296,6 +298,7 @@ function getOpenKeysForPath(pathname: string): string[] {
   const isHrInboxPath =
     pathname.startsWith("/hr/leave/requests") ||
     pathname.startsWith("/hr/loan-requests") ||
+    pathname.startsWith("/hr/cancellation-requests") ||
     pathname.startsWith("/hr/permission-requests") ||
     pathname.startsWith("/hr/employees/profile-change-requests");
 
@@ -676,6 +679,10 @@ export default function BaseLayout() {
   }, [role]);
 
   // ─── Menu definitions ──────────────────────────────────────────────────────
+  // Payroll rebuild entry (HR, Admin, CFO). Hidden until the rebuild API is
+  // enabled so the live app never links to endpoints that do not exist yet.
+  const payrollEnabled = payrollRebuildEnabled();
+
   const adminItems: MenuProps["items"] = [
     {
       type: "group",
@@ -762,6 +769,21 @@ export default function BaseLayout() {
         },
       ],
     },
+    ...(payrollEnabled
+      ? [
+          {
+            type: "group" as const,
+            label: sectionLabel(t("layout.payroll")),
+            children: [
+              {
+                key: "/hr/payroll",
+                icon: <WalletOutlined />,
+                label: <Link to="/hr/payroll">{t("layout.payroll")}</Link>,
+              },
+            ],
+          },
+        ]
+      : []),
     {
       type: "group",
       label: sectionLabel(t("layout.profile")),
@@ -780,6 +802,26 @@ export default function BaseLayout() {
       key: "/hr/dashboard",
       icon: <AppstoreOutlined />,
       label: <Link to="/hr/dashboard">{t("layout.dashboard")}</Link>,
+    },
+    {
+      type: "group",
+      label: sectionLabel(t("layout.menu.people", "People")),
+      children: [
+        {
+          key: "/hr/employees",
+          icon: <TeamOutlined />,
+          label: <Link to="/hr/employees">{t("layout.employees")}</Link>,
+        },
+        {
+          key: "/hr/organization-setup",
+          icon: <ClusterOutlined />,
+          label: (
+            <Link to="/hr/organization-setup">
+              {t("layout.organizationSetup")}
+            </Link>
+          ),
+        },
+      ],
     },
     {
       type: "group",
@@ -826,6 +868,17 @@ export default function BaseLayout() {
               label: (
                 <Link to="/hr/permission-requests">
                   {t("layout.nav.permissionInbox", "Permission Inbox")}
+                </Link>
+              ),
+            },
+            {
+              key: "/hr/cancellation-requests",
+              label: (
+                <Link to="/hr/cancellation-requests">
+                  {t(
+                    "layout.nav.cancellationRequests",
+                    "Cancellation Requests",
+                  )}
                 </Link>
               ),
             },
@@ -897,38 +950,6 @@ export default function BaseLayout() {
           icon: <SafetyCertificateOutlined />,
           label: (
             <Link to="/hr/documents/verify">{t("layout.nav.verifyPdf")}</Link>
-          ),
-        },
-      ],
-    },
-    {
-      type: "group",
-      label: sectionLabel(t("layout.menu.people", "People")),
-      children: [
-        {
-          key: "/hr/employees",
-          icon: <TeamOutlined />,
-          label: <Link to="/hr/employees">{t("layout.employees")}</Link>,
-        },
-        {
-          key: "/hr/organization-setup",
-          icon: <ClusterOutlined />,
-          label: (
-            <Link to="/hr/organization-setup">
-              {t("layout.organizationSetup")}
-            </Link>
-          ),
-        },
-        {
-          key: "/hr/invites",
-          icon: <SendOutlined />,
-          label: <Link to="/hr/invites">{t("layout.invites")}</Link>,
-        },
-        {
-          key: "/hr/import/employees",
-          icon: <CloudUploadOutlined />,
-          label: (
-            <Link to="/hr/import/employees">{t("layout.importEmployees")}</Link>
           ),
         },
       ],
@@ -1580,6 +1601,25 @@ export default function BaseLayout() {
         },
       ],
     },
+    ...(payrollEnabled
+      ? [
+          {
+            type: "group" as const,
+            label: sectionLabel(t("layout.payroll")),
+            children: [
+              {
+                key: "/hr/payroll",
+                icon: <WalletOutlined />,
+                label: (
+                  <Link to="/hr/payroll">
+                    {t("layout.payrollRuns", "Payroll Runs")}
+                  </Link>
+                ),
+              },
+            ],
+          },
+        ]
+      : []),
     {
       type: "group",
       label: sectionLabel(t("layout.menu.teamOperations", "Team Operations")),

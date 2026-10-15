@@ -33,6 +33,11 @@ The local checkout does not contain `docker-compose.prod.yml`; only a dated back
 
 ## Start / Stop
 
+On a new checkout, copy `docker-compose.dev.example.yml` to the ignored
+`docker-compose.dev.yml` before using the commands below. Keep machine-specific
+ports, service choices, and feature toggles in that local copy. The example leaves
+`VITE_PAYROLL_REBUILD` off unless explicitly enabled.
+
 ```bash
 # Start dev stack (with rebuild)
 docker compose -f docker-compose.dev.yml up -d --build
@@ -72,7 +77,7 @@ docker inspect ffi_hr_frontend --format "{{json .Config.Labels}}"
 
 A worktree that needs its own running stack sets `FFI_CONTAINER_PREFIX`, `FFI_FRONTEND_PORT`, `FFI_BACKEND_PORT`, `FFI_DB_PORT` and `EVOLUTION_API_PORT`, and passes its own `-p <project>` (example in the header of `docker-compose.dev.yml`). Defaults keep the shared `ffi_hr_*` names and 5173/8000/5432 ports.
 
-Before reporting a code/runtime task complete, rebuild and recreate each affected app service, then check its status. Rebuild all three backend-based services (`backend`, `notification-worker`, `celery-beat`) after backend changes because each runs code from the Backend image. Rebuild `frontend` after frontend changes. Docs-only changes do not need a rebuild. Never use `down -v` for a routine rebuild because that removes database, upload, and provider volumes.
+Batch edits and validation before rebuilding. Refresh affected app services once when the task requires the running local system to use the change or needs container runtime verification. Source-only work may finish with focused tests/build checks; disclose when the running stack was not refreshed. For a backend refresh, rebuild `backend`, `notification-worker`, and `celery-beat` because all use the Backend image; for a frontend refresh, rebuild `frontend`. Check health and the running change afterward. Follow the shared-stack protections in `AGENTS.md`. Docs-only changes need no rebuild. Never use `down -v` for routine troubleshooting or rebuilding because it removes database, upload, and provider volumes.
 
 ## View Logs
 
@@ -160,7 +165,7 @@ set `EVOLUTION_API_BASE_URL` to its URL. Set `NOTIFICATION_WHATSAPP_DELIVERY_ENA
 
 | Problem | Cause | Fix |
 |---|---|---|
-| Migrations fail on startup | DB not ready in time | `down -v` then `up -d --build` |
+| Migrations fail on startup | DB readiness or a migration/schema error; inspect logs to distinguish | Check database health and backend/migration logs, fix the identified cause, then retry or restart the affected service. Preserve volumes; a data reset requires explicit authorization for that destructive action. |
 | Port already in use | Another process on 5432/8000/5173 | Stop the conflicting process |
 | CORS errors in browser | `VITE_API_BASE_URL` mismatch | Check build arg in docker-compose.dev.yml |
 | `curl` prompts in PowerShell | PS alias conflict | Use `curl.exe` explicitly |

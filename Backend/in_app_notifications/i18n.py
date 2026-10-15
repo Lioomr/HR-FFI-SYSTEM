@@ -174,6 +174,11 @@ CONTRACT_RATING_EVENT_LABELS: dict[str, tuple[str, str]] = {
     "awaiting_hr_review": ("Awaiting HR review", "بانتظار مراجعة الموارد البشرية"),
     "ceo_reminder": ("CEO reminder", "تذكير للرئيس التنفيذي"),
     "termination_finalized": ("Termination finalized", "تم اعتماد الإنهاء"),
+    "awaiting_routing": ("Awaiting routing", "بانتظار التوجيه"),
+    "sent_directly_to_ceo": ("Sent directly to CEO", "أُرسل مباشرةً إلى الرئيس التنفيذي"),
+    "hr_comment_requested": ("HR comment requested", "مطلوب تعليق الموارد البشرية"),
+    "hr_comment_submitted": ("HR comment submitted", "تم إرسال تعليق الموارد البشرية"),
+    "ceo_returned": ("Returned by CEO", "أعادها الرئيس التنفيذي"),
 }
 
 _CONTRACT_RATING_DEFAULT_MESSAGE = "Please review the employee contract rating."
@@ -468,6 +473,56 @@ MESSAGES: dict[str, dict[str, tuple[str, str]]] = {
         "title": ("Leave request cancelled", "تم إلغاء طلب الإجازة"),
         "message": ("Your leave request #{request_id} was cancelled.", "تم إلغاء طلب الإجازة رقم {request_id}."),
     },
+    "leave.updated": {
+        "title": ("Leave request updated", "تم تعديل طلب الإجازة"),
+        "message": (
+            "{employee_name} updated leave request #{request_id}. Review the new details.",
+            "عدّل {employee_name} طلب الإجازة رقم {request_id}. راجِع التفاصيل الجديدة.",
+        ),
+    },
+    "permission.updated": {
+        "title": ("{request_type} updated", "تم تعديل {request_type}"),
+        "message": (
+            "{employee_name} updated request #{request_id}. Review the new details.",
+            "عدّل {employee_name} الطلب رقم {request_id}. راجِع التفاصيل الجديدة.",
+        ),
+    },
+    "loan.updated": {
+        "title": ("Loan request updated", "تم تعديل طلب السلفة"),
+        "message": (
+            "{employee_name} updated loan request #{request_id}. Review the new details.",
+            "عدّل {employee_name} طلب السلفة رقم {request_id}. راجِع التفاصيل الجديدة.",
+        ),
+    },
+    "asset_return.updated": {
+        "title": ("Asset return request updated", "تم تعديل طلب إعادة الأصل"),
+        "message": (
+            "{employee_name} updated asset return request #{request_id}. Review the new details.",
+            "عدّل {employee_name} طلب إعادة الأصل رقم {request_id}. راجِع التفاصيل الجديدة.",
+        ),
+    },
+    # An employee asked HR to cancel an approved request (core.services.cancellation_requests).
+    "cancellation.requested": {
+        "title": ("Cancellation requested: {request_type}", "طلب إلغاء: {request_type}"),
+        "message": (
+            "{employee_name} asked to cancel approved request #{request_id}. Review the reason, then confirm or decline.",
+            "طلب {employee_name} إلغاء الطلب المعتمد رقم {request_id}. راجِع السبب ثم أكِّد الإلغاء أو ارفضه.",
+        ),
+    },
+    "cancellation.confirmed": {
+        "title": ("Cancellation confirmed: {request_type}", "تم تأكيد الإلغاء: {request_type}"),
+        "message": (
+            "HR confirmed your cancellation request. Request #{request_id} is now cancelled. Note: {note}",
+            "أكّدت الموارد البشرية طلب الإلغاء. الطلب رقم {request_id} أصبح ملغى. ملاحظة: {note}",
+        ),
+    },
+    "cancellation.declined": {
+        "title": ("Cancellation declined: {request_type}", "تم رفض طلب الإلغاء: {request_type}"),
+        "message": (
+            "HR declined your cancellation request. Request #{request_id} stays approved. Note: {note}",
+            "رفضت الموارد البشرية طلب الإلغاء. الطلب رقم {request_id} يبقى معتمداً. ملاحظة: {note}",
+        ),
+    },
     "leave.delegation_assigned": {
         "title": ("Alternative employee assigned", "تم تعيينك موظفاً بديلاً"),
         "message": (
@@ -544,6 +599,15 @@ MESSAGES: dict[str, dict[str, tuple[str, str]]] = {
             "termination decision before {deadline}, or the contract will be renewed automatically.",
             "ينتهي عقد {employee_name} في {date} (الأيام المتبقية: {days_left}). يرجى تقديم قرار التجديد أو "
             "الإنهاء قبل {deadline}، وإلا سيتم تجديد العقد تلقائياً.",
+        ),
+    },
+    "contract.executive_expiry_notice": {
+        "title": ("Contract expiry notice: {employee_name}", "إشعار انتهاء العقد: {employee_name}"),
+        "message": (
+            "For your information: {employee_name}'s contract expires on {date} ({days_left} days remaining). "
+            "No contract rating or decision applies; the contract dates are kept on the employee profile.",
+            "للعلم: ينتهي عقد {employee_name} في {date} (الأيام المتبقية: {days_left}). "
+            "لا ينطبق تقييم أو قرار عقد؛ تُحفظ تواريخ العقد في ملف الموظف.",
         ),
     },
     "contract.ceo_pending": {

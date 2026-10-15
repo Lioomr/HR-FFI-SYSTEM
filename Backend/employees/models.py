@@ -4,7 +4,6 @@ from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils.translation import gettext_lazy as _
-
 from hr_reference.models import Department, Position, Sponsor, TaskGroup
 from organization.models import OrganizationNode
 
@@ -123,6 +122,8 @@ class EmployeeProfile(models.Model):
     contract_expiry = models.DateField(null=True, blank=True)
     contract_expiry_raw = models.CharField(max_length=50, blank=True, null=True)
     allowed_overtime = models.IntegerField(null=True, blank=True)
+    deduct_gosi_from_employee = models.BooleanField(default=False)
+    payroll_config_revision = models.PositiveIntegerField(default=0)
 
     health_card = models.CharField(max_length=100, blank=True)
     health_card_expiry = models.DateField(null=True, blank=True)
@@ -289,9 +290,7 @@ class EmployeeProfile(models.Model):
         # manager check depends on must not be blocked by a stale manager link,
         # e.g. contract renewals or invite acceptance.
         validate_manager = (
-            creating
-            or update_fields is None
-            or bool(self.MANAGER_VALIDATION_FIELDS & set(update_fields))
+            creating or update_fields is None or bool(self.MANAGER_VALIDATION_FIELDS & set(update_fields))
         )
         self.clean(validate_manager=validate_manager)
         super().save(*args, **kwargs)

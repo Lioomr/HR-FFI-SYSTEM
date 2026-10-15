@@ -12,6 +12,11 @@ COPY . /app
 ARG VITE_API_BASE_URL=
 ENV VITE_API_BASE_URL=${VITE_API_BASE_URL}
 
+# Payroll rebuild screens. Empty (off) unless a compose file passes "1"; only
+# docker-compose.dev.yml does, so production builds keep the legacy pages.
+ARG VITE_PAYROLL_REBUILD=
+ENV VITE_PAYROLL_REBUILD=${VITE_PAYROLL_REBUILD}
+
 RUN npm run build && node scripts/precompress.mjs
 
 FROM nginx:1.27-alpine

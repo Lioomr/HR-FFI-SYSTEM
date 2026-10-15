@@ -1,18 +1,18 @@
 from datetime import date, timedelta
 
+from assets.models import Asset, AssetAssignment
+from core.models import DelegationRule, RequestObligation, WorkflowDefinition, WorkflowInstance
+from core.services import BUSINESS_TRIP_CODE, sync_leave_obligations
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.contrib.contenttypes.models import ContentType
 from django.test import TestCase
 from django.utils import timezone
-
-from assets.models import Asset, AssetAssignment
-from core.models import DelegationRule, RequestObligation, WorkflowDefinition, WorkflowInstance
-from core.services import BUSINESS_TRIP_CODE, sync_leave_obligations
 from employees.models import EmployeeProfile
-from leaves.models import LeaveRequest, LeaveType
-from leaves.services import apply_hr_cancellation
 from organization.models import OrganizationNode, OrganizationScope, OrganizationScopeMembership
+
+from leaves.models import LeaveRequest, LeaveType
+from leaves.services import apply_hr_cancellation, apply_requester_cancellation
 
 User = get_user_model()
 
@@ -227,6 +227,35 @@ class BusinessTripObligationsTests(TestCase):
         self.assertFalse(trip_delegation.is_active)
         self.assertIsNotNone(trip_delegation.revoked_at)
         self.assertEqual(trip_delegation.revoked_by, hr_user)
+        self.assertFalse(
+            RequestObligation.objects.filter(
+                parent_object_id=leave_request.pk, status=RequestObligation.Status.OPEN
+            ).exists()
+        )
+
+    def test_employee_cancellation_closes_obligations_and_ends_trip_delegation(self):
+        leave_request = self._leave(delegated_to=self.delegate, status=LeaveRequest.RequestStatus.PENDING_CEO)
+        sync_leave_obligations(leave_request, actor=self.employee)
+        RequestObligation.objects.create(
+            company=self.company,
+            parent_content_type=ContentType.objects.get_for_model(LeaveRequest),
+            parent_object_id=leave_request.pk,
+            type=RequestObligation.ObligationType.ASSET_RETURN,
+            severity=RequestObligation.Severity.BLOCKING,
+            title="Return laptop",
+        )
+        self.assertTrue(
+            DelegationRule.objects.filter(from_user=self.employee, to_user=self.delegate, is_active=True).exists()
+        )
+
+        apply_requester_cancellation(leave_request, actor=self.employee)
+
+        leave_request.refresh_from_db()
+        self.assertEqual(leave_request.status, LeaveRequest.RequestStatus.CANCELLED)
+        trip_delegation = DelegationRule.objects.get(from_user=self.employee, to_user=self.delegate)
+        self.assertFalse(trip_delegation.is_active)
+        self.assertIsNotNone(trip_delegation.revoked_at)
+        self.assertEqual(trip_delegation.revoked_by, self.employee)
         self.assertFalse(
             RequestObligation.objects.filter(
                 parent_object_id=leave_request.pk, status=RequestObligation.Status.OPEN

@@ -1,6 +1,7 @@
 import BackButton from "../../../components/ui/BackButton";
-import { useCallback, useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
+import dayjs from "dayjs";
 import {
   Button,
   Card,
@@ -23,7 +24,11 @@ import { useI18n } from "../../../i18n/useI18n";
 import {
   getLeaveTypes,
   createLeaveRequest,
+  editLeaveRequest,
+  getLeaveRequest,
   getMyLeaveBalance,
+  type EditLeaveRequestPayload,
+  type LeaveRequest,
   type LeaveType,
   type LeaveBalance,
 } from "../../../services/api/leaveApi";
@@ -34,6 +39,7 @@ import {
 } from "../../../services/api/employeesApi";
 import { isApiError } from "../../../services/api/apiTypes";
 import { getDetailedHttpErrorMessage } from "../../../services/api/userErrorMessages";
+import { getHttpStatus } from "../../../services/api/httpErrors";
 import {
   annualLeaveDaysIssueMessage,
   getLeavePageLoadErrorMessage,
@@ -66,10 +72,48 @@ export function LeaveSubmissionError({ message }: { message: string | null }) {
   );
 }
 
-export default function RequestLeavePage() {
+/** Form fields a server validation error can be attached to in edit mode. */
+const EDITABLE_FORM_FIELDS = [
+  "leave_type",
+  "reason",
+  "will_travel",
+  "will_require_visa",
+  "other_leave_description",
+  "date_of_rejoin",
+  "po_box",
+  "full_address",
+  "airplane_ticket_payer",
+  "airplane_ticket_address",
+  "delegation_note",
+  "document",
+];
+
+/**
+ * Create form, also used (mode="edit") to edit the signed-in employee's own
+ * request until it reaches HR. The server decides editability (`can_edit`).
+ */
+export default function RequestLeavePage({
+  mode = "create",
+}: {
+  mode?: "create" | "edit";
+}) {
+  const isEdit = mode === "edit";
+  const { id: requestId = "" } = useParams();
   const navigate = useNavigate();
   const { t } = useI18n();
   const [form] = Form.useForm();
+  const [editRequest, setEditRequest] = useState<LeaveRequest | null>(null);
+  const [notEditableMessage, setNotEditableMessage] = useState<string | null>(
+    null,
+  );
+  // The request's own whole days are already reserved in `pending_days`; give
+  // them back to the balance while it is being edited.
+  const ownReservation = useRef<{ leaveTypeId: number; days: number } | null>(
+    null,
+  );
+  const submitInFlight = useRef(false);
+  const detailsPath = `/employee/leave/requests/${requestId}`;
+  const backPath = isEdit ? detailsPath : "/employee/leave/requests";
 
   // Translate leave type names coming from the API
   const translateLeaveType = (name?: string): string => {
@@ -143,6 +187,18 @@ export default function RequestLeavePage() {
       (balanceRes.data || []).forEach((b) => {
         map[b.leave_type_id] = b;
       });
+      const own = ownReservation.current;
+      const ownBalance = own ? map[own.leaveTypeId] : undefined;
+      if (own && ownBalance?.requestable_days !== undefined) {
+        map[own.leaveTypeId] = {
+          ...ownBalance,
+          requestable_days: Number(ownBalance.requestable_days || 0) + own.days,
+          pending_days: Math.max(
+            0,
+            Number(ownBalance.pending_days || 0) - own.days,
+          ),
+        };
+      }
       setBalances(map);
     }
   }, []);
@@ -152,8 +208,39 @@ export default function RequestLeavePage() {
       setLoading(true);
       try {
         const typesRes = await getLeaveTypes();
+        const types = !isApiError(typesRes) ? typesRes.data || [] : [];
         if (!isApiError(typesRes)) {
-          setLeaveTypes(typesRes.data || []);
+          setLeaveTypes(types);
+        }
+
+        if (isEdit) {
+          const requestRes = await getLeaveRequest(requestId);
+          if (isApiError(requestRes)) throw new Error(requestRes.message);
+          const current = requestRes.data;
+          setEditRequest(current);
+          if (current.workflow?.can_edit !== true) {
+            setNotEditableMessage(t("requests.edit.notEditable"));
+          }
+          const typeCode = (
+            types.find((item) => item.id === current.leave_type?.id)?.code ||
+            current.leave_type?.code ||
+            ""
+          ).toUpperCase();
+          setIsOtherSelected(typeCode === "OTHER");
+          setIsSickSelected(["SICK", "SICK_LEAVE"].includes(typeCode));
+          if (isAnnualLeaveCode(typeCode)) {
+            ownReservation.current = {
+              leaveTypeId: current.leave_type.id,
+              days: Number(current.days || 0),
+            };
+          }
+          setDaysCount(
+            Math.max(
+              0,
+              dayjs(current.end_date).diff(dayjs(current.start_date), "day") +
+                1,
+            ),
+          );
         }
 
         await loadBalances();
@@ -161,16 +248,21 @@ export default function RequestLeavePage() {
         const profileRes = await getEmployee("me");
         if (isApiError(profileRes)) throw new Error(profileRes.message);
         setIsSaudi(isSaudiEmployee(profileRes.data));
-        try {
-          const employeesRes = await listDelegationCandidates();
-          if (isApiError(employeesRes)) {
+        // Edit mode never changes the alternative employee, so the candidate
+        // list is not needed.
+        if (!isEdit)
+          try {
+            const employeesRes = await listDelegationCandidates();
+            if (isApiError(employeesRes)) {
+              notification.warning({
+                message: t("leave.alternatesUnavailable"),
+              });
+            } else {
+              setDelegationCandidates(employeesRes.data || []);
+            }
+          } catch {
             notification.warning({ message: t("leave.alternatesUnavailable") });
-          } else {
-            setDelegationCandidates(employeesRes.data || []);
           }
-        } catch {
-          notification.warning({ message: t("leave.alternatesUnavailable") });
-        }
       } catch (e) {
         console.error(e);
         setSubmitError(getLeavePageLoadErrorMessage(e));
@@ -183,7 +275,32 @@ export default function RequestLeavePage() {
       }
     }
     init();
-  }, [t, loadBalances]);
+  }, [t, loadBalances, isEdit, requestId]);
+
+  // The form mounts only after loading ends, so prefill from an effect.
+  useEffect(() => {
+    if (!isEdit || loading || !editRequest) return;
+    const current = editRequest;
+    form.setFieldsValue({
+      leave_type: current.leave_type?.id,
+      dates: [dayjs(current.start_date), dayjs(current.end_date)],
+      reason: current.reason || "",
+      will_travel: current.will_travel === true,
+      will_require_visa:
+        current.will_require_visa === null
+          ? undefined
+          : current.will_require_visa,
+      other_leave_description: current.other_leave_description || "",
+      date_of_rejoin: current.date_of_rejoin
+        ? dayjs(current.date_of_rejoin)
+        : undefined,
+      po_box: current.po_box || "",
+      full_address: current.full_address || "",
+      airplane_ticket_payer: current.airplane_ticket_payer || undefined,
+      airplane_ticket_address: current.airplane_ticket_address || "",
+      delegation_note: current.delegation_note || "",
+    });
+  }, [isEdit, loading, editRequest, form]);
 
   const handleValuesChange = (changedValues: any, allValues: any) => {
     if (
@@ -236,7 +353,105 @@ export default function RequestLeavePage() {
     }
   };
 
+  const refreshEditedRequest = async () => {
+    try {
+      const res = await getLeaveRequest(requestId);
+      if (isApiError(res)) return;
+      setEditRequest(res.data);
+      if (res.data.workflow?.can_edit !== true) {
+        setNotEditableMessage(t("requests.edit.notEditable"));
+      }
+    } catch {
+      // Keep the current view; the server re-checks on the next save.
+    }
+  };
+
+  const handleEditFinish = async (values: any) => {
+    if (isSaudi === null || submitInFlight.current) return;
+    if (balanceError) {
+      notification.error({
+        message: t("common.error"),
+        description: balanceError,
+      });
+      return;
+    }
+    submitInFlight.current = true;
+    setSubmitting(true);
+    setSubmitError(null);
+    try {
+      const payload: EditLeaveRequestPayload = {
+        leave_type: values.leave_type,
+        start_date: values.dates[0].format("YYYY-MM-DD"),
+        end_date: values.dates[1].format("YYYY-MM-DD"),
+        reason: values.reason || "",
+        will_travel: values.will_travel === true,
+        other_leave_description: values.other_leave_description || "",
+        date_of_rejoin: values.date_of_rejoin
+          ? values.date_of_rejoin.format("YYYY-MM-DD")
+          : null,
+        po_box: values.po_box || "",
+        full_address: values.full_address || "",
+        airplane_ticket_payer: values.airplane_ticket_payer || "",
+        airplane_ticket_address: values.airplane_ticket_address || "",
+        delegation_note: values.delegation_note || "",
+      };
+      if (!isSaudi && values.will_travel === true) {
+        payload.will_require_visa = values.will_require_visa === true;
+      }
+      const file = ((values.document || []) as UploadFile[])[0]?.originFileObj;
+      if (file) payload.document = file;
+
+      const response = await editLeaveRequest(requestId, payload);
+      if (isApiError(response)) {
+        throw { response: { status: 422, data: response }, apiData: response };
+      }
+      notification.success({ message: t("requests.edit.success") });
+      navigate(detailsPath);
+    } catch (err: any) {
+      const status = getHttpStatus(err);
+      const validationErrors = getLeaveValidationErrors(err);
+      // Only errors tied to an editable form field count as validation
+      // errors; anything else (including a "no longer editable" message that
+      // happens to contain a colon) is the not-editable case.
+      const fieldErrors = validationErrors.filter(
+        ({ field }) =>
+          field === "start_date" ||
+          field === "end_date" ||
+          (field !== undefined && EDITABLE_FORM_FIELDS.includes(field)),
+      );
+      let description = getDetailedHttpErrorMessage(t, err);
+      if (status === 422 && fieldErrors.length === 0) {
+        // Not editable in this status: show the server's message, then
+        // refresh because the request moved on.
+        description =
+          err?.response?.data?.message || t("requests.edit.notEditable");
+        setNotEditableMessage(description);
+        await refreshEditedRequest();
+      } else if (validationErrors.length > 0) {
+        description = validationErrors.map(({ message }) => message).join(", ");
+        form.setFields(
+          fieldErrors.flatMap(({ field, message }) => {
+            if (field === "start_date" || field === "end_date")
+              return [{ name: "dates", errors: [message] }];
+            return EDITABLE_FORM_FIELDS.includes(field as string)
+              ? [{ name: field as string, errors: [message] }]
+              : [];
+          }),
+        );
+      } else if (status === 404) {
+        description = t("requests.edit.notEditable");
+      }
+      setSubmitError(description);
+      notification.error({ message: t("requests.edit.failed"), description });
+      await loadBalances();
+    } finally {
+      submitInFlight.current = false;
+      setSubmitting(false);
+    }
+  };
+
   const handleFinish = async (values: any) => {
+    if (isEdit) return handleEditFinish(values);
     if (isSaudi === null) return;
     if (balanceError) {
       notification.error({
@@ -325,14 +540,16 @@ export default function RequestLeavePage() {
   return (
     <div style={{ maxWidth: 600, margin: "0 auto" }}>
       <PageHeader
-        title={t("leave.requestTitle")}
-        subtitle={t("leave.requestSubtitle")}
+        title={isEdit ? t("leave.edit.title") : t("leave.requestTitle")}
+        subtitle={isEdit ? t("requests.edit.hint") : t("leave.requestSubtitle")}
         actions={
           <BackButton
-            onClick={() => navigate("/employee/leave/requests")}
+            onClick={() => navigate(backPath)}
             style={{ borderRadius: 10, minHeight: 40 }}
           >
-            {t("leave.backToRequests")}
+            {isEdit
+              ? t("requests.edit.backToDetails")
+              : t("leave.backToRequests")}
           </BackButton>
         }
       />
@@ -342,6 +559,15 @@ export default function RequestLeavePage() {
           <Alert
             type="error"
             message={balanceError}
+            showIcon
+            style={{ marginBottom: 24 }}
+          />
+        )}
+
+        {isEdit && (
+          <Alert
+            type={notEditableMessage ? "warning" : "info"}
+            title={notEditableMessage || t("requests.edit.hint")}
             showIcon
             style={{ marginBottom: 24 }}
           />
@@ -476,10 +702,16 @@ export default function RequestLeavePage() {
             getValueFromEvent={(e) =>
               Array.isArray(e) ? e : e?.fileList || []
             }
+            extra={
+              isEdit && editRequest?.document
+                ? t("leave.edit.keepDocument")
+                : undefined
+            }
             rules={[
               {
                 validator: (_, value: UploadFile[]) => {
                   if (!isSickSelected) return Promise.resolve();
+                  if (isEdit && editRequest?.document) return Promise.resolve();
                   return value && value.length > 0
                     ? Promise.resolve()
                     : Promise.reject(new Error(t("common.required")));
@@ -590,27 +822,40 @@ export default function RequestLeavePage() {
             </Col>
           </Row>
 
-          <Form.Item
-            label={t("leave.delegatedTo")}
-            name="delegated_to"
-            rules={[
-              {
-                required: willTravel === true,
-                message: t("leave.travelDetailRequired"),
-              },
-            ]}
-          >
-            <Select
-              showSearch
-              allowClear
-              optionFilterProp="label"
-              placeholder="-"
-              options={delegationCandidates.map((e) => ({
-                value: e.id,
-                label: formatDelegationCandidateLabel(e),
-              }))}
-            />
-          </Form.Item>
+          {isEdit ? (
+            <Form.Item
+              label={t("leave.delegatedTo")}
+              extra={t("leave.edit.delegateReadonly")}
+            >
+              <Input
+                disabled
+                aria-label={t("leave.delegatedTo")}
+                value={editRequest?.delegated_to?.full_name || "-"}
+              />
+            </Form.Item>
+          ) : (
+            <Form.Item
+              label={t("leave.delegatedTo")}
+              name="delegated_to"
+              rules={[
+                {
+                  required: willTravel === true,
+                  message: t("leave.travelDetailRequired"),
+                },
+              ]}
+            >
+              <Select
+                showSearch
+                allowClear
+                optionFilterProp="label"
+                placeholder="-"
+                options={delegationCandidates.map((e) => ({
+                  value: e.id,
+                  label: formatDelegationCandidateLabel(e),
+                }))}
+              />
+            </Form.Item>
+          )}
 
           <Form.Item
             label={t("leave.delegationNote")}
@@ -629,13 +874,18 @@ export default function RequestLeavePage() {
           <Button
             type="primary"
             htmlType="submit"
-            icon={<SendOutlined />}
+            icon={<SendOutlined aria-hidden />}
             block
             size="large"
             loading={submitting}
-            disabled={!!balanceError || isSaudi === null}
+            disabled={
+              !!balanceError ||
+              isSaudi === null ||
+              (isEdit &&
+                (!editRequest || editRequest.workflow?.can_edit !== true))
+            }
           >
-            {t("leave.submitRequest")}
+            {isEdit ? t("requests.edit.save") : t("leave.submitRequest")}
           </Button>
         </Form>
       </Card>

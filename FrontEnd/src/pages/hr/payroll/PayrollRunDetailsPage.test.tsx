@@ -27,33 +27,35 @@ import type {
   PayrollRun,
   PayrollRunSummary,
 } from "../../../services/api/payrollApi";
+import type { FinalizeResult } from "../../../services/api/payrollTypes";
 import { useI18nStore } from "../../../i18n/i18nStore";
 import { resolveTranslation } from "../../../i18n/translate";
 
 const en = (key: string) => resolveTranslation("en", key);
 
-const run = (status: string): PayrollRun => ({
-  id: 5,
-  year: 2026,
-  month: 9,
-  status,
-  total_net: 1000,
-  total_employees: 1,
-});
+const run = (status: string): PayrollRun =>
+  ({
+    id: 5,
+    year: 2026,
+    month: 9,
+    status,
+    total_net: "1000.00",
+    total_employees: 1,
+  }) as unknown as PayrollRun;
 
-const summary: PayrollRunSummary = {
+const summary = {
   run_id: 5,
   year: 2026,
   month: 9,
   total_employees: 1,
   employees_with_deductions: 1,
-  total_basic_salary: 1000,
-  total_allowances: 0,
-  total_gross_salary: 1000,
-  total_deductions: 5,
-  total_net_salary: 995,
-  average_net_salary: 995,
-};
+  total_basic_salary: "1000.00",
+  total_allowances: "0.00",
+  total_gross_salary: "1000.00",
+  total_deductions: "5.00",
+  total_net_salary: "995.00",
+  average_net_salary: "995.00",
+} as unknown as PayrollRunSummary;
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -71,7 +73,7 @@ beforeEach(() => {
   });
   vi.mocked(finalizePayrollRun).mockResolvedValue({
     status: "success",
-    data: { message: "Payroll run finalized." } as unknown as PayrollRun,
+    data: { message: "Payroll run finalized." } as unknown as FinalizeResult,
   });
 });
 

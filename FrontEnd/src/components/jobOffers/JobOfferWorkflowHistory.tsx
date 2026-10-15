@@ -16,6 +16,14 @@ function actorName(actor: JobOfferWorkflowActor | null | undefined): string {
   return (actor.full_name || actor.email || "").trim();
 }
 
+// Recorded actions that read as "<verb> by <name>"; others keep "Handled by".
+const ACTION_VERBS: Partial<Record<string, ApprovalFlowStage["actorVerb"]>> = {
+  submit: "submitted",
+  approve: "approved",
+  reject: "rejected",
+  cancel: "cancelled",
+};
+
 function getState(action: string): ApprovalFlowStage["state"] {
   if (action === "reject") return "rejected";
   if (action === "cancel") return "cancelled";
@@ -44,9 +52,10 @@ export default function JobOfferWorkflowHistory({
   const stages: ApprovalFlowStage[] = entries.map((entry, index) => {
     const role = entry.approver_role || entry.stage || entry.to_stage;
     const who = actorName(entry.actor);
+    const actorVerb = ACTION_VERBS[entry.action];
     const details = [
       role ? t(`workflow.role.${role}`, role.toUpperCase()) : "",
-      who ? t("workflow.handledBy", { name: who }) : "",
+      who && !actorVerb ? t("workflow.handledBy", { name: who }) : "",
     ].filter(Boolean);
 
     return {
@@ -54,6 +63,8 @@ export default function JobOfferWorkflowHistory({
       title: t(`jobOffers.workflow.action.${entry.action}`, entry.action),
       state: getState(entry.action),
       detail: details.join(" · ") || undefined,
+      actor: actorVerb ? entry.actor : null,
+      actorVerb,
       note: entry.note || t("workflow.noUpdate", "No update yet"),
       at: entry.at,
     };

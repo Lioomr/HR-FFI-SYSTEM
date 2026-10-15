@@ -1,7 +1,15 @@
 import BackButton from "../../components/ui/BackButton";
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { Alert, Descriptions, Modal, Typography, message } from "antd";
+import {
+  Alert,
+  Col,
+  Descriptions,
+  Modal,
+  Row,
+  Typography,
+  message,
+} from "antd";
 
 import PageHeader from "../../components/ui/PageHeader";
 import LoadingState from "../../components/ui/LoadingState";
@@ -192,7 +200,7 @@ export default function CEOEmployeeDeletionDetailPage() {
     typeof execution.loan_requests === "number";
 
   return (
-    <div style={{ maxWidth: 1040, margin: "0 auto", paddingBottom: 24 }}>
+    <div style={{ maxWidth: 1400, margin: "0 auto", paddingBottom: 24 }}>
       <PageHeader
         title={t("employees.removalDetail.title")}
         subtitle={displayName}
@@ -252,61 +260,78 @@ export default function CEOEmployeeDeletionDetailPage() {
         />
       )}
 
-      <ApprovalSurface padding={18} style={{ marginBottom: 16 }}>
-        <SectionTitle>
-          {t("employees.removalDetail.employeeSection")}
-        </SectionTitle>
-        <Descriptions column={{ xs: 1, sm: 1, md: 2 }} size="small" bordered>
-          <Descriptions.Item label={t("permissionRequests.list.reference")}>
-            {data.reference_no || `#${data.id}`}
-          </Descriptions.Item>
-          <Descriptions.Item label={t("employees.removalDetail.fullName")}>
-            {displayName}
-          </Descriptions.Item>
-          <Descriptions.Item label={t("employees.removalDetail.employeeId")}>
-            {snapshot.employee_id || "—"}
-          </Descriptions.Item>
-          <Descriptions.Item label={t("employees.removalDetail.email")}>
-            {snapshot.email || snapshot.target_user_email || "—"}
-          </Descriptions.Item>
-          <Descriptions.Item label={t("employees.removalDetail.company")}>
-            {data.company_name || snapshot.company_name || "—"}
-          </Descriptions.Item>
-          <Descriptions.Item label={t("employees.removalDetail.department")}>
-            {snapshot.department_name || "—"}
-          </Descriptions.Item>
-          <Descriptions.Item label={t("employees.removalDetail.position")}>
-            {snapshot.position_name || "—"}
-          </Descriptions.Item>
-          <Descriptions.Item
-            label={t("employees.removalDetail.employmentStatus")}
-          >
-            {snapshot.employment_status || "—"}
-          </Descriptions.Item>
-        </Descriptions>
-      </ApprovalSurface>
-
-      <ApprovalSurface padding={18} style={{ marginBottom: 16 }}>
-        <SectionTitle>
-          {t("employees.removalDetail.requestSection")}
-        </SectionTitle>
-        <Descriptions column={1} size="small" bordered>
-          <Descriptions.Item label={t("employees.removalDetail.requestedBy")}>
-            {data.requested_by_name || "—"}
-          </Descriptions.Item>
-          <Descriptions.Item label={t("employees.removalDetail.createdAt")}>
-            {formatDateTimeShort(data.created_at)}
-          </Descriptions.Item>
-          <Descriptions.Item label={t("employees.removal.archiveReasonLabel")}>
-            {t(`employees.removal.archiveReason.${data.archive_reason}`)}
-          </Descriptions.Item>
-          <Descriptions.Item label={t("employees.removalDetail.reason")}>
-            <Paragraph style={{ marginBottom: 0, whiteSpace: "pre-wrap" }}>
-              {data.reason || "—"}
-            </Paragraph>
-          </Descriptions.Item>
-        </Descriptions>
-      </ApprovalSurface>
+      <Row gutter={[18, 16]} align="top" style={{ marginBottom: 16 }}>
+        <Col xs={24} xl={14}>
+          <ApprovalSurface padding={18}>
+            <SectionTitle>
+              {t("employees.removalDetail.employeeSection")}
+            </SectionTitle>
+            <Descriptions
+              column={{ xs: 1, sm: 1, md: 2 }}
+              size="small"
+              bordered
+            >
+              <Descriptions.Item label={t("permissionRequests.list.reference")}>
+                {data.reference_no || `#${data.id}`}
+              </Descriptions.Item>
+              <Descriptions.Item label={t("employees.removalDetail.fullName")}>
+                {displayName}
+              </Descriptions.Item>
+              <Descriptions.Item
+                label={t("employees.removalDetail.employeeId")}
+              >
+                {snapshot.employee_id || "—"}
+              </Descriptions.Item>
+              <Descriptions.Item label={t("employees.removalDetail.email")}>
+                {snapshot.email || snapshot.target_user_email || "—"}
+              </Descriptions.Item>
+              <Descriptions.Item label={t("employees.removalDetail.company")}>
+                {data.company_name || snapshot.company_name || "—"}
+              </Descriptions.Item>
+              <Descriptions.Item
+                label={t("employees.removalDetail.department")}
+              >
+                {snapshot.department_name || "—"}
+              </Descriptions.Item>
+              <Descriptions.Item label={t("employees.removalDetail.position")}>
+                {snapshot.position_name || "—"}
+              </Descriptions.Item>
+              <Descriptions.Item
+                label={t("employees.removalDetail.employmentStatus")}
+              >
+                {snapshot.employment_status || "—"}
+              </Descriptions.Item>
+            </Descriptions>
+          </ApprovalSurface>
+        </Col>
+        <Col xs={24} xl={10}>
+          <ApprovalSurface padding={18}>
+            <SectionTitle>
+              {t("employees.removalDetail.requestSection")}
+            </SectionTitle>
+            <Descriptions column={1} size="small" bordered>
+              <Descriptions.Item
+                label={t("employees.removalDetail.requestedBy")}
+              >
+                {data.requested_by_name || "—"}
+              </Descriptions.Item>
+              <Descriptions.Item label={t("employees.removalDetail.createdAt")}>
+                {formatDateTimeShort(data.created_at)}
+              </Descriptions.Item>
+              <Descriptions.Item
+                label={t("employees.removal.archiveReasonLabel")}
+              >
+                {t(`employees.removal.archiveReason.${data.archive_reason}`)}
+              </Descriptions.Item>
+              <Descriptions.Item label={t("employees.removalDetail.reason")}>
+                <Paragraph style={{ marginBottom: 0, whiteSpace: "pre-wrap" }}>
+                  {data.reason || "—"}
+                </Paragraph>
+              </Descriptions.Item>
+            </Descriptions>
+          </ApprovalSurface>
+        </Col>
+      </Row>
 
       {hasLinkedRecords && (
         <ApprovalSurface padding={18}>

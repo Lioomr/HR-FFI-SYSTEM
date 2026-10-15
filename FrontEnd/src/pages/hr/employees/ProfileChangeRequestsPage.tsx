@@ -32,7 +32,7 @@ import {
 import PageHeader from "../../../components/ui/PageHeader";
 import ResponsiveTable from "../../../components/ui/ResponsiveTable";
 import { useFilePreview } from "../../../components/ui/useFilePreview";
-import ApprovalTimeline from "../../../components/requests/ApprovalTimeline";
+import WorkflowApprovalMap from "../../../components/requests/WorkflowApprovalMap";
 import PendingActionBanner from "../../../components/requests/PendingActionBanner";
 import {
   decideProfileChangeRequest,
@@ -754,7 +754,12 @@ export default function ProfileChangeRequestsPage() {
                 {selected.items.map((item) => fieldCard(selected, item))}
               </Space>
             </div>
-            <ApprovalTimeline workflow={selected.workflow} />
+            <WorkflowApprovalMap
+              workflow={selected.workflow}
+              // Profile changes are decided by HR alone.
+              reviewStages={["hr"]}
+              title={t("profileChange.approvalTrail")}
+            />
           </Space>
         ) : null}
       </Drawer>

@@ -10,6 +10,7 @@ import { MemoryRouter, Route, Routes } from "react-router-dom";
 
 vi.mock("../../../services/api/leaveApi", () => ({
   getLeaveRequest: vi.fn(),
+  cancelLeaveRequest: vi.fn(),
   getLeaveRequestDocumentBlob: vi.fn(),
   getLeaveRequestPdfBlob: vi.fn(),
   approveDelegatedLeaveRequest: vi.fn(),
@@ -139,5 +140,71 @@ describe("EmployeeLeaveRequestDetailsPage", () => {
     expect(mocked.getLeaveRequestDocumentBlob).toHaveBeenCalledWith(5, false);
     expect(openSpy).not.toHaveBeenCalled();
     openSpy.mockRestore();
+  });
+});
+
+describe("employee leave cancellation", () => {
+  it("cancels by workflow flag and reloads the detail with recorded history", async () => {
+    const pending = {
+      ...request,
+      workflow: { ...request.workflow, can_cancel: true },
+    };
+    const cancelled = {
+      ...pending,
+      status: "cancelled",
+      workflow: {
+        status: "cancelled",
+        can_cancel: false,
+        history: [
+          {
+            id: 10,
+            action: "cancel",
+            actor: { id: 7, full_name: "Sara Ahmed" },
+            at: "2026-10-13T08:00:00Z",
+          },
+        ],
+      },
+    };
+    mocked.getLeaveRequest
+      .mockResolvedValueOnce(ok(pending))
+      .mockResolvedValue(ok(cancelled));
+    mocked.cancelLeaveRequest.mockResolvedValue(ok(cancelled));
+    renderPage("/employee/leave/requests/5");
+    const cancelButton = await screen.findByRole("button", {
+      name: "Cancel request",
+    });
+    expect(cancelButton).toHaveTextContent("Cancel request");
+    expect(cancelButton).not.toHaveClass("ant-btn-icon-only");
+    fireEvent.click(cancelButton);
+    expect(mocked.cancelLeaveRequest).not.toHaveBeenCalled();
+    fireEvent.click(
+      within(await screen.findByRole("dialog")).getByRole("button", {
+        name: "Cancel request",
+      }),
+    );
+    await waitFor(() =>
+      expect(mocked.getLeaveRequest).toHaveBeenCalledTimes(2),
+    );
+    expect(mocked.cancelLeaveRequest).toHaveBeenCalledWith(5);
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("button", { name: "Cancel request" }),
+      ).not.toBeInTheDocument(),
+    );
+    expect(await screen.findByText("Sara Ahmed")).toBeInTheDocument();
+  });
+  it("hides cancellation on approved requests without permission", async () => {
+    mocked.getLeaveRequest.mockResolvedValue(
+      ok({
+        ...request,
+        status: "approved",
+        workflow: { ...request.workflow, can_cancel: false },
+      }),
+    );
+    renderPage("/employee/leave/requests/5");
+    await screen.findByText("Family trip");
+    expect(
+      screen.queryByRole("button", { name: "Cancel request" }),
+    ).not.toBeInTheDocument();
   });
 });

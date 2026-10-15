@@ -138,10 +138,11 @@ describe("permission request approval trail", () => {
     fireEvent.click(
       await screen.findByRole("button", { name: "Show details" }),
     );
+    // Skipped stages fold into one muted "Skipped" row with no note.
     expect(await screen.findByText("Skipped")).toBeInTheDocument();
     expect(
-      screen.getByText("Not required for this employee"),
-    ).toBeInTheDocument();
+      screen.queryByText("Not required for this employee"),
+    ).not.toBeInTheDocument();
     expect(screen.getByText("Pending HR")).toBeInTheDocument();
   });
 
@@ -175,7 +176,8 @@ describe("permission request approval trail", () => {
     fireEvent.click(
       await screen.findByRole("button", { name: "Show details" }),
     );
-    expect(screen.getByText("HR Reviewer")).toBeInTheDocument();
+    // The trail names who decided each stage.
+    expect(screen.getByText("Approved by HR Reviewer")).toBeInTheDocument();
     expect(screen.getByText(/Approved for appointment/)).toBeInTheDocument();
     expect(screen.getByText(/2026-09-12 17:00/)).toBeInTheDocument();
   });
@@ -252,6 +254,57 @@ describe("sticky decision bar", () => {
     expect(
       screen.queryByPlaceholderText("Optional decision comment"),
     ).not.toBeInTheDocument();
+  });
+});
+
+describe("permission detail edit entry", () => {
+  it("hides Edit unless the server flag is true, keeping Cancel", async () => {
+    render(<PermissionRequestDetailPage role="employee" />);
+    const bar = await screen.findByRole("region", { name: "Decision actions" });
+    expect(
+      within(bar).getByRole("button", { name: "Cancel request" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Edit request" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("shows Edit beside Cancel, navigates, and renders recorded edits", async () => {
+    vi.mocked(permissionApi.getPermissionRequest).mockResolvedValue(
+      response({
+        workflow: {
+          ...base.workflow,
+          can_edit: true,
+          history: [
+            ...base.workflow.history,
+            {
+              id: 11,
+              action: "edit",
+              stage: "",
+              actor: {
+                id: 2,
+                email: "employee@test",
+                full_name: "Employee One",
+              },
+              at: "2026-09-12T13:00:00Z",
+              note: "reason",
+              from_status: "pending_manager",
+              to_status: "pending_manager",
+            },
+          ],
+        },
+      }),
+    );
+    render(<PermissionRequestDetailPage role="employee" />);
+    const bar = await screen.findByRole("region", { name: "Decision actions" });
+    expect(
+      within(bar).getByRole("button", { name: "Cancel request" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/Edited by Employee One/)).toBeInTheDocument();
+    fireEvent.click(within(bar).getByRole("button", { name: "Edit request" }));
+    expect(navigate).toHaveBeenCalledWith(
+      "/employee/permission-requests/1/edit",
+    );
   });
 });
 

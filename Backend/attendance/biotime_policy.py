@@ -14,15 +14,20 @@ no ``is_active`` column of its own; ``BioTimeEmployeeMap.clean()`` already
 refuses to save a mapping that fails those two conditions, so re-checking them
 here keeps read paths correct for rows that drifted (an employee archived after
 being mapped, or a company deactivated).
+
+A mapping also carries ``attendance_start_date``: absences and penalties are
+only raised from that day on, never for the period before the employee was
+registered on a device.
 """
 
 from __future__ import annotations
 
 import re
 
-from rest_framework import status
-
+from core.executives import is_executive_profile
 from core.responses import error
+from django.db.models import Q
+from rest_framework import status
 
 from .models import BioTimeEmployeeMap
 
@@ -56,9 +61,37 @@ def active_biotime_mappings():
     )
 
 
-def mapped_employee_profile_ids():
-    """Profile ids with an active BioTime mapping (as a subquery-friendly queryset)."""
-    return active_biotime_mappings().values("employee_profile_id")
+def mapped_employee_profile_ids(on_date=None):
+    """Profile ids with an active BioTime mapping (as a subquery-friendly queryset).
+
+    With ``on_date``, only mappings whose ``attendance_start_date`` is empty or
+    on/before that day count: days before an employee was mapped are never
+    attendance-enforced.
+    """
+    mappings = active_biotime_mappings()
+    if on_date is not None:
+        mappings = mappings.filter(Q(attendance_start_date__isnull=True) | Q(attendance_start_date__lte=on_date))
+    return mappings.values("employee_profile_id")
+
+
+def attendance_enforced_from(profile):
+    """``(mapped, start_date)`` for ``profile``'s active mapping.
+
+    ``mapped`` is False without an active mapping. ``start_date`` is None when
+    the mapping carries no start restriction.
+    """
+    if profile is None or not getattr(profile, "pk", None):
+        return False, None
+    row = active_biotime_mappings().filter(employee_profile_id=profile.pk).values("attendance_start_date").first()
+    if row is None:
+        return False, None
+    return True, row["attendance_start_date"]
+
+
+def is_attendance_enforced_on(profile, day) -> bool:
+    """True when ``profile`` is BioTime-mapped and ``day`` is on/after its mapping start."""
+    mapped, start = attendance_enforced_from(profile)
+    return mapped and (start is None or day >= start)
 
 
 def has_active_biotime_mapping(profile) -> bool:
@@ -76,7 +109,7 @@ def is_attendance_exempt(profile) -> bool:
     """
     if profile is None:
         return False
-    if bool(getattr(profile, "attendance_exempt", False)):
+    if bool(getattr(profile, "attendance_exempt", False)) or is_executive_profile(profile):
         return True
     user = getattr(profile, "user", None)
     if user and user.groups.filter(name__in=("CEO", "GM", "General Manager")).exists():

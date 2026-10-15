@@ -15,15 +15,12 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date
 
-from django.db import IntegrityError, transaction
-from django.db.models import Q
-from django.utils import timezone
-
 from admin_portal.models import SystemSettings
 from attendance.biotime_policy import is_attendance_exempt
 from attendance.calculation import AttendanceCalculationService
 from attendance.models import AttendanceAdjustment
 from audit.utils import audit
+from core.executives import EXECUTIVE_REQUEST_ERROR, is_executive_profile
 from core.models import WorkflowAction
 from core.responses import error
 from core.services import (
@@ -34,6 +31,9 @@ from core.services import (
 from core.services.request_references import next_reference_for_profile
 from core.services.stage_coverage import manager_covers_hr, record_covered_stage
 from core.services.workflow_engine import begin_recorded_transition, record_workflow_transition
+from django.db import IntegrityError, transaction
+from django.db.models import Q
+from django.utils import timezone
 from employees.models import EmployeeProfile
 from employees.services.manager_relationships import (
     PERMISSION_REQUEST_APPROVAL_CAPABILITY,
@@ -192,16 +192,18 @@ def approved_late_permission_usage(
     return queryset.count()
 
 
-def _assert_no_interval_conflict(*, user, request_date, from_time, to_time) -> None:
-    conflict = PermissionRequest.objects.filter(
+def _assert_no_interval_conflict(*, user, request_date, from_time, to_time, exclude_request_id=None) -> None:
+    conflicts = PermissionRequest.objects.filter(
         employee=user,
         request_date=request_date,
         status__in=ACTIVE_STATUSES,
         permission_type__in=[PermissionRequest.PermissionType.EXIT, PermissionRequest.PermissionType.DURING_SHIFT],
         from_time__lt=to_time,
         to_time__gt=from_time,
-    ).exists()
-    if conflict:
+    )
+    if exclude_request_id is not None:
+        conflicts = conflicts.exclude(pk=exclude_request_id)
+    if conflicts.exists():
         raise PermissionRequestError(INTERVAL_CONFLICT_MESSAGE, field="from_time")
 
 
@@ -259,6 +261,8 @@ def submit_permission_request(*, user, profile: EmployeeProfile, data: dict):
     Ownership and company come from the authenticated profile, never the client.
     """
 
+    if is_executive_profile(profile):
+        raise PermissionRequestError(EXECUTIVE_REQUEST_ERROR, status=403)
     request_date = data["request_date"]
     permission_type = data["permission_type"]
     attempt = 0
@@ -312,14 +316,17 @@ def submit_permission_request(*, user, profile: EmployeeProfile, data: dict):
                 raise
 
 
+_ADJUSTMENT_KIND_BY_TYPE = {
+    PermissionRequest.PermissionType.LATE: AttendanceAdjustment.Kind.LATE_PERMISSION,
+    PermissionRequest.PermissionType.DURING_SHIFT: AttendanceAdjustment.Kind.DURING_SHIFT_PERMISSION,
+    PermissionRequest.PermissionType.EXIT: AttendanceAdjustment.Kind.EXIT_PERMISSION,
+}
+
+
 def _upsert_attendance_adjustment(instance: PermissionRequest, *, actor) -> None:
     """Create one auditable calculation input for a finally approved request."""
 
-    kind_by_type = {
-        PermissionRequest.PermissionType.LATE: AttendanceAdjustment.Kind.LATE_PERMISSION,
-        PermissionRequest.PermissionType.DURING_SHIFT: AttendanceAdjustment.Kind.DURING_SHIFT_PERMISSION,
-        PermissionRequest.PermissionType.EXIT: AttendanceAdjustment.Kind.EXIT_PERMISSION,
-    }
+    kind_by_type = _ADJUSTMENT_KIND_BY_TYPE
     # Late is a durable arrival-excusal marker. Its raw-punch-dependent effect
     # belongs to Backend Agent 3's final enforcement, so this workflow never
     # converts a physical arrival into approved minutes. Exit remains metadata
@@ -342,6 +349,14 @@ def _upsert_attendance_adjustment(instance: PermissionRequest, *, actor) -> None
             "created_by": actor,
         },
     )
+
+
+def _remove_attendance_adjustment(instance: PermissionRequest) -> None:
+    """Withdraw the calculation input an approval created (counterpart of ``_upsert_attendance_adjustment``)."""
+
+    AttendanceAdjustment.objects.filter(
+        kind=_ADJUSTMENT_KIND_BY_TYPE[instance.permission_type], source_key=str(instance.pk)
+    ).delete()
 
 
 def schedule_attendance_recalculation(instance: PermissionRequest) -> None:
@@ -522,6 +537,138 @@ def cancel_permission_request(instance: PermissionRequest, *, actor) -> Transiti
     return Transition(locked, from_status)
 
 
+NOT_HR_CANCELLABLE_MESSAGE = "Only approved permission requests can be cancelled by HR."
+SELF_CANCELLATION_MESSAGE = "Another HR member must cancel your own permission request."
+
+
+def apply_hr_cancellation(instance: PermissionRequest, *, actor, note: str = "") -> Transition:
+    """HR cancels an approved request (the employee's cancellation request, confirmed).
+
+    The attendance adjustment the approval created is removed and the day is
+    recalculated after commit.
+    """
+
+    with transaction.atomic():
+        locked = _lock(instance)
+        if locked.employee_id == actor.pk:
+            raise PermissionRequestError(SELF_CANCELLATION_MESSAGE, status=403)
+        if locked.status != Status.APPROVED:
+            raise PermissionRequestError(NOT_HR_CANCELLABLE_MESSAGE)
+
+        from_status = locked.status
+        start = begin_recorded_transition(locked, actor=actor)
+        locked.status = Status.CANCELLED
+        locked.cancelled_at = timezone.now()
+        locked.save(update_fields=["status", "cancelled_at", "updated_at"])
+        record_workflow_transition(
+            locked, start, action=WorkflowAction.Action.CANCEL, actor=actor, note=note, approver_role="hr"
+        )
+        _remove_attendance_adjustment(locked)
+        schedule_attendance_recalculation(locked)
+    return Transition(locked, from_status)
+
+
+# The requester edits only while the request waits on their manager; ``pending_hr`` is
+# already the HR stage, so from there they cancel and resubmit.
+REQUESTER_EDITABLE_STATUSES = frozenset({Status.PENDING_MANAGER})
+NOT_REQUESTER_EDITOR_MESSAGE = "Only the requester can edit this permission request."
+NOT_REQUESTER_EDITABLE_MESSAGE = (
+    "This permission request can no longer be edited because it has reached HR review or a decision was recorded. "
+    "Cancel it and submit a new request instead."
+)
+#: Stored fields the edit may change, in a stable order for history and audit.
+EDITABLE_FIELDS = ("permission_type", "request_date", "from_time", "to_time", "duration_minutes", "exit_type", "reason")
+
+
+class PermissionEditInvalid(Exception):
+    """The edited request failed the create rules; ``errors`` is the serializer error dict."""
+
+    def __init__(self, errors):
+        super().__init__("Validation error")
+        self.errors = errors
+
+
+@dataclass(frozen=True)
+class EditResult:
+    instance: PermissionRequest
+    from_status: str
+    changed_fields: tuple[str, ...]
+    attachment_count: int = 0
+
+
+def requester_edit_refusal(instance: PermissionRequest) -> str | None:
+    """Why the requester can no longer edit ``instance``, or ``None`` while they still can."""
+
+    if instance.status not in REQUESTER_EDITABLE_STATUSES or instance.manager_decision_at or instance.hr_decision_at:
+        return NOT_REQUESTER_EDITABLE_MESSAGE
+    return None
+
+
+def edit_permission_request(instance: PermissionRequest, *, actor, validate) -> EditResult:
+    """The requester changes their own request while it waits on the manager.
+
+    ``validate(locked)`` re-runs the create rules on the merged request and returns
+    the validated changes, or raises ``PermissionEditInvalid``. Conflicts and the
+    Late Permission rules are re-checked under the employee lock, excluding this
+    request. Pending requests have no attendance adjustment yet, so none is touched.
+    """
+
+    with transaction.atomic():
+        locked = _lock(instance)
+        if locked.employee_id != actor.pk:
+            raise PermissionRequestError(NOT_REQUESTER_EDITOR_MESSAGE, status=403)
+        refusal = requester_edit_refusal(locked)
+        if refusal:
+            raise PermissionRequestError(refusal)
+
+        changes = validate(locked)
+        attachments = changes.pop("attachments", [])
+        attachment_metadata = changes.pop("attachment_metadata", [])
+        # Serialize with concurrent submissions by the same employee (as at submission).
+        EmployeeProfile.objects.select_for_update().only("pk").get(pk=locked.employee_profile_id)
+        permission_type = changes.get("permission_type", locked.permission_type)
+        request_date = changes.get("request_date", locked.request_date)
+        if permission_type == PermissionRequest.PermissionType.LATE:
+            _assert_late_permission_allowed(
+                profile=locked.employee_profile, request_date=request_date, exclude_request_id=locked.pk
+            )
+        else:
+            _assert_no_interval_conflict(
+                user=locked.employee,
+                request_date=request_date,
+                from_time=changes.get("from_time", locked.from_time),
+                to_time=changes.get("to_time", locked.to_time),
+                exclude_request_id=locked.pk,
+            )
+
+        changed = [name for name in EDITABLE_FIELDS if name in changes and getattr(locked, name) != changes[name]]
+        if not changed and not attachments:
+            return EditResult(locked, locked.status, ())
+
+        from_status = locked.status
+        start = begin_recorded_transition(locked, actor=actor)
+        refusal = requester_edit_refusal(locked)
+        if refusal:
+            raise PermissionRequestError(refusal)
+        for name in changed:
+            setattr(locked, name, changes[name])
+        if changed:
+            locked.save(update_fields=[*changed, "updated_at"])
+        _create_attachments(instance=locked, user=actor, files=attachments, metadata=attachment_metadata)
+        summary = list(changed) + (["attachments"] if attachments else [])
+        # Field names only: the free-text reason never enters the workflow history.
+        record_workflow_transition(
+            locked,
+            start,
+            action=WorkflowAction.Action.EDIT,
+            actor=actor,
+            note="Edited: " + ", ".join(summary),
+            approver_role="",
+            metadata={"changed_fields": summary},
+        )
+    return EditResult(locked, from_status, tuple(summary), len(attachments))
+
+
 # ---------------------------------------------------------------------------
 # Audit
 # ---------------------------------------------------------------------------
@@ -657,6 +804,39 @@ def notify_after_manager_decision(instance: PermissionRequest) -> None:
             _notify_requester(instance, "manager_approved_final")
 
     transaction.on_commit(send)
+
+
+def notify_after_requester_edit(instance: PermissionRequest) -> None:
+    """Tell the manager the request waiting on them was changed (after commit, never raises)."""
+
+    def send():
+        from in_app_notifications.dispatcher import dispatch_notification_channels
+        from in_app_notifications.i18n import notification_text, profile_name, request_type_label
+        from in_app_notifications.models import Notification
+
+        manager = get_valid_manager_user(
+            instance.employee_profile, cross_company_capability=PERMISSION_REQUEST_APPROVAL_CAPABILITY
+        )
+        if manager is None or manager.pk == instance.employee_id:
+            return None
+        stamp = int(instance.updated_at.timestamp()) if instance.updated_at else 0
+        return dispatch_notification_channels(
+            recipient=manager,
+            event_key="permission.updated",
+            **notification_text(
+                "permission.updated",
+                request_type=request_type_label(_request_type_label(instance)),
+                employee_name=profile_name(instance.employee_profile, _requester_name(instance)),
+                request_id=instance.pk,
+            ),
+            category=Notification.Category.REQUEST,
+            action_url=MANAGER_ACTION_PATH.format(id=instance.pk),
+            related_object=instance,
+            deduplication_key=f"permission.updated:{instance.pk}:{manager.pk}:{stamp}",
+            whatsapp_enabled=False,
+        )
+
+    transaction.on_commit(lambda: _dispatch("requester_edited", instance, send))
 
 
 def notify_after_hr_decision(instance: PermissionRequest) -> None:

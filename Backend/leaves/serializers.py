@@ -2,12 +2,7 @@ from datetime import timedelta
 from decimal import ROUND_FLOOR, Decimal
 from pathlib import Path
 
-from django.conf import settings
-from django.contrib.auth import get_user_model
-from django.db.models import Q
-from django.utils import timezone
-from rest_framework import serializers
-
+from core.executives import EXECUTIVE_REQUEST_ERROR, is_executive_profile
 from core.permissions import get_role
 from core.services import (
     get_obligations_summaries,
@@ -15,7 +10,13 @@ from core.services import (
     get_workflow_snapshot_read_only,
     get_workflow_snapshots,
 )
+from django.conf import settings
+from django.contrib.auth import get_user_model
+from django.db.models import Q
+from django.utils import timezone
 from employees.models import EmployeeProfile
+from rest_framework import serializers
+from rest_framework.exceptions import PermissionDenied
 
 from .models import AnnualLeavePaymentRequest, LeaveBalanceAdjustment, LeaveRequest, LeaveType
 from .utils import (
@@ -277,6 +278,11 @@ class LeaveRequestCreateSerializer(serializers.ModelSerializer):
         self.fields["delegated_to"].queryset = qs
 
     def validate(self, attrs):
+        return self._validate_request(attrs)
+
+    def _validate_request(self, attrs, *, check_backdate=True):
+        """The submission rules, applied to a whole request (new, or merged for an edit)."""
+
         start = attrs.get("start_date")
         end = attrs.get("end_date")
         leave_type = attrs.get("leave_type")
@@ -287,6 +293,8 @@ class LeaveRequestCreateSerializer(serializers.ModelSerializer):
         profile = EmployeeProfile.objects.filter(user=user).first()
         if not profile or profile.is_archived or not profile.company_id:
             raise serializers.ValidationError("Archived employees cannot create leave requests.")
+        if is_executive_profile(profile):
+            raise PermissionDenied(EXECUTIVE_REQUEST_ERROR)
 
         if attrs.get("will_travel", False):
             travel_fields = (
@@ -333,7 +341,7 @@ class LeaveRequestCreateSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError({"end_date": "End date must be after start date."})
 
             earliest_start_date = timezone.localdate() - timedelta(days=EMPLOYEE_LEAVE_BACKDATE_DAYS)
-            if start < earliest_start_date:
+            if check_backdate and start < earliest_start_date:
                 raise serializers.ValidationError(
                     {"start_date": "Leave can be submitted up to 7 calendar days after it starts."}
                 )
@@ -363,6 +371,9 @@ class LeaveRequestCreateSerializer(serializers.ModelSerializer):
             # (start <= req.end) AND (end >= req.start)
             Q(start_date__lte=end) & Q(end_date__gte=start)
         )
+        if self.instance is not None:
+            # An edited request never overlaps with itself.
+            overlap_qs = overlap_qs.exclude(pk=self.instance.pk)
 
         if overlap_qs.exists():
             raise serializers.ValidationError("You already have a pending or approved leave request for this period.")
@@ -382,6 +393,42 @@ class LeaveRequestCreateSerializer(serializers.ModelSerializer):
         if value.size > LEAVE_MAX_UPLOAD_SIZE:
             raise serializers.ValidationError("File size exceeds maximum limit.")
         return value
+
+
+#: Fields the requester may change with ``PATCH .../{id}/edit/``. The alternative
+#: employee changes only through ``set-delegate``.
+LEAVE_EDITABLE_FIELDS = tuple(name for name in LeaveRequestCreateSerializer.Meta.fields if name != "delegated_to")
+
+
+class LeaveRequestEditSerializer(LeaveRequestCreateSerializer):
+    """The requester's edit before HR: the create fields, all optional (use ``partial=True``).
+
+    The merged request (stored values overlaid with the submitted ones) is checked
+    with the same rules as a new submission. ``validated_data`` holds only the
+    submitted changes. The start-date backdate window applies when the start date
+    itself is changed.
+    """
+
+    def validate(self, attrs):
+        from .services import EDIT_DELEGATE_NOT_ALLOWED_MESSAGE
+
+        if "delegated_to" in getattr(self, "initial_data", {}):
+            raise serializers.ValidationError({"delegated_to": EDIT_DELEGATE_NOT_ALLOWED_MESSAGE})
+        attrs.pop("delegated_to", None)
+        # A document can be replaced, never removed.
+        if not attrs.get("document"):
+            attrs.pop("document", None)
+        # Dropping travel also drops the visa answer that only applies to travel.
+        if attrs.get("will_travel") is False and "will_require_visa" not in attrs:
+            attrs["will_require_visa"] = None
+
+        instance = self.instance
+        merged = {name: getattr(instance, name) for name in LEAVE_EDITABLE_FIELDS}
+        merged["document"] = instance.document or None
+        merged["delegated_to"] = instance.delegated_to
+        merged.update(attrs)
+        self._validate_request(merged, check_backdate="start_date" in attrs)
+        return attrs
 
 
 class LeaveRequestActionSerializer(serializers.Serializer):
@@ -463,6 +510,8 @@ class HRManualLeaveRequestSerializer(serializers.ModelSerializer):
 
         if profile.is_archived or profile.employment_status != EmployeeProfile.EmploymentStatus.ACTIVE:
             raise serializers.ValidationError({"employee_id": "Only active employees are allowed."})
+        if is_executive_profile(profile):
+            raise serializers.ValidationError({"employee_id": EXECUTIVE_REQUEST_ERROR})
 
         return profile
 
@@ -638,6 +687,9 @@ class AnnualLeavePaymentRequestSerializer(serializers.ModelSerializer):
     employee_id = serializers.IntegerField(source="employee_profile.id", read_only=True)
     fractional_days = serializers.SerializerMethodField()
     has_pending_annual_leave = serializers.SerializerMethodField()
+    # True only for the requesting employee while their own (non-termination) request is pending.
+    can_cancel = serializers.SerializerMethodField()
+    workflow = serializers.SerializerMethodField()
 
     class Meta:
         model = AnnualLeavePaymentRequest
@@ -673,8 +725,15 @@ class AnnualLeavePaymentRequestSerializer(serializers.ModelSerializer):
             "hr_reviewed_at",
             "ceo_decided_at",
             "settled_at",
+            "cancelled_at",
+            "can_cancel",
+            "workflow",
         ]
         read_only_fields = [field for field in fields if field not in {"employee_note"}]
+
+    def get_workflow(self, obj):
+        request = self.context.get("request")
+        return get_workflow_snapshot_read_only(obj, actor=getattr(request, "user", None))
 
     def get_public_reference(self, obj):
         from core.services.request_references import public_reference_for
@@ -692,6 +751,12 @@ class AnnualLeavePaymentRequestSerializer(serializers.ModelSerializer):
 
     def get_has_pending_annual_leave(self, obj):
         return has_pending_annual_leave(obj.employee_profile, company=obj.company)
+
+    def get_can_cancel(self, obj):
+        from .annual_payment_services import is_requester_cancellable_by
+
+        request = self.context.get("request")
+        return is_requester_cancellable_by(obj, getattr(request, "user", None))
 
 
 class AnnualLeaveEligibilitySerializer(serializers.Serializer):
@@ -733,6 +798,10 @@ class AnnualLeavePaymentRequestCreateSerializer(serializers.Serializer):
             profile = EmployeeProfile.objects.select_related("user", "company").filter(user=actor).first()
         if profile is None:
             raise serializers.ValidationError("Employee profile is required.")
+        if is_executive_profile(profile):
+            if attrs.get("employee_id"):
+                raise serializers.ValidationError({"employee_id": EXECUTIVE_REQUEST_ERROR})
+            raise PermissionDenied(EXECUTIVE_REQUEST_ERROR)
 
         from organization.services import get_active_company_for_request
 

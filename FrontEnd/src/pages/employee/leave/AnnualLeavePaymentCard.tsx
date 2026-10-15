@@ -1,3 +1,7 @@
+import EmployeeCancelButton from "../../../components/requests/EmployeeCancelButton";
+import RequestCancellationPanel from "../../../components/requests/RequestCancellationPanel";
+import ApprovalTimeline from "../../../components/requests/ApprovalTimeline";
+import PendingActionBanner from "../../../components/requests/PendingActionBanner";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Alert,
@@ -27,6 +31,7 @@ import AnnualLeaveSettlementDetails from "../../../components/leaves/AnnualLeave
 import { useI18n } from "../../../i18n/useI18n";
 import {
   createEmployeeAnnualLeavePaymentRequest,
+  cancelAnnualLeavePaymentRequest,
   getAnnualLeaveEligibility,
   getAnnualLeavePaymentRequests,
   ANNUAL_LEAVE_EMPLOYEE_PREFERENCES,
@@ -380,8 +385,18 @@ export default function AnnualLeavePaymentCard({
             requests.map((request) => (
               <div key={request.id}>
                 <Space size={8} style={{ marginBottom: 8 }} wrap>
-                  <Typography.Text strong>{request.public_reference || `#${request.id}`}</Typography.Text>
+                  <Typography.Text strong>
+                    {request.public_reference || `#${request.id}`}
+                  </Typography.Text>
                   <AnnualLeavePaymentStatusTag status={request.status} />
+                  <EmployeeCancelButton
+                    request={request}
+                    cancelRequest={cancelAnnualLeavePaymentRequest}
+                    onCancelled={async () => {
+                      await loadData();
+                      onSubmitted?.();
+                    }}
+                  />
                 </Space>
                 {/* The latest settlement is the one the dashboard links here. */}
                 {request === latest && (
@@ -389,6 +404,16 @@ export default function AnnualLeavePaymentCard({
                     <AnnualLeaveSettlementApprovalMap request={request} t={t} />
                   </div>
                 )}
+                <PendingActionBanner workflow={request.workflow} />
+                <RequestCancellationPanel
+                  kind="annual_leave_payment"
+                  request={request}
+                  onChanged={async () => {
+                    await loadData();
+                    onSubmitted?.();
+                  }}
+                />
+                <ApprovalTimeline workflow={request.workflow} />
                 <AnnualLeaveSettlementDetails request={request} />
               </div>
             ))

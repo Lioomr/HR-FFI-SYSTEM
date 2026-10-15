@@ -16,7 +16,7 @@ Tests are split by layer:
 - Frontend setup: `cd FrontEnd && npm install`
 - Frontend dev server: `cd FrontEnd && npm run dev`
 - Frontend build: `cd FrontEnd && npm run build`
-- Frontend tests: `cd FrontEnd && npm run test`
+- Frontend tests (one-shot agent verification): `cd FrontEnd && npm run test -- --run`; use `npm run test` for interactive watch mode.
 - Frontend quality checks: `cd FrontEnd && npm run lint && npm run type-check && npm run format:check`
 
 ## Coding Style & Naming Conventions
@@ -64,15 +64,17 @@ Run pre-commit checks before pushing when available: `pre-commit run --all-files
 For AWS production deployment, Docker service layout, real server paths, and production debugging workflow, read `AWS_AGENT_DEPLOYMENT_HANDOFF.md` before making deployment-related changes. Prefer infrastructure-as-code over ad-hoc CLI changes, and verify AWS details against documentation instead of guessing.
 
 ## Agent Context Library
+The current user request defines the task and completion criteria. Dated plans, handoffs, pasted agent prompts, phase stop points, and surface ownership assignments apply only to the task/session they describe unless the user adopts them for the current task. Use their technical evidence after verifying it in source; do not carry their old approval gates or scope limits into unrelated work. Preserve security and production-data safeguards.
+
 `.agents/` holds focused notes on this system's architecture, conventions and workflows. Start from `.agents/context/INDEX.md` to find the note for your task, and read only the files you need from `.agents/context/`, `.agents/rules/` and `.agents/skills/`. For work crossing modules, also read `.agents/context/system_map.md`. Prefer these notes and the source over guessing at architecture or standards.
 
 Default to the smallest correct change after understanding the real flow (`.agents/rules/ponytail.md`): reuse existing helpers and components, fix shared root causes, and avoid unrequested abstractions. Treat it as a strong default, not a limit. Use a larger change when the problem calls for it, and say why. It never overrides task requirements, security, API, workflow, testing, or deployment guidance.
 
 ## Frontend Quality Baseline (mandatory)
-Before editing `FrontEnd/` (including nginx, Vite, i18n, layout, API clients or request pages), read `.agents/rules/frontend_quality_baseline.md`. It protects the security headers, the initial-load budget, shared fetching (`getEmployee("me")`, notifications, company scope), the one-`<h1>`/aria-label/44 px accessibility rules, and server-side permission checks. Do not undo or work around them; if a task needs to, stop and report why.
+Before editing `FrontEnd/`, read the relevant sections of `.agents/rules/frontend_quality_baseline.md` once per task and apply checks for the behavior being changed. Preserve security headers, performance, shared fetching, accessibility, and server-side permissions. An equivalent implementation that preserves those outcomes may proceed with an explanation and appropriate verification. Pause the affected action only when it would weaken a protection, requires an unresolved product decision, or lacks required authorization; continue independent authorized work.
 
 ## Understand Connected Features Before Changing Them
-Before editing a feature, trace what it touches: screens, API clients and routes, backend models/serializers/services, permissions and company scope, workflow history and delegation, notifications and audit, feature flags or runtime toggles, translations, and tests. Check each relevant toggle's default and consumers, and do not flip a toggle unless the task asks.
+Scale investigation to the change. For copy, styling, or a local component fix, inspect the affected code and direct consumers/tests; do not trace unrelated layers. For changes to behavior, API contracts, permissions, company scope, or request transitions, trace the affected screens, API clients/routes, backend services, workflow/history, delegation, notifications/audit, translations, and tests as relevant. Expand only when evidence reveals another dependency. Inspect relevant toggle defaults and consumers; change toggle values only within the authorized task.
 
 When designing a new feature, extend existing models, APIs, approval workflows, inboxes, notifications and UI components where they fit. Make it standalone only when its purpose or lifecycle is genuinely separate, and document why. Do not create parallel approval, permission or notification systems without a clear reason.
 
@@ -82,12 +84,12 @@ For request and approval work, read `.agents/context/workflow_engine.md`. The em
 When a task asks a request page to show approval progress, decide whether it means the summary card, the list, or the detail page, and keep the linked pages consistent. Confirm backend workflow history and actor-specific serializer fields exist before building the UI. Update the relevant tests and context docs when behavior changes.
 
 ## Docker and the Shared Local Stack
-After a code or runtime change, rebuild and recreate the affected Docker service(s) so the running system uses it, then check `docker compose ... ps` and report the result. Backend changes normally affect `backend`, `notification-worker` and `celery-beat`; frontend changes affect `frontend`; Compose or shared-image changes affect every service that uses them. Documentation-only changes need no rebuild. If Docker is unavailable or a rebuild fails, say which service was not refreshed. Use the Compose file and profile from `.agents/context/local_dev_setup.md`. Never use `down -v` as a routine rebuild; it deletes persistent volumes.
+Batch edits and validation before rebuilding. Rebuild and recreate affected Docker services once after the finished change when the task requires the running local system to be refreshed or container runtime verification is needed. Source-only fixes may finish with appropriate focused tests/build checks; report when the running stack was not refreshed. Backend runtime refreshes normally affect `backend`, `notification-worker` and `celery-beat`; frontend refreshes affect `frontend`; Compose or shared-image changes affect every service using them. After a refresh, check service health and confirm the running change. Documentation-only changes need no rebuild. If Docker is unavailable or a rebuild fails, report the unrefreshed services. Use the Compose file and profile from `.agents/context/local_dev_setup.md`. Never use `down -v` as routine troubleshooting or rebuilding; it deletes persistent volumes.
 
 The stack in `docker-compose.dev.yml` (project `hr-ffi-system`, containers `ffi_hr_*`, ports 5173/8000/5432) is shared by every Claude and Codex session on this machine, and the last build wins.
 - Run it through `tools/dev-compose.sh` or `tools\dev-compose.ps1`. They stamp each image with the commit, dirty flag and checkout path, and refuse mutating commands from a git worktree. Set `FFI_ALLOW_SHARED_STACK=1` only when the user explicitly asks.
 - Rebuild the shared stack only from the main checkout (not a worktree). From a worktree, verify with tests and `npm run build`, or run a separate stack with its own `FFI_CONTAINER_PREFIX`, ports and `-p` project (see the header of `docker-compose.dev.yml`).
-- Before rebuilding, check `git status` for other sessions' uncommitted work, because a build ships whatever is on disk. If files you are about to change were edited by another agent in the last few minutes, stop and ask the user.
+- Before editing or rebuilding, inspect existing changes and preserve work from other sessions. Recent edits alone do not require a pause: proceed with non-conflicting changes. If an active edit conflict or unclear ownership prevents safe progress, pause that file/action and ask the user while continuing independent work. Before a shared-stack rebuild, remember it includes all on-disk changes; resolve any conflicting or unreviewed changes that would affect the runtime result.
 - After a rebuild, confirm the running container serves your change: `curl http://localhost:5173/build-info.json`, `docker inspect ffi_hr_frontend --format "{{json .Config.Labels}}"`, and a grep for a new string in `/usr/share/nginx/html/assets/`. For the backend, check `showmigrations` or the changed endpoint.
 - If a shipped change seems missing, first check the container's creation time and `com.ffi.build.*` labels; another session may have rebuilt from a different checkout.
 - Commit finished work promptly, because uncommitted changes exist in one folder only.

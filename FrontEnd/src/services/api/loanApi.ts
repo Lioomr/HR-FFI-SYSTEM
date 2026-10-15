@@ -116,6 +116,25 @@ export async function cancelLoanRequest(id: number | string) {
   return data;
 }
 
+export interface EditLoanRequestPayload {
+  amount?: number;
+  reason?: string;
+  loan_type?: LoanType;
+  installment_months?: number | null;
+}
+
+/** Employee edit of an own loan request until it reaches HR. */
+export async function editLoanRequest(
+  id: number | string,
+  payload: EditLoanRequestPayload,
+) {
+  const { data } = await api.patch<ApiResponse<LoanRequest>>(
+    `/api/loans/loan-requests/${id}/edit/`,
+    payload,
+  );
+  return data;
+}
+
 export async function getManagerLoanRequest(id: number | string) {
   const { data } = await api.get<ApiResponse<LoanRequest>>(
     `/api/loans/manager/loan-requests/${id}/`,

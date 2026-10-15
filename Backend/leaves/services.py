@@ -9,7 +9,8 @@ decision.
 Approval route: alternative employee (when chosen) -> direct manager (when the
 employee has a valid one) -> HR -> CEO -> HR completion (non-Saudi travellers
 only). An HR manager's own leave skips the HR stage. The CEO stage is required
-for every request. Only HR can cancel, including approved leave.
+for every request. The employee can cancel their own request while it is
+pending; only HR cancels approved leave.
 
 Workflow history is recorded as each action happens (see
 ``core.services.workflow_engine.begin_recorded_transition``), not rebuilt from
@@ -21,11 +22,6 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 
-from django.db import transaction
-from django.utils import timezone
-from rest_framework import status as http_status
-from rest_framework.response import Response
-
 from audit.utils import audit
 from core.models import WorkflowAction
 from core.responses import error
@@ -36,14 +32,18 @@ from core.services import (
     sync_leave_obligations,
     waive_open_blocking_obligations,
 )
-from core.services.stage_coverage import MANAGER_OWN_SOURCES
 from core.services.request_obligations import close_leave_obligations, is_business_trip_leave
+from core.services.stage_coverage import MANAGER_OWN_SOURCES
 from core.services.workflow_engine import begin_recorded_transition, record_workflow_transition
+from django.db import transaction
+from django.utils import timezone
 from employees.document_extraction import extract_visa_fields
 from employees.models import EmployeeDocument
 from employees.services.manager_relationships import get_valid_manager_user, manager_approval_actor_source
 from in_app_notifications.dispatcher import dispatch_notification_channels
 from in_app_notifications.models import Notification
+from rest_framework import status as http_status
+from rest_framework.response import Response
 
 from .document_integrity import on_leave_stage_approved
 from .models import LeaveRequest
@@ -66,13 +66,35 @@ EMPLOYEE_REQUESTS_PATH = "/employee/leave/requests"
 DELEGATE_ASSIGNABLE_STATUSES = frozenset(
     {Status.SUBMITTED, Status.PENDING_DELEGATE, Status.PENDING_MANAGER, Status.PENDING_HR, Status.PENDING_CEO}
 )
-MANAGER_DECIDABLE_STATUSES =frozenset({Status.SUBMITTED, Status.PENDING_MANAGER})
+MANAGER_DECIDABLE_STATUSES = frozenset({Status.SUBMITTED, Status.PENDING_MANAGER})
 HR_APPROVABLE_STATUSES = frozenset({Status.SUBMITTED, Status.PENDING_HR})
 # HR may also reject a request that is still waiting on the manager.
 HR_REJECTABLE_STATUSES = frozenset({Status.SUBMITTED, Status.PENDING_HR, Status.PENDING_MANAGER})
 # HR may only send a request to the CEO once the manager stage is over.
 CEO_REFERRABLE_STATUSES = frozenset({Status.SUBMITTED, Status.PENDING_HR})
-# Employees cannot cancel; HR cancels any request that is in progress or already approved.
+# The employee withdraws their own request while it is pending; once approved only HR cancels it.
+REQUESTER_CANCELLABLE_STATUSES = frozenset(
+    {
+        Status.SUBMITTED,
+        Status.PENDING_DELEGATE,
+        Status.PENDING_MANAGER,
+        Status.PENDING_HR,
+        Status.PENDING_CEO,
+        Status.PENDING_HR_COMPLETION,
+    }
+)
+# The employee edits their own request only until it reaches the HR stage and before
+# anyone has decided a stage on it; afterwards they cancel and resubmit.
+REQUESTER_EDITABLE_STATUSES = frozenset({Status.SUBMITTED, Status.PENDING_DELEGATE, Status.PENDING_MANAGER})
+# Decision timestamps of every stage; any of them set means a stage decision exists.
+_STAGE_DECISION_FIELDS = (
+    "delegate_decision_at",
+    "manager_decision_at",
+    "decided_at",
+    "ceo_decision_at",
+    "hr_completed_at",
+)
+# HR cancels any request that is in progress or already approved.
 HR_CANCELLABLE_STATUSES = frozenset(
     {
         Status.SUBMITTED,
@@ -107,9 +129,19 @@ OBLIGATIONS_BLOCKING_MESSAGE = "Business Trip obligations must be resolved or wa
 NOT_AWAITING_HR_COMPLETION_MESSAGE = "Request is not waiting for HR completion."
 PROFILE_NOT_FOUND_MESSAGE = "Employee profile not found."
 VISA_REQUIRED_MESSAGE = "visa_document is required when the employee selected that a visa is needed."
-CONTACT_HR_TO_CANCEL_MESSAGE = "Contact HR to cancel this leave request."
+NOT_REQUESTER_MESSAGE = "Only the requester can cancel this leave request."
+NOT_REQUESTER_CANCELLABLE_MESSAGE = "Only pending leave requests can be cancelled. Contact HR to cancel approved leave."
 SELF_CANCELLATION_MESSAGE = "Another HR member must cancel your own leave request."
 NOT_CANCELLABLE_MESSAGE = "Rejected or cancelled requests cannot be cancelled."
+NOT_REQUESTER_EDITOR_MESSAGE = "Only the requester can edit this leave request."
+NOT_REQUESTER_EDITABLE_MESSAGE = (
+    "This leave request can no longer be edited because it has reached HR review or a decision was recorded. "
+    "Cancel it and submit a new request instead."
+)
+HR_MANUAL_NOT_EDITABLE_MESSAGE = "HR manual leave records cannot be edited by the employee."
+EDIT_DELEGATE_NOT_ALLOWED_MESSAGE = (
+    "The alternative employee cannot be changed by editing the request. Use the alternative employee action instead."
+)
 
 _ERROR_TITLES = {422: "Validation error", 403: "Forbidden"}
 
@@ -528,7 +560,9 @@ def apply_delegate_approval(instance: LeaveRequest, *, actor, note: str = "") ->
 
         extra_fields = _MANAGER_DECISION_FIELDS if manager_source else []
         locked.save(
-            update_fields=list(dict.fromkeys([*_DELEGATE_DECISION_FIELDS, *extra_fields, *_covered_stage_fields(covered)]))
+            update_fields=list(
+                dict.fromkeys([*_DELEGATE_DECISION_FIELDS, *extra_fields, *_covered_stage_fields(covered)])
+            )
         )
         record_workflow_transition(locked, start, action=Action.APPROVE, actor=actor, note=note)
         on_leave_stage_approved(locked, role="alternative_employee", actor=actor, at=locked.delegate_decision_at)
@@ -901,10 +935,128 @@ def apply_hr_completion(
     return HRCompletion(locked, from_status, profile, visa_required, document, extraction_warnings)
 
 
-def refuse_requester_cancellation() -> None:
-    """Employees cannot cancel their own leave request at any stage; HR cancels it for them."""
+def apply_requester_cancellation(instance: LeaveRequest, *, actor) -> Transition:
+    """The employee withdraws their own leave request while it is still pending.
 
-    raise LeaveTransitionError(CONTACT_HR_TO_CANCEL_MESSAGE, status=403)
+    Approved leave is cancelled by HR (``apply_hr_cancellation``). A cancelled
+    Business Trip also closes its obligations and ends the delegation it created.
+    """
+
+    if instance.employee_id != actor.pk:
+        raise LeaveTransitionError(NOT_REQUESTER_MESSAGE, status=403)
+
+    with transaction.atomic():
+        locked = _lock(instance)
+        if locked.status not in REQUESTER_CANCELLABLE_STATUSES:
+            raise LeaveTransitionError(NOT_REQUESTER_CANCELLABLE_MESSAGE)
+
+        from_status = locked.status
+        start = begin_recorded_transition(locked, actor=actor)
+        locked.status = Status.CANCELLED
+        locked.save(update_fields=["status", "updated_at"])
+        record_workflow_transition(locked, start, action=Action.CANCEL, actor=actor, approver_role="")
+        close_leave_obligations(locked, note="Leave request cancelled by the employee.", actor=actor)
+    return Transition(locked, from_status)
+
+
+class LeaveEditInvalid(Exception):
+    """The edited request failed the create rules; ``errors`` is the flattened message list."""
+
+    def __init__(self, errors: list):
+        super().__init__("Validation error")
+        self.errors = errors
+
+
+@dataclass(frozen=True)
+class LeaveEdit:
+    instance: LeaveRequest
+    from_status: str
+    changed_fields: tuple[str, ...]
+
+
+def requester_edit_refusal(instance: LeaveRequest) -> str | None:
+    """Why the requester can no longer edit ``instance``, or ``None`` while they still can.
+
+    Editable only before the HR stage (``submitted``, ``pending_delegate``,
+    ``pending_manager``) and while no stage decision has been recorded. A request
+    sent back to an alternative employee from HR or later stays locked.
+    """
+
+    if instance.source == LeaveRequest.RequestSource.HR_MANUAL:
+        return HR_MANUAL_NOT_EDITABLE_MESSAGE
+    if not instance.is_active or instance.status not in REQUESTER_EDITABLE_STATUSES:
+        return NOT_REQUESTER_EDITABLE_MESSAGE
+    if instance.status == Status.PENDING_DELEGATE and instance.delegate_return_status not in {
+        "",
+        Status.SUBMITTED,
+        Status.PENDING_MANAGER,
+    }:
+        return NOT_REQUESTER_EDITABLE_MESSAGE
+    if any(getattr(instance, name) for name in _STAGE_DECISION_FIELDS):
+        return NOT_REQUESTER_EDITABLE_MESSAGE
+    return None
+
+
+def _edited_value_differs(locked: LeaveRequest, name: str, value) -> bool:
+    if name == "document":
+        return bool(value)
+    if name == "leave_type":
+        return locked.leave_type_id != getattr(value, "pk", value)
+    return getattr(locked, name) != value
+
+
+def apply_requester_edit(instance: LeaveRequest, *, actor, validate) -> LeaveEdit:
+    """The employee changes their own leave request before it reaches HR.
+
+    ``validate(locked)`` re-runs the create rules on the merged request and returns
+    the validated changes, or raises ``LeaveEditInvalid``. It runs under the row lock
+    with this request's own reservation withdrawn, so its current days never count
+    against its new dates (overlap, balance, yearly caps), while every other request
+    still does. The status, route, reference and alternative employee are unchanged;
+    Business Trip obligations and the delegation rule follow the new dates.
+    """
+
+    if instance.employee_id != actor.pk:
+        raise LeaveTransitionError(NOT_REQUESTER_EDITOR_MESSAGE, status=403)
+
+    with transaction.atomic():
+        locked = _lock(instance)
+        refusal = requester_edit_refusal(locked)
+        if refusal:
+            raise LeaveTransitionError(refusal)
+
+        from_status = locked.status
+        # Syncing can move a manager stage whose manager is no longer valid on to HR,
+        # so the window is checked again once the workflow is current.
+        start = begin_recorded_transition(locked, actor=actor)
+        refusal = requester_edit_refusal(locked)
+        if refusal:
+            raise LeaveTransitionError(refusal)
+
+        own_row = LeaveRequest.objects.filter(pk=locked.pk)
+        own_row.update(status=Status.CANCELLED)
+        try:
+            changes = validate(locked)
+        finally:
+            own_row.update(status=locked.status)
+
+        changed = [name for name, value in changes.items() if _edited_value_differs(locked, name, value)]
+        if not changed:
+            return LeaveEdit(locked, from_status, ())
+        for name in changed:
+            setattr(locked, name, changes[name])
+        locked.save(update_fields=[*changed, "updated_at"])
+        record_workflow_transition(
+            locked,
+            start,
+            action=Action.EDIT,
+            actor=actor,
+            note="Edited: " + ", ".join(changed),
+            approver_role="",
+            metadata={"changed_fields": changed},
+        )
+        sync_leave_obligations(locked, actor=actor)
+    return LeaveEdit(locked, from_status, tuple(changed))
 
 
 def apply_hr_cancellation(instance: LeaveRequest, *, actor, comment: str) -> Transition:
@@ -931,6 +1083,9 @@ def apply_hr_cancellation(instance: LeaveRequest, *, actor, comment: str) -> Tra
         locked.save(update_fields=["status", "updated_at"])
         record_workflow_transition(locked, start, action=Action.CANCEL, actor=actor, note=comment, approver_role="hr")
         close_leave_obligations(locked, note="Leave request cancelled by HR.", actor=actor)
+        from core.services.cancellation_requests import close_pending_after_direct_cancel
+
+        close_pending_after_direct_cancel(locked, actor=actor, note=comment)
     return Transition(locked, from_status)
 
 
@@ -1110,6 +1265,49 @@ def notify_after_hr_completion(instance: LeaveRequest, *, actor_id=None) -> None
         notify_leave_approved(instance)
     except Exception:
         _log_notification_failure("leave_completion_notification_failed", instance, "leave_approved", actor_id)
+
+
+def notify_after_requester_edit(instance: LeaveRequest, *, actor_id=None) -> None:
+    """Tell whoever the request is waiting on that the employee changed it.
+
+    The alternative employee while it waits on them, otherwise the employee's
+    manager, or HR approvers when no valid manager exists. Failures are logged and
+    never undo the edit.
+    """
+
+    if instance.status == Status.PENDING_DELEGATE:
+        recipients = [instance.delegated_to]
+        action_path = f"/employee/leave/requests/{instance.id}"
+    else:
+        manager = leave_manager_user(instance)
+        if manager is not None:
+            recipients = [manager]
+            action_path = MANAGER_ACTION_PATH.format(id=instance.id)
+        else:
+            recipients = list(get_hr_approver_users())
+            action_path = HR_ACTION_PATH.format(id=instance.id)
+
+    try:
+        from in_app_notifications.i18n import notification_text, user_name
+
+        employee_name = user_name(instance.employee) if instance.employee else leave_employee_name(instance)
+        text = notification_text("leave.updated", employee_name=employee_name, request_id=instance.id)
+        stamp = int(instance.updated_at.timestamp()) if instance.updated_at else 0
+        for recipient in recipients:
+            if recipient is None or recipient.pk == instance.employee_id:
+                continue
+            dispatch_notification_channels(
+                recipient=recipient,
+                event_key="leave.updated",
+                **text,
+                category=Notification.Category.LEAVE,
+                action_url=action_path,
+                related_object=instance,
+                deduplication_key=f"leave.updated:{instance.id}:{recipient.pk}:{stamp}",
+                whatsapp_enabled=False,
+            )
+    except Exception:
+        _log_notification_failure("leave_edit_notification_failed", instance, "leave_updated", actor_id)
 
 
 def notify_after_hr_cancellation(instance: LeaveRequest, *, reason: str, actor_id=None) -> None:

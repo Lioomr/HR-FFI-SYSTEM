@@ -49,22 +49,8 @@ class PayslipListSerializer(serializers.ModelSerializer):
         fields = ["id", "year", "month", "net_salary", "payment_mode", "status"]
 
 
-class PayslipDetailSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Payslip
-        fields = [
-            "id",
-            "year",
-            "month",
-            "basic_salary",
-            "transportation_allowance",
-            "accommodation_allowance",
-            "telephone_allowance",
-            "petrol_allowance",
-            "other_allowance",
-            "total_salary",
-            "total_deductions",
-            "net_salary",
-            "payment_mode",
-            "status",
-        ]
+class PayslipDetailSerializer(serializers.Serializer):
+    def to_representation(self, instance):
+        from .dto import employee_dto
+
+        return employee_dto(instance)

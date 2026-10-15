@@ -2,7 +2,6 @@ import { useState, type CSSProperties } from "react";
 import {
   Alert,
   Button,
-  Collapse,
   List,
   Modal,
   Space,
@@ -17,7 +16,7 @@ import {
   FileSearchOutlined,
 } from "@ant-design/icons";
 
-import ApprovalTimeline from "../requests/ApprovalTimeline";
+import WorkflowApprovalMap from "../requests/WorkflowApprovalMap";
 import PendingActionBanner from "../requests/PendingActionBanner";
 import {
   cancelProfileChangeRequest,
@@ -183,7 +182,7 @@ export function ProfileChangeItemList({
   );
 }
 
-/** Collapsible approval trail; nothing when the workflow has no history. */
+/** Approval card; nothing when the workflow has no history. */
 export function ProfileChangeApprovalTrail({
   request,
 }: {
@@ -192,15 +191,11 @@ export function ProfileChangeApprovalTrail({
   const { t } = useI18n();
   if (!request.workflow?.history?.length) return null;
   return (
-    <Collapse
-      size="small"
-      items={[
-        {
-          key: "trail",
-          label: t("profileChange.approvalTrail"),
-          children: <ApprovalTimeline workflow={request.workflow} />,
-        },
-      ]}
+    <WorkflowApprovalMap
+      workflow={request.workflow}
+      // Profile changes are decided by HR alone.
+      reviewStages={["hr"]}
+      title={t("profileChange.approvalTrail")}
     />
   );
 }

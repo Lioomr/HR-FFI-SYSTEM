@@ -5,6 +5,7 @@ import {
   Alert,
   Button,
   Col,
+  Collapse,
   Dropdown,
   Modal,
   Row,
@@ -674,6 +675,19 @@ export default function JobOfferDetailPage() {
   const submittable = canSubmit(offer);
   const delivery = offer.delivery_metadata;
   const warnings = delivery?.warnings || [];
+  const deliveryLegs: Array<JobOfferChannelDelivery | undefined> = [
+    delivery?.candidate?.text ?? delivery?.channels?.whatsapp,
+    delivery?.candidate?.whatsapp_pdf,
+    delivery?.candidate?.email_pdf ?? delivery?.channels?.email,
+    ...(delivery?.ceo?.recipients ?? []).flatMap((recipient) => [
+      recipient.whatsapp_pdf,
+      recipient.email_pdf,
+    ]),
+  ].filter(Boolean);
+  const deliverySent = deliveryLegs.filter((leg) => leg?.sent).length;
+  const deliveryFailed = deliveryLegs.filter(
+    (leg) => leg && !leg.sent && !leg.skipped,
+  ).length;
   // Older cached responses predate the field, and unmapped is the safe reading.
   const biotimeMapped = Boolean(offer.biotime?.is_mapped);
 
@@ -965,142 +979,7 @@ export default function JobOfferDetailPage() {
               ]}
             />
           </JobOfferDocumentSection>
-        </Col>
-
-        <Col xs={24} xl={8}>
-          <Surface style={{ marginBottom: 16 }}>
-            <SectionTitle>
-              {t("jobOffers.detail.section.ceoReview")}
-            </SectionTitle>
-            <JobOfferCeoDecision offer={offer} />
-            {/* Nothing reaches the candidate before the CEO approves, so say
-                why the send button is absent rather than leaving a gap. */}
-            {offer.status === "draft" &&
-              offer.approval_status !== "approved" && (
-                <Alert
-                  type="info"
-                  showIcon
-                  style={{ borderRadius: 12, marginTop: 12 }}
-                  message={t("jobOffers.approval.sendBlocked")}
-                />
-              )}
-          </Surface>
-
-          <Surface style={{ marginBottom: 16 }}>
-            <SectionTitle>
-              {t("jobOffers.detail.section.workflow")}
-            </SectionTitle>
-            <JobOfferWorkflowHistory history={offer.workflow?.history} />
-          </Surface>
-
-          <Surface style={{ marginBottom: 16 }}>
-            <SectionTitle>
-              {t("jobOffers.detail.section.timeline")}
-            </SectionTitle>
-            <Timeline items={timelineItems} />
-          </Surface>
-
-          <Surface style={{ marginBottom: 16 }}>
-            <SectionTitle>
-              {t("jobOffers.detail.section.delivery")}
-            </SectionTitle>
-            {!offer.sent_at ? (
-              <Text type="secondary">{t("jobOffers.delivery.notSentYet")}</Text>
-            ) : (
-              <Space direction="vertical" size={10} style={{ width: "100%" }}>
-                <Text
-                  type="secondary"
-                  style={{ fontSize: 12, fontWeight: 700 }}
-                >
-                  {t("jobOffers.delivery.candidateGroup")}
-                </Text>
-                {/* `channels` is the pre-split shape older offers still carry,
-                    so fall back to it when `candidate` is absent. */}
-                <DeliveryChannel
-                  icon={<WhatsAppOutlined aria-hidden />}
-                  label={t("jobOffers.delivery.candidateText")}
-                  delivery={
-                    delivery?.candidate?.text ?? delivery?.channels?.whatsapp
-                  }
-                />
-                {delivery?.candidate?.whatsapp_pdf && (
-                  <DeliveryChannel
-                    icon={<WhatsAppOutlined aria-hidden />}
-                    label={t("jobOffers.delivery.candidateWhatsappPdf")}
-                    delivery={delivery.candidate.whatsapp_pdf}
-                  />
-                )}
-                <DeliveryChannel
-                  icon={<MailOutlined aria-hidden />}
-                  label={t("jobOffers.delivery.candidateEmailPdf")}
-                  delivery={
-                    delivery?.candidate?.email_pdf ?? delivery?.channels?.email
-                  }
-                />
-
-                {(delivery?.ceo?.recipients?.length ?? 0) > 0 && (
-                  <>
-                    <Text
-                      type="secondary"
-                      style={{ fontSize: 12, fontWeight: 700 }}
-                    >
-                      {t("jobOffers.delivery.ceoGroup")}
-                    </Text>
-                    {delivery!.ceo!.recipients.map((recipient) => (
-                      <div key={recipient.user_id}>
-                        <Text style={{ fontSize: 13, fontWeight: 600 }}>
-                          {recipient.display_name}
-                        </Text>
-                        <Space
-                          direction="vertical"
-                          size={10}
-                          style={{ width: "100%", marginTop: 6 }}
-                        >
-                          <DeliveryChannel
-                            icon={<WhatsAppOutlined aria-hidden />}
-                            label={t("jobOffers.delivery.ceoWhatsappPdf")}
-                            delivery={recipient.whatsapp_pdf}
-                          />
-                          <DeliveryChannel
-                            icon={<MailOutlined aria-hidden />}
-                            label={t("jobOffers.delivery.ceoEmailPdf")}
-                            delivery={recipient.email_pdf}
-                          />
-                        </Space>
-                      </div>
-                    ))}
-                  </>
-                )}
-                {warnings.length > 0 && (
-                  <Alert
-                    type="warning"
-                    showIcon
-                    style={{ borderRadius: 12 }}
-                    message={t("jobOffers.delivery.warningsTitle")}
-                    description={
-                      <div>
-                        <ul
-                          style={{
-                            margin: "4px 0 8px",
-                            paddingInlineStart: 18,
-                          }}
-                        >
-                          {warnings.map((warning) => (
-                            <li key={warning}>{translateWarning(warning)}</li>
-                          ))}
-                        </ul>
-                        <Text type="secondary" style={{ fontSize: 12 }}>
-                          {t("jobOffers.delivery.warningsHint")}
-                        </Text>
-                      </div>
-                    }
-                  />
-                )}
-              </Space>
-            )}
-          </Surface>
-
-          <Surface>
+          <Surface style={{ marginTop: 16 }}>
             <SectionTitle>
               {t("jobOffers.detail.section.onboarding")}
             </SectionTitle>
@@ -1296,6 +1175,203 @@ export default function JobOfferDetailPage() {
               profilePath={(profileId) => `/hr/employees/${profileId}`}
             />
           </div>
+        </Col>
+
+        <Col xs={24} xl={8}>
+          <Surface style={{ marginBottom: 16 }}>
+            <SectionTitle>
+              {t("jobOffers.detail.section.ceoReview")}
+            </SectionTitle>
+            <JobOfferCeoDecision offer={offer} />
+            {/* Nothing reaches the candidate before the CEO approves, so say
+                why the send button is absent rather than leaving a gap. */}
+            {offer.status === "draft" &&
+              offer.approval_status !== "approved" && (
+                <Alert
+                  type="info"
+                  showIcon
+                  style={{ borderRadius: 12, marginTop: 12 }}
+                  message={t("jobOffers.approval.sendBlocked")}
+                />
+              )}
+          </Surface>
+
+          <Surface style={{ marginBottom: 16 }}>
+            <SectionTitle>
+              {t("jobOffers.detail.section.workflow")}
+            </SectionTitle>
+            <JobOfferWorkflowHistory history={offer.workflow?.history} />
+          </Surface>
+
+          <Surface style={{ marginBottom: 16 }}>
+            <SectionTitle>
+              {t("jobOffers.detail.section.timeline")}
+            </SectionTitle>
+            <Timeline items={timelineItems} />
+          </Surface>
+
+          <Surface style={{ marginBottom: 16, padding: 0 }}>
+            <Collapse
+              ghost
+              items={[
+                {
+                  key: "delivery",
+                  // Rendered while collapsed so the breakdown stays in the DOM.
+                  forceRender: true,
+                  label: (
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        flexWrap: "wrap",
+                        gap: 8,
+                      }}
+                    >
+                      <Typography.Title
+                        level={5}
+                        style={{ margin: 0, fontWeight: 700, color: "#0f172a" }}
+                      >
+                        {t("jobOffers.detail.section.delivery")}
+                      </Typography.Title>
+                      <Text type="secondary" style={{ fontSize: 12 }}>
+                        {!offer.sent_at
+                          ? t("jobOffers.delivery.summaryNotSent")
+                          : deliveryFailed > 0
+                            ? t("jobOffers.delivery.summaryWithFailures", {
+                                sent: deliverySent,
+                                total: deliveryLegs.length,
+                                failed: deliveryFailed,
+                              })
+                            : t("jobOffers.delivery.summary", {
+                                sent: deliverySent,
+                                total: deliveryLegs.length,
+                              })}
+                      </Text>
+                    </div>
+                  ),
+                  children: (
+                    <>
+                      {!offer.sent_at ? (
+                        <Text type="secondary">
+                          {t("jobOffers.delivery.notSentYet")}
+                        </Text>
+                      ) : (
+                        <Space
+                          direction="vertical"
+                          size={10}
+                          style={{ width: "100%" }}
+                        >
+                          <Text
+                            type="secondary"
+                            style={{ fontSize: 12, fontWeight: 700 }}
+                          >
+                            {t("jobOffers.delivery.candidateGroup")}
+                          </Text>
+                          {/* `channels` is the pre-split shape older offers still carry,
+                    so fall back to it when `candidate` is absent. */}
+                          <DeliveryChannel
+                            icon={<WhatsAppOutlined aria-hidden />}
+                            label={t("jobOffers.delivery.candidateText")}
+                            delivery={
+                              delivery?.candidate?.text ??
+                              delivery?.channels?.whatsapp
+                            }
+                          />
+                          {delivery?.candidate?.whatsapp_pdf && (
+                            <DeliveryChannel
+                              icon={<WhatsAppOutlined aria-hidden />}
+                              label={t(
+                                "jobOffers.delivery.candidateWhatsappPdf",
+                              )}
+                              delivery={delivery.candidate.whatsapp_pdf}
+                            />
+                          )}
+                          <DeliveryChannel
+                            icon={<MailOutlined aria-hidden />}
+                            label={t("jobOffers.delivery.candidateEmailPdf")}
+                            delivery={
+                              delivery?.candidate?.email_pdf ??
+                              delivery?.channels?.email
+                            }
+                          />
+
+                          {(delivery?.ceo?.recipients?.length ?? 0) > 0 && (
+                            <>
+                              <Text
+                                type="secondary"
+                                style={{ fontSize: 12, fontWeight: 700 }}
+                              >
+                                {t("jobOffers.delivery.ceoGroup")}
+                              </Text>
+                              {delivery!.ceo!.recipients.map((recipient) => (
+                                <div key={recipient.user_id}>
+                                  <Text
+                                    style={{ fontSize: 13, fontWeight: 600 }}
+                                  >
+                                    {recipient.display_name}
+                                  </Text>
+                                  <Space
+                                    direction="vertical"
+                                    size={10}
+                                    style={{ width: "100%", marginTop: 6 }}
+                                  >
+                                    <DeliveryChannel
+                                      icon={<WhatsAppOutlined aria-hidden />}
+                                      label={t(
+                                        "jobOffers.delivery.ceoWhatsappPdf",
+                                      )}
+                                      delivery={recipient.whatsapp_pdf}
+                                    />
+                                    <DeliveryChannel
+                                      icon={<MailOutlined aria-hidden />}
+                                      label={t(
+                                        "jobOffers.delivery.ceoEmailPdf",
+                                      )}
+                                      delivery={recipient.email_pdf}
+                                    />
+                                  </Space>
+                                </div>
+                              ))}
+                            </>
+                          )}
+                          {warnings.length > 0 && (
+                            <Alert
+                              type="warning"
+                              showIcon
+                              style={{ borderRadius: 12 }}
+                              message={t("jobOffers.delivery.warningsTitle")}
+                              description={
+                                <div>
+                                  <ul
+                                    style={{
+                                      margin: "4px 0 8px",
+                                      paddingInlineStart: 18,
+                                    }}
+                                  >
+                                    {warnings.map((warning) => (
+                                      <li key={warning}>
+                                        {translateWarning(warning)}
+                                      </li>
+                                    ))}
+                                  </ul>
+                                  <Text
+                                    type="secondary"
+                                    style={{ fontSize: 12 }}
+                                  >
+                                    {t("jobOffers.delivery.warningsHint")}
+                                  </Text>
+                                </div>
+                              }
+                            />
+                          )}
+                        </Space>
+                      )}
+                    </>
+                  ),
+                },
+              ]}
+            />
+          </Surface>
         </Col>
       </Row>
 

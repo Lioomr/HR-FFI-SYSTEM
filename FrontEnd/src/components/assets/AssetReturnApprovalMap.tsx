@@ -2,6 +2,10 @@ import ApprovalFlowMap, {
   type ApprovalFlowStage,
 } from "../requests/ApprovalFlowMap";
 
+import {
+  stageActorFromWorkflow,
+  withCancellation,
+} from "../requests/workflowPresentation";
 import type { AssetReturnRequest } from "../../services/api/assetsApi";
 
 type TranslateFn = (
@@ -78,12 +82,17 @@ function buildStages(
         ? "current"
         : "upcoming";
 
-  return [
+  const stages: ApprovalFlowStage[] = [
     {
       key: "submitted",
       title: t("assets.approvalMap.submitted", "Submitted"),
       state: "completed",
       note: t("assets.approvalMap.requestSent", "Return request submitted."),
+      actor:
+        stageActorFromWorkflow(request.workflow, "submitted") ??
+        (request.employee_name
+          ? { full_name: request.employee_name, email: request.employee_email }
+          : null),
       at: request.requested_at,
     },
     {
@@ -95,6 +104,7 @@ function buildStages(
           ? t("assets.approvalMap.notRequired", "Not required")
           : request.manager_decision_note ||
             t(`leave.approvalMap.${managerState}`),
+      actor: stageActorFromWorkflow(request.workflow, "manager"),
       at: request.manager_decision_at,
     },
     {
@@ -109,6 +119,7 @@ function buildStages(
               "Ready for HR processing.",
             )
           : t(`leave.approvalMap.${hrState}`)),
+      actor: stageActorFromWorkflow(request.workflow, "hr"),
       at: request.hr_decision_at,
     },
     {
@@ -119,6 +130,7 @@ function buildStages(
         ceoState === "skipped"
           ? t("assets.approvalMap.notRequired", "Not required")
           : request.ceo_decision_note || t(`leave.approvalMap.${ceoState}`),
+      actor: stageActorFromWorkflow(request.workflow, "ceo"),
       at: request.ceo_decision_at,
     },
     {
@@ -140,6 +152,9 @@ function buildStages(
       at: request.processed_at,
     },
   ];
+  return request.status === "CANCELLED"
+    ? withCancellation(stages, request.workflow, t)
+    : stages;
 }
 
 export default function AssetReturnApprovalMap({

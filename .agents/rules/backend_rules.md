@@ -3,7 +3,7 @@
 - The backend is the authority for authentication, authorization, ownership, organization scoping, validation, and audit logging. Never rely on frontend or mobile role checks.
 - Changes to tokens, uploads, notifications, WebSockets, security headers, or sensitive endpoints require security review and regression tests.
 
-Backend lives in `Backend/`. Django 5.2 + DRF + PostgreSQL.
+Backend lives in `Backend/`. Django and DRF versions are pinned in `Backend/requirements.txt` (currently Django 6.1.1); PostgreSQL is the production database. Check those pins before using version-specific guidance.
 
 ## Before Editing
 

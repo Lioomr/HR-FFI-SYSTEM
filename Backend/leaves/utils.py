@@ -5,7 +5,6 @@ from decimal import ROUND_FLOOR, ROUND_HALF_UP, Decimal
 
 from django.db.models import Q, Sum
 from django.utils import timezone
-
 from employees.models import EmployeeProfile
 
 from .models import AnnualLeavePaymentRequest, LeaveBalanceAdjustment, LeaveRequest, LeaveType
@@ -330,9 +329,7 @@ def get_contract_year_cycle(profile: EmployeeProfile, reference_date: date | Non
     return cycle_start, next_anniversary - timedelta(days=1)
 
 
-def _calendar_month_anniversary(
-    contract_start: date, cycle_start: date, months_ahead: int
-) -> date:
+def _calendar_month_anniversary(contract_start: date, cycle_start: date, months_ahead: int) -> date:
     """
     Return the calendar-month anniversary ``months_ahead`` months after
     ``cycle_start`` using the original ``contract_start`` day.
@@ -636,9 +633,11 @@ def build_annual_leave_eligibility(profile: EmployeeProfile | None, *, active_co
 
     reasons = []
     contract_start = get_contract_start_date(profile)
-    if not is_terminated and get_completed_calendar_months(
-        cycle_start, today, contract_start=contract_start, cycle_end=cycle_end
-    ) < ANNUAL_MINIMUM_PERIODS:
+    if (
+        not is_terminated
+        and get_completed_calendar_months(cycle_start, today, contract_start=contract_start, cycle_end=cycle_end)
+        < ANNUAL_MINIMUM_PERIODS
+    ):
         reasons.append("Annual Leave payment is available after completing 6 months of service.")
     if not window_open:
         reasons.append("The Annual Leave payment window opens only during the final 5 days of the contract year.")
@@ -720,11 +719,13 @@ def _settlement_carry_forward_split(settlement) -> tuple[Decimal, Decimal]:
 
 
 def _latest_settlement_before(profile: EmployeeProfile, cycle_start: date):
+    # A cancelled request was withdrawn by the employee: it never settled anything.
     return (
         AnnualLeavePaymentRequest.objects.filter(
             employee_profile=profile,
             cycle_end__lt=cycle_start,
         )
+        .exclude(status=AnnualLeavePaymentRequest.Status.CANCELLED)
         .order_by("-cycle_end", "-id")
         .first()
     )
@@ -1511,7 +1512,9 @@ def get_leave_request_payment_context(instances):
                 adjustments[(profile.id, row["leave_type_id"], row["year"])] += float(row["adjustment_days"])
 
     payment_rows = list(
-        AnnualLeavePaymentRequest.objects.filter(employee_profile_id__in=profile_ids).values(
+        AnnualLeavePaymentRequest.objects.filter(employee_profile_id__in=profile_ids)
+        .exclude(status=AnnualLeavePaymentRequest.Status.CANCELLED)
+        .values(
             "id",
             "employee_profile_id",
             "cycle_end",

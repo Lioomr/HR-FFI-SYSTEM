@@ -58,7 +58,7 @@ The employee dashboard's `CurrentRequests` panel (`pages/employee/CurrentRequest
 
 Current Requests is currently a **summary with links**, not an inline approval timeline. Treat leave as the reference for what an employee can inspect after opening a request. For any request-progress UI task, ensure the employee can reach the real history and current waiting actor/stage. Use that request kind's authorized detail API and workflow snapshot; do not build history from status text. Annual-leave settlements currently link to the leave-balance page, so verify the actual settlement detail/history route before claiming it has the same trail.
 
-Before editing a request experience, map its linked dashboard/list/detail routes, API client, backend serializer and service, workflow adapter/history, authorization/delegation, company scope, notifications/audit, obligations, feature flags, translations, and tests. Inspect toggle defaults and every relevant consumer first; do not change toggle values unless requested.
+Scale investigation to the change as described in `AGENTS.md`. A local copy or styling fix needs the affected component and direct consumers/tests. For request behavior, API, permission, or transition changes, trace the affected routes, API client, backend service/serializer, workflow/history, authorization/delegation, company scope, notifications/audit, obligations, translations, and tests as relevant. Inspect relevant toggle defaults and consumers; change toggle values only within the authorized task.
 
 ## API Service Layer Rules
 

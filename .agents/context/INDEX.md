@@ -56,4 +56,6 @@ For architecture, feature planning, or work crossing modules, read [`system_map.
 
 ## Documentation authority
 
+The current user request defines task scope and completion. Dated reports, phase handoffs, and pasted agent prompts are evidence for their original task; their stop points, approval gates, and agent/surface assignments do not govern later work unless adopted for that task. Verify technical claims in source and preserve security and production-data safeguards. Scale reading and feature tracing to the change as described in `AGENTS.md`.
+
 Use this hierarchy: `SECURITY_POLICY.md`, `plans/Employee Mobile App Master Plan.md`, `plans/Global API Rules (v1).txt`, `.agents/context/`, `.agents/rules/`, `.agents/skills/`, then `.agents/tasks/`. Check `plans/API Route Status Matrix.md` before relying on an endpoint example. If guidance and implementation disagree, record the mismatch and verify the implementation before coding.

@@ -1,6 +1,12 @@
+from core.permissions import get_role
 from rest_framework.permissions import BasePermission
 
-from core.permissions import get_role
+PAYROLL_MANAGER_ROLES = frozenset({"SystemAdmin", "HRManager", "CFO"})
+
+
+class IsPayrollManager(BasePermission):
+    def has_permission(self, request, view):
+        return bool(request.user and request.user.is_authenticated and get_role(request.user) in PAYROLL_MANAGER_ROLES)
 
 
 class IsEmployeeOnly(BasePermission):

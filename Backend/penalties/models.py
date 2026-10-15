@@ -1,6 +1,5 @@
 from django.db import models
 from django.db.models import Q
-
 from employees.storage import PrivateUploadStorage
 
 
@@ -108,6 +107,7 @@ class PenaltyDeduction(models.Model):
     intended_month = models.PositiveIntegerField()
     amount = models.DecimalField(max_digits=12, decimal_places=2)
     claimed_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    claimed_exact_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     status = models.CharField(max_length=24, choices=Status.choices, default=Status.PENDING_REVIEW)
     payroll_run = models.ForeignKey("payroll.PayrollRun", null=True, blank=True, on_delete=models.PROTECT)
     payroll_run_item = models.ForeignKey("payroll.PayrollRunItem", null=True, blank=True, on_delete=models.PROTECT)

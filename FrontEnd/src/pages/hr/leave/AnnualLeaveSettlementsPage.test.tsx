@@ -415,11 +415,13 @@ describe("HR Annual Leave settlements queue", () => {
         page_size: 300,
         archive_state: "archived",
         status: "TERMINATED",
+        executives: "exclude",
       }),
     );
     expect(mockedListEmployees).toHaveBeenCalledWith({
       page: 1,
       page_size: 300,
+      executives: "exclude",
     });
     fireEvent.click(
       await screen.findByRole("button", { name: /Open Settlement/ }, FIND),

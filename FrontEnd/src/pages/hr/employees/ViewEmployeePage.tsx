@@ -46,6 +46,8 @@ import "./ViewEmployeePage.css";
 import { isSaudiEmployee } from "../../../utils/countries";
 import NationalityFlag from "../../../components/ui/NationalityFlag";
 import EmployeeLeaveBalances from "./components/EmployeeLeaveBalances";
+import EmployeeGosiSetting from "./components/EmployeeGosiSetting";
+import { payrollRebuildEnabled } from "../../../services/api/payrollTransport";
 import EmployeeDocumentArchive from "../../../components/employees/EmployeeDocumentArchive";
 import PageHeader from "../../../components/ui/PageHeader";
 import LoadingState from "../../../components/ui/LoadingState";
@@ -962,6 +964,10 @@ export default function ViewEmployeePage() {
                           </InfoField>
                         ))}
                       </div>
+
+                      {payrollRebuildEnabled() && employee.id != null && (
+                        <EmployeeGosiSetting employeeProfileId={employee.id} />
+                      )}
                     </div>
                   ),
                 },

@@ -110,7 +110,11 @@ function EmployeeSearchSelect({
     let active = true;
     const timer = window.setTimeout(
       () => {
-        void listEmployees({ page_size: 100, search: search || undefined })
+        void listEmployees({
+          page_size: 100,
+          search: search || undefined,
+          executives: "exclude",
+        })
           .then((result) => {
             if (!active || isApiError(result)) return;
             setOptions(

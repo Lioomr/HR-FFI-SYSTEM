@@ -335,7 +335,8 @@ describe("StartingWorkAcknowledgmentDetailPage approval progress", () => {
 
     render(<StartingWorkAcknowledgmentDetailPage />);
 
-    expect(await screen.findByText("Handled by Huda Ali")).toBeInTheDocument();
+    // A recorded rejection names its reviewer as "Rejected by …".
+    expect(await screen.findByText("Rejected by Huda Ali")).toBeInTheDocument();
   });
 });
 

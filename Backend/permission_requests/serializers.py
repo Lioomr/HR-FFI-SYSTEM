@@ -2,14 +2,13 @@ import json
 from collections.abc import Mapping
 from datetime import timedelta
 
-from django.conf import settings
-from django.utils import timezone
-from rest_framework import serializers
-
 from admin_portal.models import SystemSettings
 from core.pdf_signers import display_name
 from core.services import get_workflow_snapshot_read_only, get_workflow_snapshots
+from django.conf import settings
+from django.utils import timezone
 from employees.services.manager_relationships import PERMISSION_REQUEST_APPROVAL_CAPABILITY, get_valid_manager_profile
+from rest_framework import serializers
 
 from .labels import EXIT_TYPE_LABELS, STATUS_LABELS, profile_department, profile_employee_number, profile_job_title
 from .models import PENDING_STATUSES, REASON_MAX_LENGTH, PermissionRequest, PermissionRequestAttachment
@@ -131,6 +130,10 @@ class PermissionRequestCreateSerializer(serializers.Serializer):
     def validate_attachments(self, values):
         return [self._validate_attachment(value) for value in values]
 
+    def _has_stored_evidence(self) -> bool:
+        """A new request has no stored evidence; an edited one may already have some."""
+        return False
+
     def validate(self, attrs):
         permission_type = attrs.setdefault("permission_type", PermissionRequest.PermissionType.EXIT)
         today = timezone.localdate()
@@ -174,7 +177,7 @@ class PermissionRequestCreateSerializer(serializers.Serializer):
                         for field in supplied_time_fields
                     }
                 )
-            if not attachments:
+            if not attachments and not self._has_stored_evidence():
                 raise serializers.ValidationError(
                     {"attachments": ["Late Permission requires at least one evidence attachment."]}
                 )
@@ -210,6 +213,42 @@ class PermissionRequestCreateSerializer(serializers.Serializer):
         attrs["duration_minutes"] = duration
         attrs.setdefault("exit_type", "")
         return attrs
+
+
+class PermissionRequestEditSerializer(PermissionRequestCreateSerializer):
+    """The requester's edit while the request waits on the manager (use ``partial=True``).
+
+    Takes the create fields, all optional. The stored request overlaid with the
+    submitted fields is checked with the create rules, and ``validated_data`` is
+    the whole merged request (times cleared for Late, duration recalculated).
+    New ``attachments`` are added to the stored evidence; nothing is removed.
+    """
+
+    def _has_stored_evidence(self) -> bool:
+        return self.instance.attachments.exists()
+
+    def validate(self, attrs):
+        instance = self.instance
+        permission_type = attrs.get("permission_type", instance.permission_type)
+        merged = {
+            "permission_type": permission_type,
+            "request_date": attrs.get("request_date", instance.request_date),
+            "reason": attrs.get("reason", instance.reason),
+        }
+        for name in ("duration_minutes", "attachments", "attachment_metadata"):
+            if name in attrs:
+                merged[name] = attrs[name]
+        if permission_type != PermissionRequest.PermissionType.LATE:
+            # A request that was Late has no stored times, so switching away needs new ones.
+            for name in ("from_time", "to_time"):
+                value = attrs.get(name, getattr(instance, name))
+                if value is not None:
+                    merged[name] = value
+            if "exit_type" in attrs:
+                merged["exit_type"] = attrs["exit_type"]
+            elif permission_type == PermissionRequest.PermissionType.EXIT and instance.exit_type:
+                merged["exit_type"] = instance.exit_type
+        return super().validate(merged)
 
 
 class PermissionRequestDecisionSerializer(serializers.Serializer):

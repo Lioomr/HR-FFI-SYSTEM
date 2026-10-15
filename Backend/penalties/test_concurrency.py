@@ -4,13 +4,12 @@ from decimal import Decimal
 from threading import Event
 from unittest.mock import patch
 
+from attendance.models import AttendanceDailyResult, BioTimeEmployeeMap
 from django.contrib.auth import get_user_model
 from django.core.management import call_command
 from django.db import close_old_connections, connection, connections, transaction
 from django.test import TransactionTestCase, override_settings
 from django.utils import timezone
-
-from attendance.models import AttendanceDailyResult
 from employees.models import EmployeeProfile
 from organization.models import OrganizationNode
 from payroll.models import PayrollRun, PayrollRunItem
@@ -98,6 +97,7 @@ class PenaltyLockTests(TransactionTestCase):
         company = OrganizationNode.objects.create(code="PEN_AUTO_LOCK", name="Auto lock", node_type="company")
         user = get_user_model().objects.create_user(email="pen-auto-lock@ffi.test")
         profile = EmployeeProfile.objects.create(user=user, company=company, employee_id="ALOCK-1", total_salary=3000)
+        BioTimeEmployeeMap.objects.create(employee_profile=profile, biotime_emp_code="ALOCK-1")
         start = timezone.make_aware(datetime.combine(date(2026, 10, 1), time(9, 0)))
         result = AttendanceDailyResult.objects.create(
             employee_profile=profile,

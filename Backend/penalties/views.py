@@ -1,19 +1,14 @@
 from datetime import date
 
+from accounts.permissions import get_role
+from audit.utils import audit
+from core.executives import executive_profile_q, is_executive_profile
+from core.pagination import StandardPagination
+from core.responses import error, success
 from django.db import transaction
 from django.db.models import Q
 from django.http import FileResponse
 from django.utils import timezone
-from rest_framework import mixins, status, viewsets
-from rest_framework.decorators import action
-from rest_framework.exceptions import PermissionDenied, ValidationError
-from rest_framework.permissions import IsAuthenticated
-from rest_framework.views import APIView
-
-from accounts.permissions import get_role
-from audit.utils import audit
-from core.pagination import StandardPagination
-from core.responses import error, success
 from employees.models import EmployeeProfile
 from employees.permissions import IsHRManagerOrAdmin
 from organization.services import (
@@ -22,11 +17,24 @@ from organization.services import (
     get_active_company_for_request,
     get_requested_company_id,
 )
+from rest_framework import mixins, status, viewsets
+from rest_framework.decorators import action
+from rest_framework.exceptions import PermissionDenied, ValidationError
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.views import APIView
 
 from .models import PenaltyCatalog, PenaltyDeduction, PenaltyRecord
 from .notifications import queue_penalty_notification
 from .serializers import PenaltyCatalogSerializer, PenaltyRecordSerializer
-from .services import _review_recurrence, current_replacement, effective_from, issue, rerate_recurrence, waive
+from .services import (
+    EXECUTIVE_PENALTY_REASON,
+    _review_recurrence,
+    current_replacement,
+    effective_from,
+    issue,
+    rerate_recurrence,
+    waive,
+)
 from .warning_notices import notice_filename
 
 Automation = PenaltyRecord.Automation
@@ -79,9 +87,14 @@ class PenaltyViewSet(
 
     def get_queryset(self):
         _selected_company(self.request)
-        qs = PenaltyRecord.objects.select_related(
-            "company", "employee_profile", "employee_profile__user", "catalog", "deduction", "warning_notice"
-        ).order_by("-occurred_on", "-id")
+        # Executives are never penalized; anything raised for them before stays out of every list.
+        qs = (
+            PenaltyRecord.objects.exclude(executive_profile_q("employee_profile__"))
+            .select_related(
+                "company", "employee_profile", "employee_profile__user", "catalog", "deduction", "warning_notice"
+            )
+            .order_by("-occurred_on", "-id")
+        )
         mine = self.request.query_params.get("mine", "").lower() in {"1", "true"}
         if mine or get_role(self.request.user) not in {"HRManager", "SystemAdmin"}:
             qs = qs.filter(employee_profile__user=self.request.user)
@@ -180,6 +193,8 @@ class PenaltyViewSet(
                 return error("Not found.", status=404)
             if profile.is_archived or profile.employment_status != EmployeeProfile.EmploymentStatus.ACTIVE:
                 return error("Only active, non-archived employees are eligible for penalties.", status=422)
+            if is_executive_profile(profile):
+                return error("Validation error", {"employee_profile_id": [EXECUTIVE_PENALTY_REASON]}, status=422)
             record = PenaltyRecord.objects.create(
                 company=company,
                 employee_profile=profile,

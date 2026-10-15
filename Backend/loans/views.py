@@ -1,16 +1,6 @@
 import logging
 import re
 
-from django.contrib.contenttypes.models import ContentType
-from django.db import transaction
-from django.db.models import Q
-from django.utils import timezone
-from django_filters.rest_framework import DjangoFilterBackend
-from rest_framework import filters, status, viewsets
-from rest_framework.decorators import action
-from rest_framework.permissions import IsAuthenticated
-from rest_framework.response import Response
-
 from audit.utils import audit
 from core.document_integrity.api import (
     DocumentIntegrityActionsMixin,
@@ -31,10 +21,20 @@ from core.services import (
     notify_users_for_pending_status,
     send_request_submission_email,
 )
+from core.services.cancellation_requests import request_cancellation_response, withdraw_cancellation_response
 from core.services.request_references import public_reference_for
+from django.contrib.contenttypes.models import ContentType
+from django.db import transaction
+from django.db.models import Q
+from django.utils import timezone
+from django_filters.rest_framework import DjangoFilterBackend
 from employees.permissions import IsHRManagerOrAdmin
 from employees.services.manager_relationships import get_valid_manager_user, manager_scope_q
 from organization.services import filter_queryset_by_accessible_companies, filter_queryset_by_company_scope
+from rest_framework import filters, status, viewsets
+from rest_framework.decorators import action
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
 
 from .models import LoanRequest
 from .permissions import (
@@ -50,9 +50,15 @@ from .permissions import (
     is_cfo_approver_user,
     is_hr_approver_user,
 )
-from .serializers import LoanRequestActionSerializer, LoanRequestCreateSerializer, LoanRequestReadSerializer
+from .serializers import (
+    LoanRequestActionSerializer,
+    LoanRequestCreateSerializer,
+    LoanRequestEditSerializer,
+    LoanRequestReadSerializer,
+)
 from .services import (
     LEGACY_PENDING_HR_STATUSES,
+    LoanEditInvalid,
     LoanTransitionError,
     apply_cancellation,
     apply_ceo_approval,
@@ -63,6 +69,8 @@ from .services import (
     apply_disbursement,
     apply_hr_recommendation,
     apply_manager_recommendation,
+    apply_requester_edit,
+    notify_after_requester_edit,
     record_loan_submission,
     submission_status,
 )
@@ -335,13 +343,12 @@ def _build_loan_request_pdf_fallback(instance: LoanRequest) -> bytes:
 def _build_loan_request_pdf_legacy(instance: LoanRequest) -> bytes:
     from io import BytesIO
 
+    from core.pdf import font_pair, shape_ar
+    from core.views_templates import resolve_template_path
     from pypdf import PdfReader, PdfWriter
     from reportlab.lib.utils import simpleSplit
     from reportlab.pdfbase import pdfmetrics
     from reportlab.pdfgen import canvas
-
-    from core.pdf import font_pair, shape_ar
-    from core.views_templates import resolve_template_path
 
     template_path = resolve_template_path("loan_request_blank.pdf", aliases=["loan-request-template.pdf"])
     if not template_path:
@@ -837,6 +844,71 @@ class LoanRequestViewSet(DocumentIntegrityActionsMixin, viewsets.ModelViewSet):
             return exc.to_response()
         audit(request, "loan_request_cancelled", entity="LoanRequest", entity_id=instance.id)
         return success(LoanRequestReadSerializer(instance).data)
+
+    @action(detail=True, methods=["patch"], permission_classes=[IsAuthenticated], url_path="edit")
+    def edit(self, request, pk=None):
+        """The requester changes their own loan while it waits on the manager.
+
+        Takes the create fields, all optional; the merged loan is revalidated with the
+        create rules. 404 unless the caller owns the loan in an accessible company.
+        """
+        instance = self._owned_loan(request, pk)
+        if instance is None:
+            return error("Not found", errors=["Not found."], status=404)
+
+        def validate(locked):
+            serializer = LoanRequestEditSerializer(locked, data=request.data, context={"request": request})
+            if not serializer.is_valid():
+                raise LoanEditInvalid(serializer.errors)
+            return dict(serializer.validated_data)
+
+        try:
+            result = apply_requester_edit(instance, actor=request.user, validate=validate)
+        except LoanEditInvalid as exc:
+            return error("Validation error", errors=exc.errors, status=422)
+        except LoanTransitionError as exc:
+            return exc.to_response()
+
+        if result.changed_fields:
+            audit(
+                request,
+                "loan_request_edited",
+                entity="LoanRequest",
+                entity_id=instance.id,
+                # Field names only: never the free-text reason.
+                metadata={
+                    "changed_fields": list(result.changed_fields),
+                    "from_status": result.from_status,
+                    "to_status": result.instance.status,
+                },
+            )
+            notify_after_requester_edit(result.instance)
+        return success(self._serialize_owned_loan(request)(instance), message="Loan request updated.")
+
+    def _owned_loan(self, request, pk):
+        return self.get_queryset().filter(pk=pk, employee=request.user).first()
+
+    def _serialize_owned_loan(self, request):
+        return lambda obj: (
+            LoanRequestReadSerializer(self.get_queryset().get(pk=obj.pk), context={"request": request}).data
+        )
+
+    @action(detail=True, methods=["post"], permission_classes=[IsAuthenticated], url_path="request-cancellation")
+    def request_cancellation(self, request, pk=None):
+        """The employee asks HR to cancel their loan while it waits for disbursement (reason required)."""
+        instance = self._owned_loan(request, pk)
+        if instance is None:
+            return error("Not found", errors=["Not found."], status=404)
+        return request_cancellation_response(request, instance, serialize=self._serialize_owned_loan(request))
+
+    @action(
+        detail=True, methods=["post"], permission_classes=[IsAuthenticated], url_path="withdraw-cancellation-request"
+    )
+    def withdraw_cancellation_request(self, request, pk=None):
+        instance = self._owned_loan(request, pk)
+        if instance is None:
+            return error("Not found", errors=["Not found."], status=404)
+        return withdraw_cancellation_response(request, instance, serialize=self._serialize_owned_loan(request))
 
     @action(detail=True, methods=["get"], permission_classes=[IsAuthenticated, IsLoanOwnerOrHR])
     def pdf(self, request, pk=None):

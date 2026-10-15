@@ -17,14 +17,12 @@ import logging
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
+from core.executives import is_executive_user
 from django.conf import settings
-from django.core.exceptions import ObjectDoesNotExist
 from django.utils import timezone
 
 logger = logging.getLogger(__name__)
 
-EXECUTIVE_GROUP = "CEO"
-EXECUTIVE_TITLES = frozenset({"chief executive officer", "general manager"})
 DIGEST_EVENT_KEY = "executive.digest"
 HELD_FOR_DIGEST = "Held for the executive daily digest."
 HELD_DIGESTED = "Included in the executive daily digest."
@@ -35,23 +33,8 @@ def _policy_enabled() -> bool:
 
 
 def is_executive_recipient(user) -> bool:
-    """CEO group member, or an active profile whose title/position is CEO or General Manager."""
-    if not user or not getattr(user, "pk", None):
-        return False
-    if user.groups.filter(name=EXECUTIVE_GROUP).exists():
-        return True
-    try:
-        profile = user.employee_profile
-    except (AttributeError, ObjectDoesNotExist):
-        return False
-    names = {
-        (getattr(profile, "job_title", "") or "").strip().lower(),
-        (getattr(profile, "job_title_en", "") or "").strip().lower(),
-    }
-    position = getattr(profile, "position_ref", None)
-    if position is not None:
-        names.add((getattr(position, "name", "") or "").strip().lower())
-    return bool(names & EXECUTIVE_TITLES)
+    """CEO group member, or a profile whose title/position is an executive title (``core.executives``)."""
+    return is_executive_user(user)
 
 
 def quiet_hours_active(now: datetime | None = None) -> bool:

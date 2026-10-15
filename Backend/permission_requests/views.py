@@ -6,16 +6,6 @@ therefore no CEO route, queue, or action.
 
 import os
 
-from django.contrib.contenttypes.models import ContentType
-from django.db.models import Q
-from django.http import FileResponse
-from django.utils.dateparse import parse_date
-from rest_framework import status, viewsets
-from rest_framework.decorators import action
-from rest_framework.exceptions import ValidationError
-from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
-from rest_framework.permissions import IsAuthenticated
-
 from core.document_integrity.api import (
     DocumentIntegrityActionsMixin,
     frozen_pdf_response,
@@ -25,6 +15,11 @@ from core.document_integrity.api import (
 from core.models import WorkflowInstance
 from core.pagination import StandardPagination
 from core.responses import error, success
+from core.services.cancellation_requests import request_cancellation_response, withdraw_cancellation_response
+from django.contrib.contenttypes.models import ContentType
+from django.db.models import Q
+from django.http import FileResponse
+from django.utils.dateparse import parse_date
 from employees.permissions import IsHRManagerOrAdmin
 from employees.services.manager_relationships import PERMISSION_REQUEST_APPROVAL_CAPABILITY, manager_scope_q
 from organization.services import (
@@ -33,6 +28,11 @@ from organization.services import (
     get_active_company_for_request,
     get_active_organization_for_request,
 )
+from rest_framework import status, viewsets
+from rest_framework.decorators import action
+from rest_framework.exceptions import ValidationError
+from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
+from rest_framework.permissions import IsAuthenticated
 
 from . import services
 from .models import PENDING_STATUSES, PermissionRequest
@@ -49,6 +49,7 @@ from .serializers import (
     PermissionRequestCreateSerializer,
     PermissionRequestDecisionSerializer,
     PermissionRequestDetailSerializer,
+    PermissionRequestEditSerializer,
     PermissionRequestReadSerializer,
 )
 
@@ -94,7 +95,8 @@ class PermissionRequestViewSet(DocumentIntegrityActionsMixin, viewsets.GenericVi
         if self.action == "integrity_retry_seal":
             return [IsAuthenticated(), IsHRManagerOrAdmin()]
         # integrity, integrity_verify: object access is decided by get_integrity_object.
-        # list, retrieve, cancel, pdf: object access is decided by _visible_queryset.
+        # list, retrieve, cancel, edit, pdf, request_cancellation, withdraw_cancellation_request:
+        # object access is decided by _visible_queryset.
         return [IsAuthenticated()]
 
     # -- scoping ----------------------------------------------------------------
@@ -188,7 +190,7 @@ class PermissionRequestViewSet(DocumentIntegrityActionsMixin, viewsets.GenericVi
         action = getattr(self, "action", None)
         if action is None and hasattr(self, "request"):
             action = getattr(self, "action_map", {}).get(self.request.method.lower())
-        if action in {"create", "add_attachments"}:
+        if action in {"create", "add_attachments", "edit"}:
             return [MultiPartParser(), FormParser(), JSONParser()]
         return super().get_parsers()
 
@@ -247,6 +249,72 @@ class PermissionRequestViewSet(DocumentIntegrityActionsMixin, viewsets.GenericVi
             request, "permission_request_cancelled", instance, from_status=transition.from_status
         )
         return success(self._detail(instance), message="Permission request cancelled.")
+
+    @action(detail=True, methods=["patch"], url_path="edit")
+    def edit(self, request, pk=None):
+        """The requester changes their own request while it waits on the manager.
+
+        Takes the create fields, all optional; the merged request is revalidated
+        with the create rules. 404 unless the caller owns the request.
+        """
+        instance = self._get_visible(pk)
+        if instance is None or instance.employee_id != request.user.pk:
+            return _not_found()
+
+        def validate(locked):
+            serializer = PermissionRequestEditSerializer(
+                locked, data=request.data, partial=True, context={"request": request}
+            )
+            if not serializer.is_valid():
+                raise services.PermissionEditInvalid(serializer.errors)
+            return dict(serializer.validated_data)
+
+        try:
+            result = services.edit_permission_request(instance, actor=request.user, validate=validate)
+        except services.PermissionEditInvalid as exc:
+            return error("Validation error", errors=exc.errors, status=422)
+        except services.PermissionRequestError as exc:
+            return exc.to_response()
+
+        instance = self._reload(instance)
+        if result.changed_fields:
+            services.audit_permission_request(
+                request,
+                "permission_request_edited",
+                instance,
+                from_status=result.from_status,
+                extra={"changed_fields": list(result.changed_fields)},
+            )
+            if result.attachment_count:
+                services.audit_permission_request(
+                    request,
+                    "permission_request_attachment_added",
+                    instance,
+                    extra={"attachment_count": result.attachment_count},
+                )
+            services.notify_after_requester_edit(instance)
+        return success(self._detail(instance), message="Permission request updated.")
+
+    def _owned(self, pk):
+        instance = self._get_visible(pk)
+        if instance is None or instance.employee_id != self.request.user.pk:
+            return None
+        return instance
+
+    @action(detail=True, methods=["post"], url_path="request-cancellation")
+    def request_cancellation(self, request, pk=None):
+        """The requester asks HR to cancel their approved permission (reason required). 404 unless they own it."""
+        instance = self._owned(pk)
+        if instance is None:
+            return _not_found()
+        return request_cancellation_response(request, instance, serialize=lambda obj: self._detail(self._reload(obj)))
+
+    @action(detail=True, methods=["post"], url_path="withdraw-cancellation-request")
+    def withdraw_cancellation_request(self, request, pk=None):
+        instance = self._owned(pk)
+        if instance is None:
+            return _not_found()
+        return withdraw_cancellation_response(request, instance, serialize=lambda obj: self._detail(self._reload(obj)))
 
     @action(detail=True, methods=["get"])
     def pdf(self, request, pk=None):

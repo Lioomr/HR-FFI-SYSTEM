@@ -27,6 +27,8 @@ import type {
 } from "antd/es/table/interface";
 import {
   PlusOutlined,
+  SendOutlined,
+  CloudUploadOutlined,
   SearchOutlined,
   DownloadOutlined,
   EllipsisOutlined,
@@ -1254,21 +1256,35 @@ export default function EmployeesListPage() {
           </h2>
           <Text type="secondary">{t("employees.list.subtitle")}</Text>
         </div>
-        <Button
-          type="primary"
-          size="large"
-          icon={<PlusOutlined />}
-          onClick={() => navigate("/hr/employees/create")}
-          disabled={isHeadOffice}
-          title={
-            isHeadOffice
-              ? t("organization.headOffice.switchToCreateEmployees")
-              : undefined
-          }
-          className="employees-header__create"
-        >
-          {t("employees.list.createEmployee")}
-        </Button>
+        <div className="employees-header__actions">
+          <Button
+            icon={<SendOutlined aria-hidden="true" />}
+            onClick={() => navigate("/hr/invites")}
+          >
+            {t("layout.invites")}
+          </Button>
+          <Button
+            icon={<CloudUploadOutlined aria-hidden="true" />}
+            onClick={() => navigate("/hr/import/employees")}
+          >
+            {t("layout.importEmployees")}
+          </Button>
+          <Button
+            type="primary"
+            size="large"
+            icon={<PlusOutlined aria-hidden="true" />}
+            onClick={() => navigate("/hr/employees/create")}
+            disabled={isHeadOffice}
+            title={
+              isHeadOffice
+                ? t("organization.headOffice.switchToCreateEmployees")
+                : undefined
+            }
+            className="employees-header__create"
+          >
+            {t("employees.list.createEmployee")}
+          </Button>
+        </div>
       </header>
 
       <div className="employees-views">

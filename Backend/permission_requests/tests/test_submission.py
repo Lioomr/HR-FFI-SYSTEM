@@ -1,11 +1,12 @@
 from datetime import time, timedelta
 
 import pytest
-from django.utils import timezone
-
 from audit.models import AuditLog
+from core.executives import EXECUTIVE_REQUEST_ERROR
+from django.utils import timezone
 from employees.models import EmployeeProfile
 from organization.models import UserOrganizationAccess
+
 from permission_requests.models import PermissionRequest
 from permission_requests.services import NO_APPROVER_MESSAGE
 from permission_requests.tests.helpers import BASE_URL, field_errors, payload
@@ -47,7 +48,7 @@ def test_employee_submits_a_valid_request(team, client_for, notifications):
     assert notified["action_path"] == f"/manager/permission-requests/{data['id']}"
 
 
-@pytest.mark.parametrize("role", ["HRManager", "CFO", "CEO", "Manager", "SystemAdmin"])
+@pytest.mark.parametrize("role", ["HRManager", "CFO", "Manager", "SystemAdmin"])
 def test_every_role_with_an_active_employee_profile_can_submit(role, make_user, client_for):
     manager = make_user("Manager")
     requester = make_user(role, manager=manager)
@@ -57,6 +58,16 @@ def test_every_role_with_an_active_employee_profile_can_submit(role, make_user, 
     assert response.status_code == 201, response.data
     assert response.data["data"]["employee"]["id"] == requester.id
     assert response.data["data"]["status"] == Status.PENDING_MANAGER
+
+
+def test_the_ceo_cannot_submit(make_user, client_for):
+    requester = make_user("CEO", manager=make_user("Manager"))
+
+    response = _post(client_for, requester)
+
+    assert response.status_code == 403
+    assert response.data["message"] == EXECUTIVE_REQUEST_ERROR
+    assert not PermissionRequest.objects.exists()
 
 
 def test_system_admin_without_an_employee_profile_cannot_submit(make_user, client_for):

@@ -1,14 +1,13 @@
-"""Recheck existing absence candidates after attendance or leave changes."""
+"""Recheck existing absence candidates after attendance, leave or BioTime mapping changes."""
 
+from attendance.models import AttendanceRecord, BioTimeEmployeeMap
 from django.db import transaction
-from django.db.models.signals import post_save
+from django.db.models.signals import post_delete, post_save
 from django.dispatch import receiver
-
-from attendance.models import AttendanceRecord
 from leaves.models import LeaveRequest
 
 from .models import PenaltyRecord
-from .services import effective_from, reconcile_absence_candidates
+from .services import effective_from, invalidate_unmapped_candidates, reconcile_absence_candidates
 
 
 @receiver(post_save, sender=AttendanceRecord, dispatch_uid="penalty_absence_attendance_changed")
@@ -36,3 +35,26 @@ def leave_request_changed(sender, instance, **kwargs):
             profile, day
         )
     )
+
+
+@receiver(post_save, sender=BioTimeEmployeeMap, dispatch_uid="penalty_biotime_mapping_saved")
+@receiver(post_delete, sender=BioTimeEmployeeMap, dispatch_uid="penalty_biotime_mapping_deleted")
+def biotime_mapping_changed(sender, instance, **kwargs):
+    """Withdraw candidates that a removed mapping or a later start date no longer supports."""
+    profile_id = instance.employee_profile_id
+    if not PenaltyRecord.objects.filter(
+        employee_profile_id=profile_id, status=PenaltyRecord.Status.PENDING_HR_MARK
+    ).exists():
+        return
+
+    def recheck():
+        invalidate_unmapped_candidates([profile_id])
+        if (
+            instance.attendance_start_date
+            and PenaltyRecord.objects.filter(employee_profile_id=profile_id, source_kind="absence").exists()
+        ):
+            reconcile_absence_candidates(
+                instance.employee_profile, max(instance.attendance_start_date, effective_from())
+            )
+
+    transaction.on_commit(recheck)

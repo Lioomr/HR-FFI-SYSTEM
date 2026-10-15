@@ -8,6 +8,7 @@ import {
   Dropdown,
   DatePicker,
   Form,
+  Grid,
   Input,
   InputNumber,
   Row,
@@ -175,6 +176,7 @@ function Money({ value }: { value: string | number | null | undefined }) {
 
 export default function CEOJobOfferDetailPage() {
   const { t } = useI18n();
+  const screens = Grid.useBreakpoint();
   const navigate = useNavigate();
   const { id } = useParams();
   const [messageApi, messageContext] = message.useMessage();
@@ -996,49 +998,53 @@ export default function CEOJobOfferDetailPage() {
         </Col>
 
         <Col xs={24} xl={8}>
-          <Surface style={{ marginBottom: 16 }}>
-            <SectionTitle>{t("jobOffers.ceo.decisionTitle")}</SectionTitle>
+          {/* The decision column is much shorter than the offer, so it stays
+              beside the reader (below the 72px header) on wide screens. */}
+          <div style={screens.xl ? { position: "sticky", top: 88 } : undefined}>
+            <Surface style={{ marginBottom: 16 }}>
+              <SectionTitle>{t("jobOffers.ceo.decisionTitle")}</SectionTitle>
 
-            {offer.ceo_decision_at ? (
-              <JobOfferCeoDecision offer={offer} />
-            ) : null}
+              {offer.ceo_decision_at ? (
+                <JobOfferCeoDecision offer={offer} />
+              ) : null}
 
-            {actionable ? (
-              <Text type="secondary" style={{ display: "block" }}>
-                {t("jobOffers.ceo.decisionHint")}
-              </Text>
-            ) : (
-              // Already decided elsewhere, or never this approver's to make.
-              <Alert
-                type="info"
-                showIcon
-                style={{
-                  borderRadius: 12,
-                  marginTop: offer.ceo_decision_at ? 16 : 0,
-                }}
-                message={t("jobOffers.ceo.noActionAvailable")}
-              />
-            )}
-          </Surface>
+              {actionable ? (
+                <Text type="secondary" style={{ display: "block" }}>
+                  {t("jobOffers.ceo.decisionHint")}
+                </Text>
+              ) : (
+                // Already decided elsewhere, or never this approver's to make.
+                <Alert
+                  type="info"
+                  showIcon
+                  style={{
+                    borderRadius: 12,
+                    marginTop: offer.ceo_decision_at ? 16 : 0,
+                  }}
+                  message={t("jobOffers.ceo.noActionAvailable")}
+                />
+              )}
+            </Surface>
 
-          <Surface>
-            <SectionTitle>
-              {t("jobOffers.detail.section.workflow")}
-            </SectionTitle>
-            <JobOfferWorkflowHistory history={offer.workflow?.history} />
-          </Surface>
+            <Surface>
+              <SectionTitle>
+                {t("jobOffers.detail.section.workflow")}
+              </SectionTitle>
+              <JobOfferWorkflowHistory history={offer.workflow?.history} />
+            </Surface>
 
-          {/* Read-only for the CEO; the backend answers 404 to a CEO who did
+            {/* Read-only for the CEO; the backend answers 404 to a CEO who did
               not decide the offer, which the card shows as unavailable. */}
-          <div style={{ marginTop: 16 }}>
-            <DocumentIntegrityPanel
-              documentType="job_offer"
-              requestId={offer.id}
-              isFinal={
-                isDocumentFinal("job_offer", offer.status) &&
-                Boolean(offer.sent_at)
-              }
-            />
+            <div style={{ marginTop: 16 }}>
+              <DocumentIntegrityPanel
+                documentType="job_offer"
+                requestId={offer.id}
+                isFinal={
+                  isDocumentFinal("job_offer", offer.status) &&
+                  Boolean(offer.sent_at)
+                }
+              />
+            </div>
           </div>
         </Col>
       </Row>

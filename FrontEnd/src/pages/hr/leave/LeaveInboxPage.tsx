@@ -161,7 +161,7 @@ export default function LeaveInboxPage() {
     try {
       const [employeesRes, delegationCandidatesRes, leaveTypesRes] =
         await Promise.all([
-          listEmployees({ page: 1, page_size: 300 }),
+          listEmployees({ page: 1, page_size: 300, executives: "exclude" }),
           listDelegationCandidates({ scope: "all" }),
           getLeaveTypes(),
         ]);

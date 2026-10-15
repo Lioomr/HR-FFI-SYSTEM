@@ -340,7 +340,7 @@ export default function StartingWorkAcknowledgmentDetailPage() {
     : null;
 
   return (
-    <div style={{ maxWidth: 1200, margin: "0 auto", paddingBottom: 24 }}>
+    <div style={{ maxWidth: 1400, margin: "0 auto", paddingBottom: 24 }}>
       {messageContext}
 
       <PageHeader

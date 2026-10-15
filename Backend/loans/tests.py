@@ -2,21 +2,21 @@ from datetime import date
 from decimal import Decimal
 from unittest.mock import patch
 
+from core.models import DelegationRule
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.db import connection
 from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
+from employees.models import EmployeeProfile
+from hr_reference.models import Department, Position
+from organization.models import OrganizationNode, UserOrganizationAccess
+from payroll.models import PayrollRun
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from core.models import DelegationRule
-from employees.models import EmployeeProfile
-from hr_reference.models import Department, Position
 from loans.models import LoanRequest, LoanWorkflowConfig
 from loans.serializers import LoanRequestReadSerializer
-from organization.models import OrganizationNode, UserOrganizationAccess
-from payroll.models import PayrollRun
 
 User = get_user_model()
 
@@ -276,9 +276,11 @@ class LoanWorkflowTests(APITestCase):
 
     def test_notification_failure_does_not_fail_loan_submission(self):
         self.client.force_authenticate(user=self.employee)
-        with self.assertLogs("loans.views", level="ERROR") as logs, patch(
-            "loans.views.send_request_submission_email", side_effect=RuntimeError("provider unavailable")
-        ), patch("loans.views.notify_users_for_pending_status", side_effect=RuntimeError("provider unavailable")):
+        with (
+            self.assertLogs("loans.views", level="ERROR") as logs,
+            patch("loans.views.send_request_submission_email", side_effect=RuntimeError("provider unavailable")),
+            patch("loans.views.notify_users_for_pending_status", side_effect=RuntimeError("provider unavailable")),
+        ):
             response = self.client.post(self.loan_requests_url, {"amount": "1200", "reason": "Medical"}, format="json")
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
@@ -333,7 +335,11 @@ class LoanWorkflowTests(APITestCase):
             _generate_payroll_items(run)
 
         profile_queries = [
-            query["sql"] for query in queries if EmployeeProfile._meta.db_table in query["sql"]
+            query["sql"]
+            for query in queries
+            if f'FROM "{EmployeeProfile._meta.db_table}"' in query["sql"]
+            and "FOR UPDATE" in query["sql"]
+            and "JOIN" in query["sql"]
         ]
         self.assertEqual(len(profile_queries), 1)
         self.assertIn(User._meta.db_table, profile_queries[0])

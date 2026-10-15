@@ -16,6 +16,8 @@ import {
   Space,
   Typography,
   notification,
+  Row,
+  Col,
 } from "antd";
 import {
   CheckCircleOutlined,
@@ -511,7 +513,7 @@ export default function LeaveRequestDetailsPage({
   };
 
   return (
-    <div style={{ maxWidth: 800, margin: "0 auto" }}>
+    <div style={{ maxWidth: 1400, margin: "0 auto" }}>
       <PageHeader
         title={t("leave.requestDetailsTitle", { id: request.id })}
         tags={<Tag color={statusColor()}>{statusLabel}</Tag>}
@@ -592,102 +594,106 @@ export default function LeaveRequestDetailsPage({
         }
       />
 
-      <div style={{ display: "grid", gap: 18 }}>
-        <LeaveApprovalMap request={request} t={t} />
-        {!isCEO && (
-          <RequestObligationsPanel
-            parentType="leave_request"
-            parentId={request.id}
-            leaveRequest={request}
-            onChanged={loadData}
-          />
-        )}
+      <Row gutter={[18, 18]} align="top">
+        <Col xs={24} xl={10}>
+          <LeaveApprovalMap request={request} t={t} />
+        </Col>
+        <Col xs={24} xl={14} style={{ display: "grid", gap: 18 }}>
+          {!isCEO && (
+            <RequestObligationsPanel
+              parentType="leave_request"
+              parentId={request.id}
+              leaveRequest={request}
+              onChanged={loadData}
+            />
+          )}
 
-        <Card style={{ borderRadius: 16 }} title={t("common.details")}>
-          <Descriptions bordered column={1}>
-            <Descriptions.Item label={t("permissionRequests.list.reference")}>
-              {request.reference_no || `#${request.id}`}
-            </Descriptions.Item>
-            <Descriptions.Item label={t("common.employee")}>
-              {employeeName}
-            </Descriptions.Item>
-            <Descriptions.Item label={t("leave.type")}>
-              {translateLeaveType(request.leave_type?.name)}
-            </Descriptions.Item>
-            <Descriptions.Item label={t("leave.period")}>
-              {request.start_date} {t("common.to")} {request.end_date}
-            </Descriptions.Item>
-            <Descriptions.Item label={t("common.duration")}>
-              {request.days} {t("leaves.days")}
-            </Descriptions.Item>
-            <Descriptions.Item label={t("common.reason")}>
-              {request.reason}
-            </Descriptions.Item>
-            {request.source !== "hr_manual" && (
-              <Descriptions.Item label={t("leave.willTravel")}>
-                {t(request.will_travel ? "common.yes" : "common.no")}
+          <Card style={{ borderRadius: 16 }} title={t("common.details")}>
+            <Descriptions bordered column={1}>
+              <Descriptions.Item label={t("permissionRequests.list.reference")}>
+                {request.reference_no || `#${request.id}`}
               </Descriptions.Item>
-            )}
-            {request.requires_hr_completion_visa &&
-              request.will_require_visa != null && (
-                <Descriptions.Item label={t("leave.willRequireVisa")}>
-                  {t(request.will_require_visa ? "common.yes" : "common.no")}
+              <Descriptions.Item label={t("common.employee")}>
+                {employeeName}
+              </Descriptions.Item>
+              <Descriptions.Item label={t("leave.type")}>
+                {translateLeaveType(request.leave_type?.name)}
+              </Descriptions.Item>
+              <Descriptions.Item label={t("leave.period")}>
+                {request.start_date} {t("common.to")} {request.end_date}
+              </Descriptions.Item>
+              <Descriptions.Item label={t("common.duration")}>
+                {request.days} {t("leaves.days")}
+              </Descriptions.Item>
+              <Descriptions.Item label={t("common.reason")}>
+                {request.reason}
+              </Descriptions.Item>
+              {request.source !== "hr_manual" && (
+                <Descriptions.Item label={t("leave.willTravel")}>
+                  {t(request.will_travel ? "common.yes" : "common.no")}
                 </Descriptions.Item>
               )}
-            <Descriptions.Item label={t("common.submittedOn")}>
-              {request.created_at
-                ? new Date(request.created_at).toLocaleDateString()
-                : "-"}
-            </Descriptions.Item>
-            {request.source === "hr_manual" && (
-              <Descriptions.Item label={t("leave.manual.recordSource")}>
-                <Tag color="cyan">{t("leave.manual.badge")}</Tag>
+              {request.requires_hr_completion_visa &&
+                request.will_require_visa != null && (
+                  <Descriptions.Item label={t("leave.willRequireVisa")}>
+                    {t(request.will_require_visa ? "common.yes" : "common.no")}
+                  </Descriptions.Item>
+                )}
+              <Descriptions.Item label={t("common.submittedOn")}>
+                {request.created_at
+                  ? new Date(request.created_at).toLocaleDateString()
+                  : "-"}
               </Descriptions.Item>
-            )}
-            {request.source === "hr_manual" && (
-              <Descriptions.Item label={t("leave.manual.entryReason")}>
-                {request.manual_entry_reason || "-"}
-              </Descriptions.Item>
-            )}
-            {request.source === "hr_manual" && (
-              <Descriptions.Item label={t("leave.manual.sourceDocumentRef")}>
-                {request.source_document_ref || "-"}
-              </Descriptions.Item>
-            )}
+              {request.source === "hr_manual" && (
+                <Descriptions.Item label={t("leave.manual.recordSource")}>
+                  <Tag color="cyan">{t("leave.manual.badge")}</Tag>
+                </Descriptions.Item>
+              )}
+              {request.source === "hr_manual" && (
+                <Descriptions.Item label={t("leave.manual.entryReason")}>
+                  {request.manual_entry_reason || "-"}
+                </Descriptions.Item>
+              )}
+              {request.source === "hr_manual" && (
+                <Descriptions.Item label={t("leave.manual.sourceDocumentRef")}>
+                  {request.source_document_ref || "-"}
+                </Descriptions.Item>
+              )}
 
-            {request.status === "rejected" && (
-              <Descriptions.Item
-                label={t("leave.rejectionReason")}
-                contentStyle={{ color: "red" }}
-              >
-                {request.ceo_decision_note ||
-                  request.hr_decision_note ||
-                  request.manager_decision_note ||
-                  request.delegate_decision_note ||
-                  request.rejection_reason ||
-                  "-"}
-              </Descriptions.Item>
-            )}
-            {request.status === "pending_ceo" && !isCEO && (
-              <Descriptions.Item
-                label={t("leave.statusNote")}
-                contentStyle={{ color: "#d4380d" }}
-              >
-                {t("leave.ceoApprovalWait")}
-              </Descriptions.Item>
-            )}
-          </Descriptions>
-        </Card>
+              {request.status === "rejected" && (
+                <Descriptions.Item
+                  label={t("leave.rejectionReason")}
+                  contentStyle={{ color: "red" }}
+                >
+                  {request.ceo_decision_note ||
+                    request.hr_decision_note ||
+                    request.manager_decision_note ||
+                    request.delegate_decision_note ||
+                    request.rejection_reason ||
+                    "-"}
+                </Descriptions.Item>
+              )}
+              {request.status === "pending_ceo" && !isCEO && (
+                <Descriptions.Item
+                  label={t("leave.statusNote")}
+                  contentStyle={{ color: "#d4380d" }}
+                >
+                  {t("leave.ceoApprovalWait")}
+                </Descriptions.Item>
+              )}
+            </Descriptions>
+          </Card>
 
-        <DocumentIntegrityPanel
-          requestId={request.id}
-          isFinal={request.status === "approved"}
-          canRetrySeal={!isCEO}
-          profilePath={
-            isCEO ? undefined : (profileId) => `/hr/employees/${profileId}`
-          }
-        />
-      </div>
+          <DocumentIntegrityPanel
+            requestId={request.id}
+            isFinal={request.status === "approved"}
+            canRetrySeal={!isCEO}
+            profilePath={
+              isCEO ? undefined : (profileId) => `/hr/employees/${profileId}`
+            }
+          />
+        </Col>
+      </Row>
 
       {canCeoDecide && (
         <StickyDecisionBar>

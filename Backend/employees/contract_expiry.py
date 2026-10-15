@@ -4,18 +4,15 @@ import logging
 from datetime import date, timedelta
 from decimal import Decimal
 
+from audit.utils import audit
+from core.executives import executive_profile_q, is_executive_profile
+from core.models import WorkflowAction
+from core.services import get_ceo_approver_users
+from core.services.workflow_engine import begin_recorded_transition, record_workflow_transition
 from django.contrib.auth import get_user_model
 from django.db import IntegrityError, InterfaceError, OperationalError, transaction
 from django.db.models import F, Q
 from django.utils import timezone
-from rest_framework.exceptions import ValidationError
-from rest_framework.fields import DecimalField
-
-from audit.utils import audit
-from core.models import WorkflowAction
-from core.services import get_ceo_approver_users
-from core.services.workflow_engine import begin_recorded_transition, record_workflow_transition
-from employees.services.archiving import retire_biotime_mapping_and_archive_profile
 from in_app_notifications.dispatcher import dispatch_notification_channels
 from in_app_notifications.i18n import (
     contract_failure_reason,
@@ -27,6 +24,10 @@ from in_app_notifications.i18n import (
 )
 from in_app_notifications.i18n import status_label as status_label_text
 from in_app_notifications.models import Notification
+from rest_framework.exceptions import ValidationError
+from rest_framework.fields import DecimalField
+
+from employees.services.archiving import retire_biotime_mapping_and_archive_profile
 
 from .models import ContractDecision, EmployeeProfile
 
@@ -49,6 +50,8 @@ TERM_FIELDS = (
     "other_allowance",
     "total_salary",
 )
+#: Executives (CEO, General Manager) have no rating or decision; HR only gets an informational notice.
+EXECUTIVE_CONTRACT_MESSAGE = "Contract decisions and ratings do not apply to the CEO or General Manager."
 FINAL_NOTIFICATION_STATUSES = {
     ContractDecision.Status.APPROVED,
     ContractDecision.Status.AUTO_APPROVED,
@@ -118,6 +121,7 @@ def contract_rating_due(profile: EmployeeProfile, decision: ContractDecision, to
         or decision.company_id != profile.company_id
         or decision.original_contract_date != profile.contract_date
         or decision.original_contract_expiry != profile.contract_expiry
+        or is_executive_profile(profile)
     )
 
 
@@ -140,6 +144,8 @@ def apply_contract_terms(
 
 @transaction.atomic
 def ensure_contract_decision(profile: EmployeeProfile) -> tuple[ContractDecision, bool]:
+    if is_executive_profile(profile):
+        raise ValueError(EXECUTIVE_CONTRACT_MESSAGE)
     decision, created = ContractDecision.objects.get_or_create(
         employee_profile=profile,
         original_contract_expiry=profile.contract_expiry,
@@ -178,11 +184,15 @@ def cancel_stale_contract_decisions(profile: EmployeeProfile, *, actor=None) -> 
     Archiving (or leaving ACTIVE employment) ends every open decision. Otherwise a
     PENDING_HR/PENDING_CEO decision is stale once the profile's contract expiry was
     changed outside the workflow, for example when HR edits the employee record to
-    renew it. A decided rating still owns its decision (a scheduled termination or
-    renewal runs later), so that decision is left alone.
+    renew it. An executive never has a decision, so all of theirs are ended. A decided
+    rating still owns its decision (a scheduled termination or renewal runs later), so
+    that decision is left alone. A cancelled rating's workflow is recorded too.
     """
     employment_ended = profile.is_archived or profile.employment_status != EmployeeProfile.EmploymentStatus.ACTIVE
-    if employment_ended:
+    if is_executive_profile(profile):
+        candidates = ContractDecision.objects.filter(employee_profile=profile, status__in=OPEN_DECISION_STATUSES)
+        reason = EXECUTIVE_CONTRACT_MESSAGE
+    elif employment_ended:
         candidates = ContractDecision.objects.filter(employee_profile=profile, status__in=OPEN_DECISION_STATUSES)
         reason = "Employee is no longer active."
     else:
@@ -201,6 +211,7 @@ def cancel_stale_contract_decisions(profile: EmployeeProfile, *, actor=None) -> 
             if rating is not None and rating.status == rating.Status.DECIDED:
                 continue
             start = begin_recorded_transition(decision, actor=actor)
+            rating_start = begin_recorded_transition(rating, actor=actor) if rating is not None else None
             now = timezone.now()
             decision.status = ContractDecision.Status.CANCELLED
             decision.failure_reason = reason
@@ -213,6 +224,15 @@ def cancel_stale_contract_decisions(profile: EmployeeProfile, *, actor=None) -> 
             if rating is not None:
                 rating.status = rating.Status.CANCELLED
                 rating.save(update_fields=["status", "updated_at"])
+                record_workflow_transition(
+                    rating,
+                    rating_start,
+                    action=WorkflowAction.Action.CANCEL,
+                    actor=actor,
+                    note=reason,
+                    approver_role="",
+                    metadata={"reason": reason, "contract_decision_id": decision.id},
+                )
             record_workflow_transition(
                 decision,
                 start,
@@ -312,6 +332,47 @@ def notify_hr_milestone(decision: ContractDecision, milestone: str, days_left: i
         failed = failed or result.get("notification") is None
         count += int(result.get("created", False))
     return count if attempted and not failed else None
+
+
+def notify_hr_executive_contract_expiry(profile: EmployeeProfile, milestone: str, days_left: int) -> int:
+    """Tell HR an executive's contract nears its end. Informational only: no decision row exists.
+
+    Deduplicated per profile, contract expiry and milestone, so the hourly sweep sends it once.
+    """
+    text = notification_text(
+        "contract.executive_expiry_notice",
+        employee_name=profile_name(profile),
+        date=profile.contract_expiry,
+        days_left=days_left,
+    )
+    count = 0
+    for recipient in _company_hr_recipients(profile.company_id):
+        result = dispatch_notification_channels(
+            recipient=recipient,
+            company=profile.company,
+            event_key="contract.expiry",
+            **text,
+            category=Notification.Category.DOCUMENT,
+            action_url=f"/hr/employees/{profile.id}",
+            related_object=profile,
+            metadata={
+                "employee_profile_id": profile.id,
+                "milestone": milestone,
+                "days_left": days_left,
+                "requires_action": False,
+                "executive": True,
+            },
+            deduplication_key=f"contract.expiry:top_tier:{profile.id}:{profile.contract_expiry.isoformat()}:{milestone}",
+            email_enabled=True,
+            whatsapp_enabled=True,
+            email_context={
+                "title_ar": render(text["i18n"], "title", "ar") or text["title"],
+                "message_ar": render(text["i18n"], "message", "ar") or text["message"],
+                "employee_name": profile.full_name or profile.employee_id,
+            },
+        )
+        count += int(result.get("created", False))
+    return count
 
 
 def notify_ceo_pending(
@@ -947,8 +1008,12 @@ def auto_renew_decision(decision_id: int):
         # A rating cycle owns this contract; never auto-renew underneath it.
         return decision, False
     profile = EmployeeProfile.objects.select_for_update().get(pk=decision.employee_profile_id)
-    if profile.is_archived or profile.employment_status != EmployeeProfile.EmploymentStatus.ACTIVE:
-        # Never renew a contract for someone who has left; the sweep cancels the decision instead.
+    if (
+        profile.is_archived
+        or profile.employment_status != EmployeeProfile.EmploymentStatus.ACTIVE
+        or is_executive_profile(profile)
+    ):
+        # Never renew a contract for someone who has left, or an executive's; the sweep cancels the decision instead.
         return decision, False
     workflow_start = begin_recorded_transition(decision)
     mismatch_reason = _snapshot_mismatch_reason(decision, profile)
@@ -1033,6 +1098,7 @@ def process_contract_expiry(*, today=None, now=None) -> dict:
         .filter(
             Q(employee_profile__is_archived=True)
             | ~Q(employee_profile__employment_status=EmployeeProfile.EmploymentStatus.ACTIVE)
+            | executive_profile_q("employee_profile__")
             | (
                 Q(status__in=[ContractDecision.Status.PENDING_HR, ContractDecision.Status.PENDING_CEO])
                 & ~Q(original_contract_expiry=F("employee_profile__contract_expiry"))
@@ -1054,9 +1120,16 @@ def process_contract_expiry(*, today=None, now=None) -> dict:
         contract_expiry__isnull=False,
         company__is_active=True,
     ).select_related("company")
+    executive_ids = set(profiles.filter(executive_profile_q()).values_list("pk", flat=True))
     for profile in profiles.iterator():
         try:
             days_left = (profile.contract_expiry - today).days
+            if profile.pk in executive_ids:
+                if days_left in CONTRACT_MILESTONES:
+                    summary["milestones"] += notify_hr_executive_contract_expiry(
+                        profile, CONTRACT_MILESTONES[days_left], days_left
+                    )
+                continue
             decision, _ = ensure_contract_decision(profile)
             # A decision the rating flow owns, or will own this cycle, gets its HR notice
             # from that flow ("awaiting_routing" / HR-gate reminders), never from here too.

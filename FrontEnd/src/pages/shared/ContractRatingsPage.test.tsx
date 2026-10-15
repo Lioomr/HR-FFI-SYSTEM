@@ -347,8 +347,9 @@ describe("ContractRatingsPage — CEO", () => {
     renderAt("/ceo/contract-ratings/1");
     expect(await screen.findByText("Rating progress")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: /Show details/ }));
-    expect(screen.getByText("HR routing")).toBeTruthy();
-    expect(screen.getByText("Evaluations")).toBeTruthy();
+    // Stage names show in both the stepper and the history list.
+    expect(screen.getAllByText("HR routing").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Evaluations").length).toBeGreaterThan(0);
     expect(screen.getByText("Handled by Hana HR")).toBeTruthy();
   });
 

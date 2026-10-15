@@ -3,9 +3,8 @@ from datetime import timedelta
 from decimal import Decimal
 
 from celery import shared_task
-from django.utils import timezone
-
 from core.services.pending_approval_email import get_hr_approver_users
+from django.utils import timezone
 from employees.models import EmployeeProfile
 from in_app_notifications.dispatcher import dispatch_notification_channels
 from in_app_notifications.i18n import notification_text, profile_name
@@ -23,11 +22,7 @@ SETTLEMENT_WINDOW_OPEN_ACTION_URL = "/employee/leave/balance?focus=settlement"
 
 def _hr_users_for_company(company):
     users = get_hr_approver_users().filter(is_active=True)
-    if (
-        company is None
-        or company.node_type != OrganizationNode.NodeType.COMPANY
-        or not company.is_active
-    ):
+    if company is None or company.node_type != OrganizationNode.NodeType.COMPANY or not company.is_active:
         return users.none()
     return users.filter(
         employee_profile__company=company,
@@ -81,11 +76,15 @@ def send_annual_leave_year_end_notifications():
         previous_cycle_start = cycle_start - timedelta(days=1)
         previous_start, previous_end = get_contract_year_cycle(profile, previous_cycle_start)
         if previous_start and previous_end == today - timedelta(days=1):
-            exists = AnnualLeavePaymentRequest.objects.filter(
-                employee_profile=profile,
-                cycle_start=previous_start,
-                cycle_end=previous_end,
-            ).exists()
+            exists = (
+                AnnualLeavePaymentRequest.objects.filter(
+                    employee_profile=profile,
+                    cycle_start=previous_start,
+                    cycle_end=previous_end,
+                )
+                .exclude(status=AnnualLeavePaymentRequest.Status.CANCELLED)
+                .exists()
+            )
             if not exists:
                 for hr_user in _hr_users_for_company(profile.company):
                     dispatch_notification_channels(

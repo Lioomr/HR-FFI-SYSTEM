@@ -1,3 +1,4 @@
+import type { WorkflowSnapshot } from "../../types/workflow";
 import { api } from "./apiClient";
 import type { ApiResponse, PaginatedResponse } from "./apiTypes";
 
@@ -20,6 +21,7 @@ export const ANNUAL_LEAVE_PAYMENT_STATUSES = [
   "approved",
   "rejected",
   "carried_forward",
+  "cancelled",
 ] as const;
 
 export type AnnualLeavePaymentStatus =
@@ -55,6 +57,8 @@ export type AnnualLeavePaymentReviewDecision = "forward" | "carry_forward";
  * instead of trusting either shape.
  */
 export interface AnnualLeavePaymentRequest {
+  workflow?: WorkflowSnapshot;
+  can_cancel?: boolean;
   id: number;
   public_reference?: string;
   /** EmployeeProfile id — the value `employee_profile` filters on. */
@@ -106,6 +110,7 @@ export interface AnnualLeavePaymentRequest {
   hr_reviewed_at: string | null;
   ceo_decided_at: string | null;
   settled_at: string | null;
+  cancelled_at?: string | null;
 }
 
 /**
@@ -266,6 +271,15 @@ export async function rejectAnnualLeavePaymentRequest(
   const { data } = await api.post<ApiResponse<AnnualLeavePaymentRequest>>(
     `/api/leaves/annual-leave-payments/${id}/reject/`,
     { comment },
+  );
+  return data;
+}
+
+export async function cancelAnnualLeavePaymentRequest(
+  id: string | number,
+): Promise<ApiResponse<AnnualLeavePaymentRequest>> {
+  const { data } = await api.post<ApiResponse<AnnualLeavePaymentRequest>>(
+    `/api/leaves/annual-leave-payments/${id}/cancel/`,
   );
   return data;
 }

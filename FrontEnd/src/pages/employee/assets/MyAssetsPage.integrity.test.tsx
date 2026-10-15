@@ -1,10 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import {
+  fireEvent,
+  render,
+  screen,
+  within,
+  waitFor,
+} from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 
 vi.mock("../../../services/api/assetsApi", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../../services/api/assetsApi")>()),
   listMyAssets: vi.fn(),
+  cancelAssetDamageReport: vi.fn(),
+  cancelAssetReturnRequest: vi.fn(),
   listMyAssetDamageReports: vi.fn(),
   listMyAssetReturnRequests: vi.fn(),
 }));
@@ -124,4 +132,88 @@ describe("MyAssetsPage document integrity (owner, read-only)", () => {
     ).not.toBeInTheDocument();
     expect(screen.queryByTestId("integrity-panel")).not.toBeInTheDocument();
   });
+});
+
+describe("employee asset cancellation", () => {
+  it.each(["damage", "return"] as const)(
+    "cancels the %s request and refreshes both history tabs",
+    async (kind) => {
+      const pendingDamage = {
+        ...damage("PENDING_HR"),
+        can_cancel: kind === "damage",
+      };
+      const pendingReturn = {
+        ...returned("PENDING_MANAGER"),
+        workflow: {
+          status: "in_review" as const,
+          can_cancel: kind === "return",
+          history: [],
+        },
+      };
+      vi.mocked(assetsApi.listMyAssets).mockResolvedValue(page([]) as never);
+      vi.mocked(assetsApi.listMyAssetDamageReports)
+        .mockResolvedValueOnce(page([pendingDamage]))
+        .mockResolvedValue(
+          page([
+            { ...pendingDamage, status: "CANCELLED", can_cancel: false },
+          ]) as never,
+        );
+      vi.mocked(assetsApi.listMyAssetReturnRequests)
+        .mockResolvedValueOnce(page([pendingReturn]))
+        .mockResolvedValue(
+          page([
+            {
+              ...pendingReturn,
+              status: "CANCELLED",
+              workflow: { status: "cancelled", can_cancel: false, history: [] },
+            },
+          ]) as never,
+        );
+      const cancel =
+        kind === "damage"
+          ? assetsApi.cancelAssetDamageReport
+          : assetsApi.cancelAssetReturnRequest;
+      vi.mocked(cancel).mockResolvedValue({
+        status: "success",
+        data: { id: kind === "damage" ? 31 : 41 },
+      } as never);
+      render(
+        <MemoryRouter>
+          <MyAssetsPage />
+        </MemoryRouter>,
+      );
+      const panel = await openTab(
+        kind === "damage" ? /Damage Reports/ : /Return Requests/,
+      );
+      fireEvent.click(
+        await within(panel).findByRole(
+          "button",
+          { name: "Cancel request" },
+          FIND,
+        ),
+      );
+      expect(cancel).not.toHaveBeenCalled();
+      fireEvent.click(
+        within(await screen.findByRole("dialog")).getByRole("button", {
+          name: "Cancel request",
+        }),
+      );
+      await waitFor(
+        () => expect(cancel).toHaveBeenCalledWith(kind === "damage" ? 31 : 41),
+        FIND,
+      );
+      await waitFor(
+        () =>
+          expect(assetsApi.listMyAssetReturnRequests).toHaveBeenCalledTimes(2),
+        FIND,
+      );
+      expect(assetsApi.listMyAssetDamageReports).toHaveBeenCalledTimes(2);
+      expect(
+        await within(panel).findByText("Cancelled", {}, FIND),
+      ).toBeInTheDocument();
+      expect(
+        within(panel).queryByRole("button", { name: "Cancel request" }),
+      ).not.toBeInTheDocument();
+    },
+  );
 });

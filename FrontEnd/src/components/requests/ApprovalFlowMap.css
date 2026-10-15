@@ -1,0 +1,410 @@
+/* Approval flow map: shared approval stepper for every request type. */
+
+.afm {
+  --afm-ink: #0b1220;
+  --afm-ink-2: #334155;
+  --afm-muted: #64748b;
+  --afm-faint: #94a3b8;
+  --afm-done: #059669;
+  --afm-live: #ea580c;
+  --afm-stop: #e11d48;
+
+  overflow: hidden;
+  border-radius: 20px !important;
+  border: 1px solid #e9ecf1 !important;
+  background: #fff !important;
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.04),
+    0 10px 30px -14px rgba(15, 23, 42, 0.15) !important;
+}
+.afm .ant-card-body {
+  padding: 0 !important;
+}
+
+/* Tone per state, consumed by badges, stepper dots, panel and history. */
+.afm-t-done,
+.afm-s-completed {
+  --afm-tone: var(--afm-done);
+  --afm-soft: #ecfdf5;
+  --afm-ring: #a7f3d0;
+}
+.afm-t-live,
+.afm-s-current {
+  --afm-tone: var(--afm-live);
+  --afm-soft: #fff7ed;
+  --afm-ring: #fed7aa;
+}
+.afm-t-stop,
+.afm-s-rejected,
+.afm-s-cancelled {
+  --afm-tone: var(--afm-stop);
+  --afm-soft: #fff1f2;
+  --afm-ring: #fecdd3;
+}
+.afm-s-upcoming {
+  --afm-tone: var(--afm-faint);
+  --afm-soft: #f8fafc;
+  --afm-ring: #e2e8f0;
+}
+
+/* Header ---------------------------------------------------------------- */
+
+.afm-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 20px 22px 16px;
+}
+.afm-eyebrow {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--afm-muted);
+}
+.afm-title {
+  margin: 2px 0 0;
+  font-size: 19px;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  color: var(--afm-ink);
+}
+.afm-meta {
+  display: block;
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--afm-faint);
+  font-variant-numeric: tabular-nums;
+}
+.afm-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  padding: 5px 11px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  color: var(--afm-tone);
+  background: var(--afm-soft);
+}
+.afm-badge-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+/* Stepper --------------------------------------------------------------- */
+
+.afm-steps {
+  display: flex;
+  margin: 0;
+  padding: 6px 14px 4px;
+  list-style: none;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.afm-steps::-webkit-scrollbar {
+  display: none;
+}
+.afm-step {
+  position: relative;
+  flex: 1 0 72px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+/* Connector to the next step; green once this step is done. */
+.afm-step:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  top: 15px;
+  inset-inline-start: calc(50% + 21px);
+  width: calc(100% - 42px);
+  height: 2px;
+  border-radius: 2px;
+  background: #e5e9f0;
+}
+.afm-step.afm-s-completed:not(:last-child)::after {
+  background: var(--afm-done);
+}
+.afm-dot {
+  position: relative;
+  z-index: 1;
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  font-size: 13px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--afm-faint);
+  background: #f1f4f8;
+}
+.afm-s-completed .afm-dot,
+.afm-s-rejected .afm-dot,
+.afm-s-cancelled .afm-dot {
+  color: #fff;
+  background: var(--afm-tone);
+}
+.afm-s-current .afm-dot {
+  color: #fff;
+  background: var(--afm-live);
+  box-shadow: 0 0 0 5px rgba(234, 88, 12, 0.15);
+}
+.afm-s-current .afm-dot::after {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: 11px;
+  border: 2px solid rgba(234, 88, 12, 0.35);
+  animation: afm-pulse 2s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+}
+.afm-live-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #fff;
+}
+.afm-step-label {
+  max-width: 100%;
+  margin-top: 8px;
+  padding: 0 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--afm-ink-2);
+}
+.afm-s-upcoming .afm-step-label {
+  color: var(--afm-muted);
+}
+.afm-step-state {
+  margin-top: 1px;
+  font-size: 11px;
+  color: var(--afm-faint);
+}
+.afm-s-current .afm-step-state,
+.afm-s-rejected .afm-step-state,
+.afm-s-cancelled .afm-step-state {
+  font-weight: 600;
+  color: var(--afm-tone);
+}
+
+.afm-skipped {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+  padding: 10px 22px 0;
+  font-size: 11.5px;
+  color: var(--afm-faint);
+}
+.afm-skipped-label {
+  font-weight: 600;
+}
+.afm-skipped-name {
+  text-decoration: line-through;
+  text-decoration-color: rgba(148, 163, 184, 0.6);
+}
+
+/* Focus panel ----------------------------------------------------------- */
+
+.afm-panel {
+  margin: 16px 22px 0;
+  padding: 16px;
+  border-radius: 14px;
+  background: var(--afm-soft);
+  box-shadow: inset 0 0 0 1px var(--afm-ring);
+}
+.afm-panel-kicker {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--afm-tone);
+}
+.afm-panel-title {
+  margin: 4px 0 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--afm-ink);
+  overflow-wrap: anywhere;
+}
+.afm-actor {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--afm-ink);
+  min-width: 0;
+}
+.afm-avatar {
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: #fff;
+  background: #334155;
+}
+.afm-actor-name {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.afm-panel-note {
+  margin: 10px 0 0;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--afm-ink-2);
+  text-wrap: pretty;
+}
+.afm-time {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--afm-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+/* History --------------------------------------------------------------- */
+
+.afm-history {
+  margin: 16px 0 0;
+  padding: 4px 22px 14px;
+  border-top: 1px solid #f0f2f5;
+  list-style: none;
+}
+.afm-history-item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 10px;
+  padding: 11px 0;
+  border-bottom: 1px dashed #edf0f4;
+  font-size: 13px;
+}
+.afm-history-item:last-child {
+  border-bottom: 0;
+}
+.afm-history-icon {
+  width: 22px;
+  height: 22px;
+  border-radius: 7px;
+  display: grid;
+  place-items: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--afm-tone);
+  background: var(--afm-soft);
+}
+.afm-history-name {
+  font-weight: 650;
+  color: var(--afm-ink);
+}
+.afm-s-upcoming .afm-history-name {
+  color: var(--afm-muted);
+}
+.afm-history-detail {
+  color: var(--afm-muted);
+  overflow-wrap: anywhere;
+}
+.afm-history-note {
+  display: block;
+  margin-top: 3px;
+  font-size: 12.5px;
+  color: var(--afm-ink-2);
+}
+.afm-history-time {
+  padding-top: 2px;
+  font-size: 11.5px;
+  color: var(--afm-faint);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.afm-toggle {
+  margin: 4px 0 8px;
+  font-weight: 600;
+  color: var(--afm-live) !important;
+}
+.afm-panel + .afm-toggle {
+  margin-top: 8px;
+}
+
+@keyframes afm-pulse {
+  0% {
+    transform: scale(1);
+    opacity: 0.9;
+  }
+  100% {
+    transform: scale(1.5);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .afm-s-current .afm-dot::after {
+    animation: none;
+  }
+}
+
+@media (max-width: 767px) {
+  .afm-top {
+    padding: 16px 16px 12px;
+  }
+  .afm-steps {
+    padding-inline: 6px;
+  }
+  .afm-step {
+    flex-basis: 62px;
+  }
+  .afm-step:not(:last-child)::after {
+    inset-inline-start: calc(50% + 19px);
+    width: calc(100% - 38px);
+  }
+  .afm-dot {
+    width: 30px;
+    height: 30px;
+  }
+  .afm-step-label {
+    font-size: 11.5px;
+  }
+  .afm-title {
+    font-size: 17px;
+  }
+  .afm-panel {
+    padding: 14px;
+  }
+  .afm-skipped {
+    padding-inline: 16px;
+  }
+  .afm-panel {
+    margin-inline: 16px;
+  }
+  .afm-history {
+    padding-inline: 16px;
+  }
+  .afm-history-item {
+    grid-template-columns: auto minmax(0, 1fr);
+    row-gap: 2px;
+  }
+  .afm-history-time {
+    grid-column: 2;
+    padding-top: 0;
+  }
+}

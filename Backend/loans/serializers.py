@@ -1,11 +1,12 @@
 from decimal import Decimal
 
-from django.utils import timezone
-from rest_framework import serializers
-
+from core.executives import EXECUTIVE_REQUEST_ERROR, is_executive_profile
 from core.services import get_workflow_snapshot_read_only, get_workflow_snapshots
 from core.services.request_references import public_reference_for
+from django.utils import timezone
 from employees.models import EmployeeProfile
+from rest_framework import serializers
+from rest_framework.exceptions import PermissionDenied
 
 from .models import LoanRequest
 
@@ -194,6 +195,8 @@ class LoanRequestCreateSerializer(serializers.Serializer):
 
         if profile.is_archived or profile.employment_status != EmployeeProfile.EmploymentStatus.ACTIVE:
             raise serializers.ValidationError("Only active employees can request loans.")
+        if is_executive_profile(profile):
+            raise PermissionDenied(EXECUTIVE_REQUEST_ERROR)
 
         loan_type = attrs.get("loan_type", LoanRequest.LoanType.OPEN)
         amount = attrs["amount"]
@@ -242,6 +245,36 @@ class LoanRequestCreateSerializer(serializers.Serializer):
 
         attrs["employee_profile"] = profile
         return attrs
+
+
+#: Assigned at submission; the requester's edit refuses them instead of ignoring them.
+LOAN_EDIT_SERVER_FIELDS = ("employee", "employee_id", "employee_profile", "company", "company_id", "status")
+
+
+class LoanRequestEditSerializer(LoanRequestCreateSerializer):
+    """The create rules applied to the stored loan merged with the edited fields (all optional)."""
+
+    def __init__(self, loan: LoanRequest, *, data, **kwargs):
+        body = data if hasattr(data, "keys") else {}
+        self._server_fields = [name for name in LOAN_EDIT_SERVER_FIELDS if name in body]
+        merged = {
+            "amount": loan.requested_amount,
+            "loan_type": loan.loan_type,
+            "installment_months": loan.installment_months,
+            "reason": loan.reason,
+        }
+        merged.update({name: body[name] for name in list(merged) if name in body})
+        # Switching to an open loan drops the stored installment count unless it is sent again.
+        if merged["loan_type"] == LoanRequest.LoanType.OPEN and "installment_months" not in body:
+            merged["installment_months"] = None
+        super().__init__(data=merged, **kwargs)
+
+    def validate(self, attrs):
+        if self._server_fields:
+            raise serializers.ValidationError(
+                {name: "This field is assigned by the server and cannot be changed." for name in self._server_fields}
+            )
+        return super().validate(attrs)
 
 
 class LoanRequestActionSerializer(serializers.Serializer):

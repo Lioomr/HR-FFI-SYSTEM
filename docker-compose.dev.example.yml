@@ -184,6 +184,7 @@ services:
       context: ./FrontEnd
       args:
         VITE_API_BASE_URL: ""
+        VITE_PAYROLL_REBUILD: "${VITE_PAYROLL_REBUILD:-}"
         FFI_BUILD_COMMIT: "${FFI_BUILD_COMMIT:-unknown}"
         FFI_BUILD_DIRTY: "${FFI_BUILD_DIRTY:-unknown}"
         FFI_BUILD_TIME: "${FFI_BUILD_TIME:-unknown}"

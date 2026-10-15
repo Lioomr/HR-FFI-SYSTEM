@@ -1,6 +1,6 @@
 # Database Schema Context
 
-Backend: Django 5.2 + PostgreSQL 16. All domain models carry a `company` FK for multi-company scoping.
+Backend: Django version pinned in `Backend/requirements.txt` (currently 6.1.1) + PostgreSQL 16. All domain models carry a `company` FK for multi-company scoping.
 
 ## Key Models by App
 

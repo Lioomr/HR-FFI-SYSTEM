@@ -1,6 +1,7 @@
 import { api } from "./apiClient";
 import type { ApiResponse, PaginatedResponse } from "./apiTypes";
 import { downloadBlob } from "../../utils/download";
+import type { CancellationWorkflowFlags } from "../../types/workflow";
 
 export type PermissionStatus =
   | "pending_manager"
@@ -88,7 +89,7 @@ export type PermissionRequest = {
     employee_profile_id: number;
     full_name: string;
   } | null;
-  workflow: {
+  workflow: CancellationWorkflowFlags & {
     status: string;
     current_stage: string;
     current_approver_role: string;
@@ -96,6 +97,8 @@ export type PermissionRequest = {
     can_approve: boolean;
     can_reject: boolean;
     can_cancel: boolean;
+    /** Server decides: true only while pending the manager. */
+    can_edit?: boolean;
     history: Array<{
       id: number;
       action: string;
@@ -151,6 +154,17 @@ export type CreatePermissionRequestPayload =
   | ExitPermissionPayload
   | LatePermissionPayload
   | DuringShiftPermissionPayload;
+
+/** Editable fields of a pending permission request (evidence has its own flow). */
+export type EditPermissionRequestPayload = {
+  permission_type?: PermissionType;
+  request_date?: string;
+  from_time?: string | null;
+  to_time?: string | null;
+  exit_type?: ExitType;
+  reason?: string;
+  duration_minutes?: number;
+};
 
 const base = "/api/permission-requests";
 // apiClient defaults to JSON, and axios would serialize FormData to JSON under
@@ -273,6 +287,16 @@ export function parseCaptureMetadata(
   return parsed && typeof parsed === "object" && !Array.isArray(parsed)
     ? (parsed as CaptureMetadata)
     : null;
+}
+
+/** Owner edit while the request is pending the manager. JSON only. */
+export function editPermissionRequest(
+  id: number | string,
+  payload: EditPermissionRequestPayload,
+) {
+  return api
+    .patch<ApiResponse<PermissionRequest>>(`${base}/${id}/edit/`, payload)
+    .then((r) => r.data);
 }
 
 export function cancelPermissionRequest(id: number | string) {

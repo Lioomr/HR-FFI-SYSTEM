@@ -1,16 +1,18 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
+  CheckOutlined,
   ClockCircleOutlined,
+  CloseOutlined,
   DownOutlined,
+  StopOutlined,
   UpOutlined,
-  CheckCircleFilled,
-  CloseCircleFilled,
-  MinusCircleOutlined,
 } from "@ant-design/icons";
-import { Button, Card, Grid, Space, Tag, Typography } from "antd";
+import { Button, Card, Grid } from "antd";
+import { useAuthStore } from "../../auth/authStore";
+import type { WorkflowActor } from "../../types/workflow";
 import { formatDateTime } from "../../utils/dateTime";
-
-const { Paragraph, Text } = Typography;
+import { shortEmployeeName } from "../../utils/employeeName";
+import "./ApprovalFlowMap.css";
 
 type TranslateFn = (
   key: string,
@@ -31,40 +33,71 @@ export type ApprovalFlowStage = {
     | "cancelled";
   note: string;
   detail?: string;
+  /** Who acted on (or is holding) this stage; drives "Cancelled by you". */
+  actor?: StageActor | null;
+  /**
+   * What the actor did, when the state alone can't say it (an event list
+   * where "completed" may be a submission). Defaults from state and key.
+   */
+  actorVerb?: ActorVerb;
   at?: string | null;
 };
 
-function getStageColor(state: ApprovalFlowStage["state"]) {
-  switch (state) {
-    case "completed":
-      return { accent: "#16a34a", surface: "#f0fdf4", border: "#bbf7d0" };
-    case "current":
-      return { accent: "#f97316", surface: "#fff7ed", border: "#fdba74" };
-    case "rejected":
-      return { accent: "#dc2626", surface: "#fef2f2", border: "#fecaca" };
-    case "cancelled":
-      return { accent: "#6b7280", surface: "#f8fafc", border: "#d1d5db" };
-    case "skipped":
-      return { accent: "#64748b", surface: "#f8fafc", border: "#cbd5e1" };
-    default:
-      return { accent: "#94a3b8", surface: "#f8fafc", border: "#e2e8f0" };
-  }
+export type StageActor = Omit<WorkflowActor, "id"> & { id?: number | null };
+type ActorVerb =
+  | "submitted"
+  | "approved"
+  | "rejected"
+  | "cancelled"
+  | "current";
+
+// Stages whose completion means the request was sent, not approved.
+const SUBMISSION_STAGE_KEYS = new Set([
+  "submitted",
+  "manual_entry",
+  "reported",
+]);
+
+const AVATAR_COLORS = ["#334155", "#7c3aed", "#0e7490", "#b45309", "#be185d"];
+
+function isClosingState(state: ApprovalFlowStage["state"]) {
+  return state === "rejected" || state === "cancelled";
 }
 
-function getStageIcon(state: ApprovalFlowStage["state"]) {
+// "Manager: Sara Ali" -> "Sara Ali": the detail line carries a role prefix.
+function getActorName(detail: string) {
+  return detail.includes(":")
+    ? detail.slice(detail.lastIndexOf(":") + 1).trim()
+    : detail.trim();
+}
+
+function getInitials(name: string) {
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((word) => Array.from(word)[0] ?? "")
+    .join("")
+    .toUpperCase();
+}
+
+function getAvatarColor(name: string) {
+  const sum = Array.from(name).reduce((acc, ch) => acc + ch.charCodeAt(0), 0);
+  return AVATAR_COLORS[sum % AVATAR_COLORS.length];
+}
+
+function getStageIcon(state: ApprovalFlowStage["state"], number: number) {
   switch (state) {
     case "completed":
-      return <CheckCircleFilled />;
+      return <CheckOutlined />;
     case "current":
-      return <ClockCircleOutlined />;
+      return <span className="afm-live-dot" />;
     case "rejected":
-      return <CloseCircleFilled />;
+      return <CloseOutlined />;
     case "cancelled":
-      return <MinusCircleOutlined />;
-    case "skipped":
-      return <MinusCircleOutlined />;
+      return <StopOutlined />;
     default:
-      return <ClockCircleOutlined />;
+      return number;
   }
 }
 
@@ -92,601 +125,256 @@ export default function ApprovalFlowMap({
       ? t(stage.labelKey, stage.title)
       : t(`workflow.role.${stage.key}`, stage.title);
 
-  const activeStages = stages.filter((stage) => stage.state !== "skipped");
-  const skippedCount = stages.length - activeStages.length;
-  const completedStages = activeStages.filter(
-    (stage) => stage.state === "completed",
-  ).length;
-  const currentStage = stages.find((stage) => stage.state === "current");
-  const terminalStage = stages.find(
-    (stage) => stage.state === "rejected" || stage.state === "cancelled",
-  );
-  const progressPercent = activeStages.length
-    ? Math.round((completedStages / activeStages.length) * 100)
-    : 0;
-  const progressLabel = terminalStage
-    ? getStateLabel(terminalStage.state)
-    : currentStage
-      ? getStageLabel(currentStage)
-      : completedStages === activeStages.length
-        ? t("workflow.flowComplete")
-        : t("workflow.awaitingNextStep");
-
-  // On phones the waiting (or final rejected/cancelled) stage keeps its full
-  // card and the rest shrink to mini cards, so the flow fits on one screen.
-  const isMobile = !Grid.useBreakpoint().md;
-  const [showAll, setShowAll] = useState(false);
-  const compact = isMobile && !showAll;
-  const focusIndex = stages.findIndex(
-    (stage) =>
-      stage.state === "current" ||
-      stage.state === "rejected" ||
-      stage.state === "cancelled",
-  );
-
-  const renderStageCard = (stage: ApprovalFlowStage, index: number) => {
-    const colors = getStageColor(stage.state);
-    // An undated stage only says "Awaiting action" while it is the one being
-    // waited on; a finished, skipped or closed stage must not claim that.
-    const footerText = stage.at
+  // An undated stage only says "Awaiting action" while it is the one being
+  // waited on; a finished, skipped or closed stage must not claim that.
+  const getTimeText = (stage: ApprovalFlowStage) =>
+    stage.at
       ? `${t("workflow.updated")} ${formatDateTime(stage.at)}`
       : stage.state === "current"
         ? t("leave.approvalMap.noDate")
         : stage.state === "upcoming"
           ? t("leave.approvalMap.notReached")
           : "";
+
+  const currentUser = useAuthStore((state) => state.user);
+  const isCurrentUser = (actor: StageActor) =>
+    !!currentUser &&
+    // Some APIs only send a name, with a placeholder id of 0.
+    ((!!actor.id && String(actor.id) === String(currentUser.id)) ||
+      (!!actor.email &&
+        actor.email.toLowerCase() === currentUser.email?.toLowerCase()));
+
+  // "Cancelled by you" / "Approved by Sara Ali": names who acted on a stage.
+  const getActorLine = (stage: ApprovalFlowStage) => {
+    const actor = stage.actor;
+    const name = shortEmployeeName(actor?.full_name) || actor?.email || "";
+    if (!actor || !name) return "";
+    const verb =
+      stage.actorVerb ??
+      (stage.state === "completed"
+        ? SUBMISSION_STAGE_KEYS.has(stage.key)
+          ? "submitted"
+          : "approved"
+        : stage.state === "upcoming" || stage.state === "skipped"
+          ? ""
+          : stage.state);
+    if (!verb) return "";
+    return isCurrentUser(actor)
+      ? t(`workflow.actorLine.${verb}You`)
+      : t(`workflow.actorLine.${verb}`, { name });
+  };
+
+  const activeStages = stages.filter((stage) => stage.state !== "skipped");
+  const skippedStages = stages.filter((stage) => stage.state === "skipped");
+  const completedStages = activeStages.filter(
+    (stage) => stage.state === "completed",
+  ).length;
+  const currentStage = stages.find((stage) => stage.state === "current");
+  const terminalStage = stages.find((stage) => isClosingState(stage.state));
+  const tone = terminalStage
+    ? "stop"
+    : currentStage || completedStages < activeStages.length
+      ? "live"
+      : "done";
+  const statusLabel = terminalStage
+    ? getStateLabel(terminalStage.state)
+    : currentStage
+      ? getStateLabel("current")
+      : getStateLabel("completed");
+  const progressSummary = t("workflow.progressSummary", {
+    completed: completedStages,
+    total: activeStages.length,
+  });
+
+  // The panel spotlights the stage being waited on, or the one that closed
+  // the flow; a fully approved flow shows its last stage.
+  const focusStage =
+    terminalStage ?? currentStage ?? activeStages[activeStages.length - 1];
+  const focusIndex = focusStage ? activeStages.indexOf(focusStage) : -1;
+  const historyStages = activeStages.filter((stage) => stage !== focusStage);
+
+  // On phones the history list stays folded until asked for.
+  const isMobile = !Grid.useBreakpoint().md;
+  const [showAll, setShowAll] = useState(false);
+  const showHistory = !isMobile || showAll;
+
+  // When the stepper overflows (narrow screens, long flows), bring the focus
+  // step into view instead of leaving it scrolled off to the side.
+  const stepsRef = useRef<HTMLOListElement>(null);
+  useEffect(() => {
+    const list = stepsRef.current;
+    const item = list?.children[focusIndex] as HTMLElement | undefined;
+    if (!list || !item || list.scrollWidth <= list.clientWidth) return;
+    const offset = item.offsetLeft - (list.clientWidth - item.offsetWidth) / 2;
+    // RTL scroll positions run from 0 down to a negative maximum.
+    const isRtl = getComputedStyle(list).direction === "rtl";
+    list.scrollLeft = isRtl
+      ? offset - (list.scrollWidth - list.clientWidth)
+      : offset;
+  }, [focusIndex, activeStages.length]);
+
+  const renderFocusPanel = (stage: ApprovalFlowStage) => {
+    const number = activeStages.indexOf(stage) + 1;
+    const stateLabel = getStateLabel(stage.state);
+    const stageLabel = getStageLabel(stage);
+    const kicker =
+      !currentStage && !terminalStage
+        ? t("workflow.flowComplete")
+        : stateLabel.trim().toLowerCase() === stageLabel.trim().toLowerCase()
+          ? t("workflow.step", { number })
+          : stateLabel;
+    // Skip notes that only repeat the state label ("Cancelled" / "Cancelled").
+    const note =
+      stage.note &&
+      stage.note.trim().toLowerCase() !== stateLabel.trim().toLowerCase()
+        ? stage.note
+        : "";
+    const actorLine = getActorLine(stage);
+    const actorName = actorLine
+      ? shortEmployeeName(stage.actor?.full_name) || stage.actor?.email || ""
+      : stage.detail
+        ? getActorName(stage.detail)
+        : "";
+    const timeText = getTimeText(stage);
+
     return (
       <div
-        key={stage.key}
-        style={{
-          position: "relative",
-          padding: 16,
-          borderRadius: 18,
-          border: `1px solid ${colors.border}`,
-          background: colors.surface,
-          minHeight: 140,
-          boxShadow:
-            stage.state === "current"
-              ? "0 8px 18px rgba(249, 115, 22, 0.10)"
-              : "none",
-        }}
+        className={`afm-panel afm-s-${stage.state}`}
         aria-current={stage.state === "current" ? "step" : undefined}
       >
-        <Space direction="vertical" size={10} style={{ width: "100%" }}>
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              gap: 10,
-            }}
-          >
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-                minWidth: 0,
-              }}
+        <div className="afm-panel-kicker">{kicker}</div>
+        <div className="afm-panel-title">{stageLabel}</div>
+        {actorLine || stage.detail ? (
+          <div className="afm-actor">
+            <span
+              className="afm-avatar"
+              aria-hidden="true"
+              style={{ background: getAvatarColor(actorName) }}
             >
-              <div
-                style={{
-                  width: 34,
-                  height: 34,
-                  borderRadius: 999,
-                  background: "#fff",
-                  border: `1px solid ${colors.border}`,
-                  display: "grid",
-                  placeItems: "center",
-                  color: colors.accent,
-                }}
-              >
-                {getStageIcon(stage.state)}
-              </div>
-              <Text
-                type="secondary"
-                style={{
-                  fontSize: 11,
-                  fontWeight: 700,
-                  whiteSpace: "nowrap",
-                }}
-              >
-                {t("workflow.step", { number: index + 1 })}
-              </Text>
-            </div>
-            <Tag
-              color={
-                stage.state === "skipped" || stage.state === "cancelled"
-                  ? "default"
-                  : stage.state === "rejected"
-                    ? "red"
-                    : stage.state === "completed"
-                      ? "green"
-                      : "orange"
-              }
-            >
-              {getStateLabel(stage.state)}
-            </Tag>
+              {getInitials(actorName)}
+            </span>
+            <span className="afm-actor-name">{actorLine || stage.detail}</span>
           </div>
-          <Text
-            style={{
-              fontSize: 15,
-              fontWeight: 800,
-              color: "#0f172a",
-              letterSpacing: "0.02em",
-              textTransform: "uppercase",
-            }}
-          >
-            {getStageLabel(stage)}
-          </Text>
-          {stage.detail ? (
-            <Text
-              style={{
-                color: "#0f172a",
-                fontSize: 13,
-                fontWeight: 600,
-                overflowWrap: "anywhere",
-              }}
-            >
-              {stage.detail}
-            </Text>
-          ) : null}
-          <Paragraph
-            style={{
-              marginBottom: 0,
-              color: "#475569",
-              minHeight: 44,
-              padding: "8px 10px",
-              borderRadius: 10,
-              background: "rgba(255, 255, 255, 0.56)",
-              fontSize: 13,
-            }}
-          >
-            {stage.note}
-          </Paragraph>
-          {footerText ? (
-            <Space size={5}>
-              <ClockCircleOutlined style={{ color: "#94a3b8", fontSize: 12 }} />
-              <Text type="secondary" style={{ fontSize: 12 }}>
-                {footerText}
-              </Text>
-            </Space>
-          ) : null}
-        </Space>
-      </div>
-    );
-  };
-
-  // Desktop and expanded phone view: one vertical trail. A rail of nodes joins
-  // the steps in order; each node and the line leaving it carry the step state,
-  // so the path reads top to bottom without relying on grid wrapping.
-  const renderTrailStep = (
-    stage: ApprovalFlowStage,
-    index: number,
-    isLast: boolean,
-  ) => {
-    const colors = getStageColor(stage.state);
-    const skipped = stage.state === "skipped";
-    const filled = stage.state === "completed" || stage.state === "rejected";
-    const current = stage.state === "current";
-    const footerText = stage.at
-      ? `${t("workflow.updated")} ${formatDateTime(stage.at)}`
-      : current
-        ? t("leave.approvalMap.noDate")
-        : stage.state === "upcoming"
-          ? t("leave.approvalMap.notReached")
-          : "";
-    const nodeSize = skipped ? 22 : 36;
-
-    return (
-      <li
-        key={stage.key}
-        aria-current={current ? "step" : undefined}
-        style={{
-          display: "grid",
-          gridTemplateColumns: "36px minmax(0, 1fr)",
-          columnGap: 14,
-          listStyle: "none",
-        }}
-      >
-        <div
-          aria-hidden="true"
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-          }}
-        >
-          <div
-            style={{
-              width: nodeSize,
-              height: nodeSize,
-              marginTop: skipped ? 7 : 0,
-              flexShrink: 0,
-              borderRadius: 999,
-              display: "grid",
-              placeItems: "center",
-              fontSize: skipped ? 12 : 16,
-              background: filled ? colors.accent : "#fff",
-              color: filled ? "#fff" : colors.accent,
-              boxShadow: current
-                ? `inset 0 0 0 2px ${colors.accent}, 0 0 0 5px rgba(249, 115, 22, 0.14)`
-                : filled
-                  ? `0 4px 10px ${colors.accent}33`
-                  : `inset 0 0 0 1.5px ${colors.border}`,
-            }}
-          >
-            {getStageIcon(stage.state)}
+        ) : null}
+        {note ? <p className="afm-panel-note">{note}</p> : null}
+        {timeText ? (
+          <div className="afm-time">
+            <ClockCircleOutlined aria-hidden="true" />
+            {timeText}
           </div>
-          {isLast ? null : (
-            <div
-              style={{
-                flex: 1,
-                width: 2,
-                minHeight: 14,
-                margin: "4px 0",
-                borderRadius: 2,
-                background:
-                  stage.state === "completed"
-                    ? colors.accent
-                    : "repeating-linear-gradient(to bottom, #cbd5e1 0 4px, transparent 4px 8px)",
-              }}
-            />
-          )}
-        </div>
-
-        <div style={{ paddingBottom: isLast ? 0 : 14, minWidth: 0 }}>
-          {skipped ? (
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-                minHeight: 36,
-              }}
-            >
-              <Text
-                style={{
-                  fontSize: 12,
-                  fontWeight: 700,
-                  letterSpacing: "0.02em",
-                  textTransform: "uppercase",
-                  color: "#94a3b8",
-                }}
-              >
-                {getStageLabel(stage)}
-              </Text>
-              <Text style={{ fontSize: 12, color: "#94a3b8" }}>
-                · {getStateLabel(stage.state)}
-              </Text>
-            </div>
-          ) : (
-            <div
-              style={{
-                padding: "12px 16px",
-                borderRadius: 14,
-                background: colors.surface,
-                boxShadow: `0 0 0 1px ${colors.border}, 0 1px 2px rgba(15, 23, 42, 0.04)`,
-              }}
-            >
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  flexWrap: "wrap",
-                  gap: 8,
-                }}
-              >
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "baseline",
-                    gap: 8,
-                    minWidth: 0,
-                  }}
-                >
-                  <Text
-                    type="secondary"
-                    style={{
-                      fontSize: 11,
-                      fontWeight: 700,
-                      fontVariantNumeric: "tabular-nums",
-                      whiteSpace: "nowrap",
-                    }}
-                  >
-                    {t("workflow.step", { number: index + 1 })}
-                  </Text>
-                  <Text
-                    style={{
-                      fontSize: 15,
-                      fontWeight: 800,
-                      color: "#0f172a",
-                      letterSpacing: "0.02em",
-                      textTransform: "uppercase",
-                    }}
-                  >
-                    {getStageLabel(stage)}
-                  </Text>
-                </div>
-                <Tag
-                  style={{ marginInlineEnd: 0 }}
-                  color={
-                    stage.state === "cancelled"
-                      ? "default"
-                      : stage.state === "rejected"
-                        ? "red"
-                        : stage.state === "completed"
-                          ? "green"
-                          : "orange"
-                  }
-                >
-                  {getStateLabel(stage.state)}
-                </Tag>
-              </div>
-              {stage.detail ? (
-                <Text
-                  style={{
-                    display: "block",
-                    marginTop: 4,
-                    color: "#0f172a",
-                    fontSize: 13,
-                    fontWeight: 600,
-                    overflowWrap: "anywhere",
-                  }}
-                >
-                  {stage.detail}
-                </Text>
-              ) : null}
-              {stage.note ? (
-                <Paragraph
-                  style={{
-                    margin: "8px 0 0",
-                    padding: "8px 12px",
-                    borderRadius: 8,
-                    background: "rgba(255, 255, 255, 0.7)",
-                    color: "#475569",
-                    fontSize: 13,
-                    textWrap: "pretty",
-                  }}
-                >
-                  {stage.note}
-                </Paragraph>
-              ) : null}
-              {footerText ? (
-                <Space size={5} style={{ marginTop: 8 }}>
-                  <ClockCircleOutlined
-                    style={{ color: "#94a3b8", fontSize: 12 }}
-                  />
-                  <Text
-                    type="secondary"
-                    style={{
-                      fontSize: 12,
-                      fontVariantNumeric: "tabular-nums",
-                    }}
-                  >
-                    {footerText}
-                  </Text>
-                </Space>
-              ) : null}
-            </div>
-          )}
-        </div>
-      </li>
-    );
-  };
-
-  const renderMiniCard = (stage: ApprovalFlowStage, index: number) => {
-    const colors = getStageColor(stage.state);
-    return (
-      <div
-        key={stage.key}
-        style={{
-          minWidth: 0,
-          padding: "10px 12px",
-          borderRadius: 14,
-          border: `1px solid ${colors.border}`,
-          background: colors.surface,
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <span
-            aria-hidden="true"
-            style={{
-              display: "inline-flex",
-              color: colors.accent,
-              fontSize: 16,
-            }}
-          >
-            {getStageIcon(stage.state)}
-          </span>
-          <Text
-            style={{
-              minWidth: 0,
-              fontSize: 12,
-              fontWeight: 800,
-              color: "#0f172a",
-              letterSpacing: "0.02em",
-              textTransform: "uppercase",
-              overflowWrap: "anywhere",
-            }}
-          >
-            {getStageLabel(stage)}
-          </Text>
-        </div>
-        <Text
-          style={{
-            display: "block",
-            marginTop: 4,
-            fontSize: 11,
-            fontWeight: 600,
-            color: colors.accent,
-          }}
-        >
-          {t("workflow.step", { number: index + 1 })} ·{" "}
-          {getStateLabel(stage.state)}
-        </Text>
+        ) : null}
       </div>
     );
   };
 
   return (
-    <Card
-      style={{
-        borderRadius: 20,
-        border: "1px solid #e5e7eb",
-        background: "linear-gradient(180deg, #ffffff 0%, #fffaf5 100%)",
-        boxShadow: "0 18px 40px rgba(15, 23, 42, 0.06)",
-      }}
-      bodyStyle={{ padding: isMobile ? 14 : 20 }}
-    >
-      <Space
-        direction="vertical"
-        size={6}
-        style={{ width: "100%", marginBottom: 18 }}
-      >
-        <Text
-          style={{
-            fontSize: 12,
-            fontWeight: 700,
-            letterSpacing: "0.14em",
-            textTransform: "uppercase",
-            color: "#f97316",
-          }}
-        >
-          {eyebrow}
-        </Text>
-        <Text style={{ fontSize: 20, fontWeight: 700, color: "#0f172a" }}>
-          {title}
-        </Text>
-      </Space>
-
-      <div
-        aria-label={t("workflow.progressSummary", {
-          completed: completedStages,
-          total: activeStages.length,
-        })}
-        style={{
-          display: "grid",
-          gridTemplateColumns: "auto minmax(0, 1fr) auto",
-          alignItems: "center",
-          gap: 12,
-          padding: "12px 14px",
-          marginBottom: 18,
-          border: "1px solid #e7edf4",
-          borderRadius: 14,
-          background: "rgba(248, 250, 252, 0.8)",
-        }}
-      >
-        <div
-          style={{
-            minWidth: 42,
-            height: 42,
-            borderRadius: 12,
-            display: "grid",
-            placeItems: "center",
-            background: terminalStage ? "#fef2f2" : "#fff7ed",
-            color: terminalStage ? "#dc2626" : "#ea580c",
-            fontWeight: 800,
-            fontSize: 13,
-            fontVariantNumeric: "tabular-nums",
-          }}
-        >
-          {completedStages}/{activeStages.length}
-        </div>
+    <Card className="afm" bordered={false}>
+      <div className="afm-top">
         <div style={{ minWidth: 0 }}>
-          <Text style={{ display: "block", fontWeight: 700, color: "#1e293b" }}>
-            {progressLabel}
-          </Text>
-          <Text type="secondary" style={{ fontSize: 12 }}>
-            {t("workflow.progressSummary", {
-              completed: completedStages,
-              total: activeStages.length,
-            })}
-            {skippedCount > 0
-              ? ` · ${t("workflow.progressSkipped", { count: skippedCount })}`
+          <span className="afm-eyebrow">{eyebrow}</span>
+          <h3 className="afm-title">{title}</h3>
+          <span className="afm-meta">
+            {progressSummary}
+            {skippedStages.length > 0
+              ? ` · ${t("workflow.progressSkipped", { count: skippedStages.length })}`
               : ""}
-          </Text>
-          <div
-            aria-hidden="true"
-            style={{
-              height: 5,
-              marginTop: 7,
-              overflow: "hidden",
-              borderRadius: 999,
-              background: "#e2e8f0",
-            }}
-          >
-            <div
-              style={{
-                width: `${progressPercent}%`,
-                height: "100%",
-                borderRadius: 999,
-                background: terminalStage ? "#dc2626" : "#f97316",
-                transition: "width 180ms ease",
-              }}
-            />
-          </div>
+          </span>
         </div>
-        <Tag
-          color={
-            terminalStage
-              ? terminalStage.state === "rejected"
-                ? "red"
-                : "default"
-              : currentStage
-                ? "orange"
-                : "green"
-          }
-          style={{ marginInlineEnd: 0, whiteSpace: "nowrap" }}
-        >
-          {terminalStage
-            ? getStateLabel(terminalStage.state)
-            : currentStage
-              ? getStateLabel("current")
-              : getStateLabel("completed")}
-        </Tag>
+        <span className={`afm-badge afm-t-${tone}`}>
+          <span className="afm-badge-dot" aria-hidden="true" />
+          {statusLabel} · {completedStages}/{activeStages.length}
+        </span>
       </div>
 
-      {compact ? (
-        // Steps stay in order; the focus stage spans both columns in its place.
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-            gap: 8,
-          }}
-        >
-          {stages.map((stage, index) =>
-            index === focusIndex ? (
-              <div key={stage.key} style={{ gridColumn: "1 / -1" }}>
-                {renderStageCard(stage, index)}
-              </div>
-            ) : (
-              renderMiniCard(stage, index)
-            ),
-          )}
+      <ol ref={stepsRef} className="afm-steps" aria-label={progressSummary}>
+        {activeStages.map((stage, index) => (
+          <li
+            key={stage.key}
+            className={`afm-step afm-s-${stage.state}`}
+            title={getStageLabel(stage)}
+          >
+            <span className="afm-dot" aria-hidden="true">
+              {getStageIcon(stage.state, index + 1)}
+            </span>
+            <span className="afm-step-label">{getStageLabel(stage)}</span>
+            <span className="afm-step-state">{getStateLabel(stage.state)}</span>
+          </li>
+        ))}
+      </ol>
+
+      {skippedStages.length > 0 ? (
+        <div className="afm-skipped">
+          <span className="afm-skipped-label">{getStateLabel("skipped")}</span>
+          {skippedStages.map((stage) => (
+            <span key={stage.key} className="afm-skipped-name">
+              {getStageLabel(stage)}
+            </span>
+          ))}
         </div>
-      ) : (
-        <ol style={{ margin: 0, padding: 0 }}>
-          {stages.map((stage, index) =>
-            renderTrailStep(stage, index, index === stages.length - 1),
-          )}
-        </ol>
-      )}
-      {isMobile && (
+      ) : null}
+
+      {focusStage ? renderFocusPanel(focusStage) : null}
+
+      {showHistory && historyStages.length > 0 ? (
+        <ul className="afm-history">
+          {historyStages.map((stage) => {
+            const number = activeStages.indexOf(stage) + 1;
+            const timeText = getTimeText(stage);
+            const actorText = getActorLine(stage) || stage.detail;
+            const note =
+              stage.note &&
+              stage.note.trim().toLowerCase() !==
+                getStateLabel(stage.state).trim().toLowerCase()
+                ? stage.note
+                : "";
+            return (
+              <li
+                key={stage.key}
+                className={`afm-history-item afm-s-${stage.state}`}
+              >
+                <span className="afm-history-icon" aria-hidden="true">
+                  {getStageIcon(stage.state, number)}
+                </span>
+                <span style={{ minWidth: 0 }}>
+                  <span className="afm-history-name">
+                    {getStageLabel(stage)}
+                  </span>
+                  {actorText ? (
+                    <>
+                      <span className="afm-history-detail" aria-hidden="true">
+                        {" · "}
+                      </span>
+                      <span className="afm-history-detail">{actorText}</span>
+                    </>
+                  ) : null}
+                  {note ? (
+                    <span className="afm-history-note">{note}</span>
+                  ) : null}
+                </span>
+                {timeText ? (
+                  <span className="afm-history-time">{timeText}</span>
+                ) : null}
+              </li>
+            );
+          })}
+        </ul>
+      ) : null}
+
+      {isMobile && historyStages.length > 0 ? (
         <Button
           type="link"
           block
+          className="afm-toggle"
           icon={
             showAll ? <UpOutlined aria-hidden /> : <DownOutlined aria-hidden />
           }
           aria-expanded={showAll}
           onClick={() => setShowAll((value) => !value)}
-          style={{ marginTop: 8, fontWeight: 600, color: "#ea580c" }}
         >
           {showAll ? t("workflow.hideDetails") : t("workflow.showDetails")}
         </Button>
+      ) : (
+        <div style={{ height: 8 }} />
       )}
     </Card>
   );

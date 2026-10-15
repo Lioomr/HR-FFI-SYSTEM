@@ -7,7 +7,7 @@ Backend:
 - Prefer app-level tests for serializers, views, permissions, and approval workflows.
 
 Frontend:
-- Test runner: `cd FrontEnd && npm run test`
+- Test runner for one-shot agent verification: `cd FrontEnd && npm run test -- --run`; add test-file paths for focused runs. `npm run test` is interactive watch mode.
 - Quality checks: `npm run lint`, `npm run type-check`, `npm run format:check`
 - Add tests near behavior-critical UI and API integration boundaries.
 

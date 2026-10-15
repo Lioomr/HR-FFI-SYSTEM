@@ -1,7 +1,8 @@
 import BackButton from "../../../components/ui/BackButton";
-import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
 import {
+  Alert,
   Button,
   Card,
   Form,
@@ -11,10 +12,15 @@ import {
   Select,
   Typography,
 } from "antd";
-import { SendOutlined } from "@ant-design/icons";
+import { SaveOutlined, SendOutlined } from "@ant-design/icons";
 
 import PageHeader from "../../../components/ui/PageHeader";
-import { createLoanRequest } from "../../../services/api/loanApi";
+import {
+  createLoanRequest,
+  editLoanRequest,
+  getMyLoanRequest,
+  type LoanRequest,
+} from "../../../services/api/loanApi";
 import { getEmployee, type Employee } from "../../../services/api/employeesApi";
 import { isApiError, type ApiError } from "../../../services/api/apiTypes";
 import { getHttpStatus } from "../../../services/api/httpErrors";
@@ -23,11 +29,37 @@ import { useI18n } from "../../../i18n/useI18n";
 
 const { TextArea } = Input;
 
-export default function RequestLoanPage() {
+const EDITABLE_FORM_FIELDS = [
+  "amount",
+  "loan_type",
+  "installment_months",
+  "reason",
+];
+
+/**
+ * Create form, also used (mode="edit") to edit the signed-in employee's own
+ * loan request until it reaches HR. The server decides editability
+ * (`workflow.can_edit`).
+ */
+export default function RequestLoanPage({
+  mode = "create",
+}: {
+  mode?: "create" | "edit";
+}) {
+  const isEdit = mode === "edit";
+  const { id } = useParams();
+  const requestId = id ?? "";
+  const detailsPath = `/employee/loans/${requestId}`;
   const navigate = useNavigate();
   const { t } = useI18n();
   const [form] = Form.useForm();
   const [submitting, setSubmitting] = useState(false);
+  const submitInFlight = useRef(false);
+  const [editRequest, setEditRequest] = useState<LoanRequest | null>(null);
+  const [editLoading, setEditLoading] = useState(isEdit);
+  const [notEditableMessage, setNotEditableMessage] = useState<string | null>(
+    null,
+  );
   const [employee, setEmployee] = useState<Employee | null>(null);
   const selectedLoanType = Form.useWatch("loan_type", form) as
     | "open"
@@ -46,6 +78,53 @@ export default function RequestLoanPage() {
       })
       .catch(() => undefined);
   }, []);
+
+  useEffect(() => {
+    if (!isEdit || !requestId) return;
+    let active = true;
+    setEditLoading(true);
+    getMyLoanRequest(requestId)
+      .then((res) => {
+        if (!active) return;
+        if (isApiError(res)) {
+          setNotEditableMessage(t("requests.edit.notEditable"));
+          return;
+        }
+        const current = res.data;
+        setEditRequest(current);
+        form.setFieldsValue({
+          loan_type: current.loan_type || "open",
+          amount: Number(current.requested_amount),
+          installment_months: current.installment_months ?? undefined,
+          reason: current.reason || "",
+        });
+        if (current.workflow?.can_edit !== true) {
+          setNotEditableMessage(t("requests.edit.notEditable"));
+        }
+      })
+      .catch(() => {
+        if (active) setNotEditableMessage(t("requests.edit.notEditable"));
+      })
+      .finally(() => {
+        if (active) setEditLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [isEdit, requestId, form, t]);
+
+  async function refreshEditedRequest() {
+    try {
+      const res = await getMyLoanRequest(requestId);
+      if (isApiError(res)) return;
+      setEditRequest(res.data);
+      if (res.data.workflow?.can_edit !== true) {
+        setNotEditableMessage(t("requests.edit.notEditable"));
+      }
+    } catch {
+      // Keep the current view; the server re-checks on the next save.
+    }
+  }
 
   const maxAmount = useMemo(
     () => Number(employee?.basic_salary || 0),
@@ -177,6 +256,75 @@ export default function RequestLoanPage() {
     return raw;
   }
 
+  async function onEditFinish(values: {
+    amount: number;
+    reason?: string;
+    loan_type: "open" | "installment";
+    installment_months?: number;
+  }) {
+    if (submitInFlight.current) return;
+    submitInFlight.current = true;
+    setSubmitting(true);
+    try {
+      const res = await editLoanRequest(requestId, {
+        amount: values.amount,
+        reason: values.reason || "",
+        loan_type: values.loan_type,
+        installment_months:
+          values.loan_type === "installment"
+            ? (values.installment_months ?? null)
+            : null,
+      });
+      if (isApiError(res)) {
+        throw { response: { status: 422, data: res } };
+      }
+      notification.success({ message: t("requests.edit.success") });
+      navigate(detailsPath);
+    } catch (err: unknown) {
+      const status = getHttpStatus(err);
+      const data = (err as { response?: { data?: ApiError } })?.response?.data;
+      const rawErrors: unknown[] = Array.isArray(data?.errors)
+        ? (data.errors as unknown[])
+        : [];
+      const fieldErrors = rawErrors.flatMap((item) => {
+        if (!item || typeof item !== "object") return [];
+        const { field, message } = item as {
+          field?: unknown;
+          message?: unknown;
+        };
+        return typeof field === "string" &&
+          EDITABLE_FORM_FIELDS.includes(field) &&
+          typeof message === "string"
+          ? [{ field, message }]
+          : [];
+      });
+      let description: string;
+      if (status === 422 && fieldErrors.length === 0) {
+        description =
+          (typeof data?.message === "string" && data.message.trim()) ||
+          t("requests.edit.notEditable");
+        setNotEditableMessage(description);
+        await refreshEditedRequest();
+      } else if (status === 422) {
+        form.setFields(
+          fieldErrors.map(({ field, message }) => ({
+            name: field,
+            errors: [message],
+          })),
+        );
+        description = fieldErrors.map(({ message }) => message).join(", ");
+      } else if (status === 404) {
+        description = t("requests.edit.notEditable");
+      } else {
+        description = getLoanRequestErrorDescription(err);
+      }
+      notification.error({ message: t("requests.edit.failed"), description });
+    } finally {
+      submitInFlight.current = false;
+      setSubmitting(false);
+    }
+  }
+
   async function onFinish(values: {
     amount: number;
     reason?: string;
@@ -217,18 +365,30 @@ export default function RequestLoanPage() {
   return (
     <div style={{ maxWidth: 720, margin: "0 auto" }}>
       <PageHeader
-        title={t("loans.request.title")}
-        subtitle={t("loans.request.subtitle")}
+        title={isEdit ? t("loans.edit.title") : t("loans.request.title")}
+        subtitle={
+          isEdit ? t("requests.edit.hint") : t("loans.request.subtitle")
+        }
         actions={
           <BackButton
-            onClick={() => navigate("/employee/loans")}
+            onClick={() => navigate(isEdit ? detailsPath : "/employee/loans")}
             style={{ borderRadius: 10, minHeight: 40 }}
           >
-            {t("loans.details.back")}
+            {isEdit
+              ? t("requests.edit.backToDetails")
+              : t("loans.details.back")}
           </BackButton>
         }
       />
-      <Card style={{ borderRadius: 16 }}>
+      <Card style={{ borderRadius: 16 }} loading={isEdit && editLoading}>
+        {isEdit && (
+          <Alert
+            style={{ marginBottom: 16 }}
+            showIcon
+            type={notEditableMessage ? "warning" : "info"}
+            message={notEditableMessage || t("requests.edit.hint")}
+          />
+        )}
         <Typography.Paragraph style={{ marginBottom: 8 }}>
           <strong>{t("loans.request.limitLabel")}</strong>{" "}
           {formatNumber(maxAmount)}
@@ -240,7 +400,7 @@ export default function RequestLoanPage() {
         <Form
           form={form}
           layout="vertical"
-          onFinish={onFinish}
+          onFinish={isEdit ? onEditFinish : onFinish}
           initialValues={{ loan_type: "open" }}
         >
           <Form.Item
@@ -360,10 +520,17 @@ export default function RequestLoanPage() {
           <Button
             type="primary"
             htmlType="submit"
-            icon={<SendOutlined />}
+            icon={isEdit ? <SaveOutlined aria-hidden /> : <SendOutlined />}
             loading={submitting}
+            style={{ minHeight: 44 }}
+            disabled={
+              isEdit &&
+              (editLoading ||
+                !editRequest ||
+                editRequest.workflow?.can_edit !== true)
+            }
           >
-            {t("loans.request.formSubmit")}
+            {isEdit ? t("requests.edit.save") : t("loans.request.formSubmit")}
           </Button>
         </Form>
       </Card>

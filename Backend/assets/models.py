@@ -4,7 +4,6 @@ from django.db import models, transaction
 from django.db.models import Q
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
-
 from employees.models import EmployeeProfile
 from employees.storage import PrivateUploadStorage
 from organization.models import OrganizationNode
@@ -174,6 +173,7 @@ class AssetDamageReport(models.Model):
         PENDING_CEO = "PENDING_CEO", _("Pending CEO")
         APPROVED = "APPROVED", _("Approved")
         REJECTED = "REJECTED", _("Rejected")
+        CANCELLED = "CANCELLED", _("Cancelled")
 
     asset = models.ForeignKey(Asset, on_delete=models.CASCADE, related_name="damage_reports")
     employee = models.ForeignKey(EmployeeProfile, on_delete=models.CASCADE, related_name="asset_damage_reports")
@@ -198,6 +198,8 @@ class AssetDamageReport(models.Model):
     )
     ceo_decision_at = models.DateTimeField(null=True, blank=True)
     ceo_decision_note = models.TextField(blank=True)
+    # Set when the employee withdraws the report while it is still pending.
+    cancelled_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         ordering = ["-reported_at"]
@@ -211,6 +213,7 @@ class AssetReturnRequest(models.Model):
         APPROVED = "APPROVED", _("Approved")
         PROCESSED = "PROCESSED", _("Processed")
         REJECTED = "REJECTED", _("Rejected")
+        CANCELLED = "CANCELLED", _("Cancelled")
 
     asset = models.ForeignKey(Asset, on_delete=models.CASCADE, related_name="return_requests")
     employee = models.ForeignKey(EmployeeProfile, on_delete=models.CASCADE, related_name="asset_return_requests")
@@ -252,6 +255,8 @@ class AssetReturnRequest(models.Model):
     )
     ceo_decision_at = models.DateTimeField(null=True, blank=True)
     ceo_decision_note = models.TextField(blank=True)
+    # Set when the employee withdraws the request while it is still pending.
+    cancelled_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         ordering = ["-requested_at"]

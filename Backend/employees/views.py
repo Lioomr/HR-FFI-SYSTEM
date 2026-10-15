@@ -8,21 +8,9 @@ import string
 from datetime import datetime, timedelta
 from decimal import Decimal, InvalidOperation
 
-from django.conf import settings
-from django.core.exceptions import ValidationError as DjangoValidationError
-from django.db import IntegrityError, transaction
-from django.db.models import Case, CharField, Exists, F, OuterRef, Q, Value, When
-from django.http import FileResponse, HttpResponse
-from django.utils import timezone
-from rest_framework import mixins, status, viewsets
-from rest_framework.decorators import action
-from rest_framework.exceptions import ValidationError as DRFValidationError
-from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
-from rest_framework.permissions import BasePermission, IsAuthenticated
-from rest_framework.response import Response
-
 from announcements.models import Announcement
 from audit.utils import audit
+from core.executives import executive_profile_q, is_executive_profile
 from core.exporting import audit_export, xlsx_response
 from core.models import WorkflowInstance
 from core.pagination import EmployeePagination, StandardPagination
@@ -42,6 +30,12 @@ from core.services import (
     sync_workflow,
 )
 from core.services.request_references import public_reference_for
+from django.conf import settings
+from django.core.exceptions import ValidationError as DjangoValidationError
+from django.db import IntegrityError, transaction
+from django.db.models import Case, CharField, Exists, F, OuterRef, Q, Value, When
+from django.http import FileResponse, HttpResponse
+from django.utils import timezone
 from in_app_notifications.models import Notification
 from leaves.models import AnnualLeavePaymentRequest, LeaveRequest
 from loans.models import LoanRequest
@@ -58,6 +52,12 @@ from organization.services import (
     get_user_accessible_company_ids,
 )
 from permission_requests.models import PermissionRequest
+from rest_framework import mixins, status, viewsets
+from rest_framework.decorators import action
+from rest_framework.exceptions import ValidationError as DRFValidationError
+from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
+from rest_framework.permissions import BasePermission, IsAuthenticated
+from rest_framework.response import Response
 
 from .archive_request_services import (
     ArchiveRequestError,
@@ -67,6 +67,7 @@ from .archive_request_services import (
 )
 from .cache import employee_list_cache_version
 from .contract_expiry import (
+    EXECUTIVE_CONTRACT_MESSAGE,
     ensure_contract_decision,
     finalize_decision,
     notify_hr_final,
@@ -671,6 +672,10 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
         # Employees who can still receive an invitation (no user account yet).
         if params.get("account") == "unlinked":
             qs = qs.filter(user__isnull=True)
+
+        # Pickers choosing who a request is for: executives are never a request's subject.
+        if params.get("executives") == "exclude":
+            qs = qs.exclude(executive_profile_q())
 
         department = params.get("department")
         if department:
@@ -2219,6 +2224,10 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
                 errors=["Employee does not have a contract expiry date."],
                 status=status.HTTP_422_UNPROCESSABLE_ENTITY,
             )
+        if is_executive_profile(profile):
+            return error(
+                "Validation error", errors=[EXECUTIVE_CONTRACT_MESSAGE], status=status.HTTP_422_UNPROCESSABLE_ENTITY
+            )
         serializer = ContractDecisionSubmitSerializer(data=request.data)
         if not serializer.is_valid():
             return error("Validation error", errors=serializer.errors, status=status.HTTP_422_UNPROCESSABLE_ENTITY)
@@ -2295,9 +2304,10 @@ class ContractDecisionViewSet(viewsets.ReadOnlyModelViewSet):
     pagination_class = StandardPagination
 
     def get_queryset(self):
+        # Executives have no contract decisions; any left from before stay out of every list.
         qs = ContractDecision.objects.select_related(
             "company", "employee_profile", "requested_by", "ceo_decided_by", "finalized_by"
-        )
+        ).exclude(executive_profile_q("employee_profile__"))
         role = get_role(self.request.user)
         if role in ["SystemAdmin", "HRManager"]:
             return filter_queryset_by_company_scope(qs, self.request)

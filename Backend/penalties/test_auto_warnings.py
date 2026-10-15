@@ -7,22 +7,22 @@ from io import BytesIO, StringIO
 from unittest.mock import patch
 
 import pymupdf
+from attendance.late_notices import MAPPED_TEXT_FIELDS, WHATSAPP_VARIABLES, load_notice_assets
+from attendance.models import BioTimeEmployeeMap
+from audit.models import AuditLog
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.core.files.base import ContentFile
 from django.core.management import call_command
 from django.test import TestCase, override_settings
 from django.utils import timezone
-from PIL import Image
-from rest_framework.test import APIClient
-
-from attendance.late_notices import MAPPED_TEXT_FIELDS, WHATSAPP_VARIABLES, load_notice_assets
-from audit.models import AuditLog
 from employees.models import EmployeeProfile
 from in_app_notifications.dispatcher import _load_whatsapp_document
 from in_app_notifications.i18n import notification_text
 from organization.models import OrganizationNode, UserOrganizationAccess
 from payroll.models import PayrollRun, PayrollRunItem
+from PIL import Image
+from rest_framework.test import APIClient
 
 from .catalog import CATALOG
 from .models import PenaltyCatalog, PenaltyDeduction, PenaltyRecord, PenaltyWarningNotice
@@ -79,7 +79,7 @@ class AutomaticWarningTests(TestCase):
 
     @classmethod
     def _profile(cls, user, employee_id, name):
-        return EmployeeProfile.objects.create(
+        profile = EmployeeProfile.objects.create(
             user=user,
             company=cls.company,
             employee_id=employee_id,
@@ -88,6 +88,9 @@ class AutomaticWarningTests(TestCase):
             basic_salary=Decimal("3000.00"),
             employment_status=EmployeeProfile.EmploymentStatus.ACTIVE,
         )
+        # Attendance penalties only apply to BioTime-mapped employees.
+        BioTimeEmployeeMap.objects.create(employee_profile=profile, biotime_emp_code=employee_id)
+        return profile
 
     def tearDown(self):
         for notice in PenaltyWarningNotice.objects.all():

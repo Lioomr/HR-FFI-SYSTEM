@@ -1,0 +1,446 @@
+msgid ""
+msgstr "Content-Type: text/plain; charset=UTF-8\nLanguage: ar\n"
+
+msgid "payroll.accommodation_status.assigned"
+msgstr "معين"
+
+msgid "payroll.accommodation_status.none"
+msgstr "لا يوجد سكن شركة"
+
+msgid "payroll.accommodation_status.unknown"
+msgstr "السكن غير معروف"
+
+msgid "payroll.adjustment.absence_override"
+msgstr "تجاوز أيام الغياب"
+
+msgid "payroll.adjustment.addition_entry"
+msgstr "إدخال إضافة"
+
+msgid "payroll.adjustment.employment_input_change"
+msgstr "تغيير بيانات التوظيف"
+
+msgid "payroll.adjustment.leave_input_change"
+msgstr "تغيير بيانات الإجازة"
+
+msgid "payroll.adjustment.manual_adjustment"
+msgstr "تعديل يدوي"
+
+msgid "payroll.adjustment.other_deduction_entry"
+msgstr "إدخال خصم آخر"
+
+msgid "payroll.adjustment.overtime_eligibility_override"
+msgstr "تجاوز حد ساعات العمل الإضافي العادي"
+
+msgid "payroll.adjustment.salary_adjustment"
+msgstr "تعديل الراتب"
+
+msgid "payroll.adjustment.settings_refresh"
+msgstr "تحديث الإعدادات"
+
+msgid "payroll.adjustment.zero_salary_reason"
+msgstr "سبب الراتب الصفري"
+
+msgid "payroll.assumption.missing_hire_date"
+msgstr "تم افتراض شهر كامل وفئة أقل من خمس سنوات لهذه المسودة فقط."
+
+msgid "payroll.assumption.overtime_basic"
+msgstr "يعتمد العمل الإضافي افتراضيًا على الراتب الأساسي؛ يمكن للموارد البشرية ضبط الأساس."
+
+msgid "payroll.assumption.overtime_calendar_month"
+msgstr "حد العمل الإضافي العادي لكل شهر تقويمي (افتراض)."
+
+msgid "payroll.carry_status.pending"
+msgstr "معلق"
+
+msgid "payroll.carry_status.settled"
+msgstr "مسدد"
+
+msgid "payroll.collection_state.applied"
+msgstr "مطبق"
+
+msgid "payroll.collection_state.claimed"
+msgstr "محجوز"
+
+msgid "payroll.collection_state.released"
+msgstr "محرر"
+
+msgid "payroll.field.carry_forward"
+msgstr "غير محصل ومرحل"
+
+msgid "payroll.field.cost_incomplete"
+msgstr "تكلفة الشركة غير مكتملة"
+
+msgid "payroll.field.gross_salary"
+msgstr "إجمالي الراتب"
+
+msgid "payroll.field.net_salary"
+msgstr "صافي الراتب"
+
+msgid "payroll.field.require_manual_absence_confirmation"
+msgstr "اشتراط تأكيد الغياب يدويًا"
+
+msgid "payroll.field.total_additions"
+msgstr "إجمالي الإضافات"
+
+msgid "payroll.field.total_company_cost"
+msgstr "إجمالي تكلفة الشركة"
+
+msgid "payroll.field.total_deductions"
+msgstr "إجمالي الخصومات"
+
+msgid "payroll.history.assignment_change"
+msgstr "تغيير تخصيص السكن"
+
+msgid "payroll.history.employee_gosi_change"
+msgstr "تغيير تأمينات الموظف"
+
+msgid "payroll.history.settings_change"
+msgstr "تغيير الإعدادات"
+
+msgid "payroll.line.absence"
+msgstr "الغياب"
+
+msgid "payroll.line.accommodation_allowance"
+msgstr "بدل السكن"
+
+msgid "payroll.line.accommodation_cost"
+msgstr "تكلفة سكن الشركة"
+
+msgid "payroll.line.air_ticket"
+msgstr "تذكرة الطيران"
+
+msgid "payroll.line.attendance_penalty"
+msgstr "مخالفة الحضور"
+
+msgid "payroll.line.basic_salary"
+msgstr "الراتب الأساسي"
+
+msgid "payroll.line.bonus"
+msgstr "مكافأة"
+
+msgid "payroll.line.eos_provision"
+msgstr "مخصص نهاية الخدمة"
+
+msgid "payroll.line.gosi_company"
+msgstr "تأمينات الشركة"
+
+msgid "payroll.line.gosi_employee"
+msgstr "تأمينات الموظف"
+
+msgid "payroll.line.id_cost"
+msgstr "تكلفة الإقامة"
+
+msgid "payroll.line.incentive"
+msgstr "حافز"
+
+msgid "payroll.line.leave_provision"
+msgstr "مخصص الإجازة"
+
+msgid "payroll.line.loan"
+msgstr "قرض"
+
+msgid "payroll.line.medical"
+msgstr "التأمين الطبي"
+
+msgid "payroll.line.official_holiday_work"
+msgstr "العمل في العطلة الرسمية"
+
+msgid "payroll.line.other_addition"
+msgstr "إضافة أخرى"
+
+msgid "payroll.line.other_allowance"
+msgstr "بدل آخر"
+
+msgid "payroll.line.other_deduction"
+msgstr "خصم آخر"
+
+msgid "payroll.line.overtime_normal"
+msgstr "العمل الإضافي العادي"
+
+msgid "payroll.line.penalty_fine"
+msgstr "غرامة مخالفة"
+
+msgid "payroll.line.penalty_wage_withholding"
+msgstr "حجز أجر المخالفة"
+
+msgid "payroll.line.petrol_allowance"
+msgstr "بدل الوقود"
+
+msgid "payroll.line.previous_total_deductions"
+msgstr "إجمالي الخصومات السابقة"
+
+msgid "payroll.line.telephone_allowance"
+msgstr "بدل الهاتف"
+
+msgid "payroll.line.transportation_allowance"
+msgstr "بدل النقل"
+
+msgid "payroll.line.weekly_rest_work"
+msgstr "العمل في الراحة الأسبوعية"
+
+msgid "payroll.line_category.addition"
+msgstr "إضافة"
+
+msgid "payroll.line_category.deduction"
+msgstr "خصم"
+
+msgid "payroll.line_category.provision"
+msgstr "مخصص"
+
+msgid "payroll.line_category.salary"
+msgstr "راتب"
+
+msgid "payroll.message.already_cancelled"
+msgstr "تم إلغاء مسير الرواتب مسبقًا."
+
+msgid "payroll.message.already_finalized"
+msgstr "تم اعتماد مسير الرواتب مسبقًا."
+
+msgid "payroll.message.cancelled"
+msgstr "تم إلغاء مسير الرواتب."
+
+msgid "payroll.message.finalized"
+msgstr "تم اعتماد مسير الرواتب."
+
+msgid "payroll.message.generated"
+msgstr "تم إنشاء قسائم الرواتب"
+
+msgid "payroll.message.recalculated"
+msgstr "تمت إعادة حساب مسير الرواتب."
+
+msgid "payroll.payment_mode.bank_transfer"
+msgstr "تحويل بنكي"
+
+msgid "payroll.pdf.additions"
+msgstr "الإضافات"
+
+msgid "payroll.pdf.deductions"
+msgstr "الخصومات"
+
+msgid "payroll.pdf.earnings"
+msgstr "تفاصيل المستحقات"
+
+msgid "payroll.pdf.employee"
+msgstr "الموظف"
+
+msgid "payroll.pdf.payment_mode"
+msgstr "طريقة الدفع"
+
+msgid "payroll.pdf.payroll_report"
+msgstr "تقرير الرواتب"
+
+msgid "payroll.pdf.payslip"
+msgstr "قسيمة راتب الموظف"
+
+msgid "payroll.pdf.payslip_id"
+msgstr "رقم قسيمة الراتب"
+
+msgid "payroll.pdf.period"
+msgstr "الفترة"
+
+msgid "payroll.pdf.provisions"
+msgstr "مخصصات الشركة"
+
+msgid "payroll.provision_proration.full_month"
+msgstr "شهر كامل"
+
+msgid "payroll.provision_proration.prorated_by_days"
+msgstr "موزع نسبيًا حسب أيام الأجر"
+
+msgid "payroll.rent.not_in_payroll"
+msgstr "غير مدرج في مسير الرواتب"
+
+msgid "payroll.rent.rounding_difference"
+msgstr "فرق التقريب"
+
+msgid "payroll.rent.vacant_unallocated"
+msgstr "شاغر وغير موزع"
+
+msgid "payroll.salary_base.basic"
+msgstr "الراتب الأساسي"
+
+msgid "payroll.salary_base.basic_housing"
+msgstr "الأساسي والسكن"
+
+msgid "payroll.salary_base.basic_housing_transport"
+msgstr "الأساسي والسكن والنقل"
+
+msgid "payroll.salary_base.fixed_amount"
+msgstr "مبلغ ثابت"
+
+msgid "payroll.salary_base.gross"
+msgstr "إجمالي الراتب"
+
+msgid "payroll.status.cancelled"
+msgstr "ملغى"
+
+msgid "payroll.status.completed"
+msgstr "معتمد"
+
+msgid "payroll.status.draft"
+msgstr "مسودة"
+
+msgid "payroll.status.paid"
+msgstr "مدفوع"
+
+msgid "payroll.suspended_pay_decision.full_pay"
+msgstr "أجر كامل"
+
+msgid "payroll.suspended_pay_decision.zero_pay"
+msgstr "أجر صفري"
+
+msgid "payroll.validation.absence_capped"
+msgstr "تم تقييد خصم الغياب بالأجر المستحق المسموح."
+
+msgid "payroll.validation.accommodation_unknown"
+msgstr "تكلفة السكن غير معروفة؛ تكلفة الشركة غير مكتملة."
+
+msgid "payroll.validation.amount_out_of_range"
+msgstr "يتجاوز المبلغ النطاق المدعوم للرواتب."
+
+msgid "payroll.validation.archived_without_date"
+msgstr "الموظف المؤرشف ليس له تاريخ أرشفة."
+
+msgid "payroll.validation.assignment_overlap"
+msgstr "يتداخل تخصيص سكن مع هذه التواريخ."
+
+msgid "payroll.validation.attendance_calendar_missing"
+msgstr "يلزم دليل أيام العمل لتحديد غياب الشهر الكامل."
+
+msgid "payroll.validation.attendance_source_unavailable"
+msgstr "لا يغطي مصدر الحضور أيام التوظيف؛ يجب على الموارد البشرية تأكيد أيام الغياب يدويًا عند اشتراط ذلك."
+
+msgid "payroll.validation.claim_unaffordable"
+msgstr "لا يكفي الأجر لتحصيل المطالبة كاملة وتبقى معلقة."
+
+msgid "payroll.validation.company_mismatch"
+msgstr "يجب أن تنتمي السجلات المرجعية إلى الشركة نفسها."
+
+msgid "payroll.validation.confirm_required"
+msgstr "يجب أن تكون قيمة confirm صحيحة."
+
+msgid "payroll.validation.deductions_capped"
+msgstr "تجاوزت الخصومات الأجر المتاح؛ تبقى المبالغ غير المحصلة معلقة."
+
+msgid "payroll.validation.duplicate_period"
+msgstr "يوجد مسير رواتب لهذه الفترة بالفعل."
+
+msgid "payroll.validation.field_not_editable"
+msgstr "لا يمكن تعديل هذا الحقل هنا."
+
+msgid "payroll.validation.invalid_choice"
+msgstr "اختر قيمة مدعومة."
+
+msgid "payroll.validation.invalid_date_range"
+msgstr "يجب ألا يسبق تاريخ النهاية تاريخ البداية."
+
+msgid "payroll.validation.invalid_decimal"
+msgstr "أدخل قيمة عشرية نصية محدودة وغير سالبة."
+
+msgid "payroll.validation.invalid_export_format"
+msgstr "يجب أن يكون تنسيق الملف csv أو pdf أو xlsx."
+
+msgid "payroll.validation.invalid_period"
+msgstr "اختر سنة وشهر رواتب صحيحين."
+
+msgid "payroll.validation.invalid_quantity"
+msgstr "أدخل عدد أيام أو ساعات صحيحًا وغير سالب."
+
+msgid "payroll.validation.legacy_link_unresolved"
+msgstr "يحتاج ربط موظف في الرواتب السابقة إلى تسوية."
+
+msgid "payroll.validation.medical_invoice_missing"
+msgstr "فاتورة التأمين الطبي مفقودة؛ تكلفة الشركة غير مكتملة."
+
+msgid "payroll.validation.missing_hire_date"
+msgstr "تاريخ التعيين مفقود؛ صحح ملف الموظف وأعد الحساب."
+
+msgid "payroll.validation.overtime_limit_not_set"
+msgstr "لم يُضبط حد لساعات العمل الإضافي العادي؛ الساعات المدخلة مسموحة."
+
+msgid "payroll.validation.overtime_not_allowed"
+msgstr "يتطلب دفع العمل الإضافي العادي فوق الحد تجاوزًا من الموارد البشرية وسببًا."
+
+msgid "payroll.validation.overtime_over_allowed"
+msgstr "يتجاوز العمل الإضافي العادي الحد الشهري للساعات؛ يتطلب دفع الزائد تجاوزًا مدققًا من الموارد البشرية."
+
+msgid "payroll.validation.payroll_reconciliation_failed"
+msgstr "لا تتطابق إجماليات المسير والبنود وقسائم الرواتب."
+
+msgid "payroll.validation.penalty_absence_overlap"
+msgstr "تم استبعاد أيام الأجر المحجوز سابقًا من الغياب."
+
+msgid "payroll.validation.penalty_pending_fine_cap"
+msgstr "تبقى المخالفة معلقة بسبب الحد الشهري للغرامات."
+
+msgid "payroll.validation.penalty_wage_evidence_missing"
+msgstr "تتطلب أيام حجز الأجر تسوية قبل اعتماد المسير."
+
+msgid "payroll.validation.policy_decision_required"
+msgstr "يحتاج هذا الحساب إلى سياسة رواتب معتمدة."
+
+msgid "payroll.validation.prehire_status_conflict"
+msgstr "تتعارض حالة ما قبل التعيين مع تاريخ تعيين خلال هذا الشهر أو قبله."
+
+msgid "payroll.validation.reason_required"
+msgstr "السبب مطلوب."
+
+msgid "payroll.validation.rent_reconciliation_failed"
+msgstr "توزيعات الإيجار غير المقربة لا تتطابق."
+
+msgid "payroll.validation.rent_value_missing"
+msgstr "الإيجار المعين ليس له قيمة سنوية."
+
+msgid "payroll.validation.run_cancelled"
+msgstr "لا يمكن اعتماد المسيرات الملغاة."
+
+msgid "payroll.validation.run_not_draft"
+msgstr "لا يمكن تغيير أو إلغاء سوى مسير رواتب مسودة."
+
+msgid "payroll.validation.run_not_finalized"
+msgstr "اعتمد مسير الرواتب قبل إنشاء القسائم."
+
+msgid "payroll.validation.salary_total_mismatch"
+msgstr "يختلف إجمالي الملف عن مكونات الراتب؛ تم استخدام المكونات."
+
+msgid "payroll.validation.stale_revision"
+msgstr "تغيرت بيانات الرواتب؛ أعد التحميل والمحاولة."
+
+msgid "payroll.validation.suspended_pay_decision_required"
+msgstr "اختر الأجر الكامل أو أجرًا صفريًا بسبب الإيقاف لهذا المسير."
+
+msgid "payroll.validation.terminated_without_end_date"
+msgstr "الموظف المنتهية خدمته ليس له تاريخ نهاية خدمة مؤرشف."
+
+msgid "payroll.validation.uncollected_deduction"
+msgstr "يبقى مبلغ {amount} معلقًا لمسير رواتب لاحق."
+
+msgid "payroll.validation.zero_salary_detail_required"
+msgstr "أدخل تفاصيل لسبب الراتب الصفري الآخر."
+
+msgid "payroll.validation.zero_salary_reason_required"
+msgstr "يلزم سبب لراتب صفري."
+
+msgid "payroll.validation_severity.error"
+msgstr "خطأ"
+
+msgid "payroll.validation_severity.warning"
+msgstr "تحذير"
+
+msgid "payroll.zero_salary_reason.full_absence"
+msgstr "غياب كامل"
+
+msgid "payroll.zero_salary_reason.full_leave"
+msgstr "إجازة كاملة"
+
+msgid "payroll.zero_salary_reason.not_joined"
+msgstr "لم يلتحق"
+
+msgid "payroll.zero_salary_reason.other"
+msgstr "أخرى"
+
+msgid "payroll.zero_salary_reason.suspended"
+msgstr "موقوف"
+
+msgid "payroll.zero_salary_reason.unpaid_leave"
+msgstr "إجازة غير مدفوعة"

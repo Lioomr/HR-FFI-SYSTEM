@@ -110,6 +110,8 @@ export interface AssetDashboardSummary {
 }
 
 export interface AssetDamageReport {
+  workflow?: WorkflowSnapshot;
+  can_cancel?: boolean;
   id: number;
   company_id?: number;
   company_name?: string;
@@ -120,13 +122,14 @@ export interface AssetDamageReport {
   employee_name?: string;
   employee_email?: string;
   description: string;
-  status: "PENDING_HR" | "PENDING_CEO" | "APPROVED" | "REJECTED";
+  status: "PENDING_HR" | "PENDING_CEO" | "APPROVED" | "REJECTED" | "CANCELLED";
   reported_at: string;
   hr_decision_note?: string;
   ceo_decision_note?: string;
 }
 
 export interface AssetReturnRequest {
+  can_cancel?: boolean;
   id: number;
   reference_no?: string | null;
   company_id?: number;
@@ -144,7 +147,8 @@ export interface AssetReturnRequest {
     | "PENDING_CEO"
     | "APPROVED"
     | "PROCESSED"
-    | "REJECTED";
+    | "REJECTED"
+    | "CANCELLED";
   requested_at: string;
   manager_decision_at?: string | null;
   manager_decision_note?: string;
@@ -322,6 +326,18 @@ export async function requestAssetReturn(
   const { data } = await api.post<
     ApiResponse<{ id: number; requested_at: string; status: string }>
   >(`/api/assets/${assetId}/return-request/`, payload);
+  return data;
+}
+
+/** Employee edit of the note on an own return request until it reaches HR. */
+export async function editAssetReturnRequest(
+  id: number | string,
+  payload: { note: string },
+) {
+  const { data } = await api.patch<ApiResponse<AssetReturnRequest>>(
+    `/api/assets/return-requests/${id}/edit/`,
+    payload,
+  );
   return data;
 }
 
@@ -519,4 +535,22 @@ export async function downloadLabelJobPdf(
     responseType: "blob",
   });
   return data as Blob;
+}
+
+export async function cancelAssetReturnRequest(
+  id: string | number,
+): Promise<ApiResponse<AssetReturnRequest>> {
+  const { data } = await api.post<ApiResponse<AssetReturnRequest>>(
+    `/api/assets/return-requests/${id}/cancel/`,
+  );
+  return data;
+}
+
+export async function cancelAssetDamageReport(
+  id: string | number,
+): Promise<ApiResponse<AssetDamageReport>> {
+  const { data } = await api.post<ApiResponse<AssetDamageReport>>(
+    `/api/assets/damage-reports/${id}/cancel/`,
+  );
+  return data;
 }

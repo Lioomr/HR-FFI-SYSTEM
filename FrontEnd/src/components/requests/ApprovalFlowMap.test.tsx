@@ -1,6 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { useAuthStore } from "../../auth/authStore";
 import ApprovalFlowMap, { type ApprovalFlowStage } from "./ApprovalFlowMap";
 
 const t = (key: string) => key;
@@ -54,5 +55,47 @@ describe("ApprovalFlowMap", () => {
     );
 
     expect(screen.getByText(/workflow\.progressSkipped/)).toBeInTheDocument();
+  });
+
+  it("names who acted, and says 'you' for the signed-in user", () => {
+    useAuthStore.setState({
+      user: { id: "7", email: "zeyad@ffi.test", role: "Employee" },
+    });
+    const tWithName = (key: string, params?: unknown) =>
+      params && typeof params === "object" && "name" in params
+        ? `${key}:${(params as { name: string }).name}`
+        : key;
+    render(
+      <ApprovalFlowMap
+        eyebrow="e"
+        title="t"
+        t={tWithName}
+        stages={[
+          {
+            ...stage("submitted", "completed"),
+            actor: { id: 7, full_name: "Zeyad Abdulhamid" },
+          },
+          {
+            ...stage("manager", "completed"),
+            actor: { id: 9, full_name: "Sara Ali" },
+          },
+          {
+            ...stage("cancelled", "cancelled"),
+            actor: { id: 7, full_name: "Zeyad Abdulhamid" },
+          },
+        ]}
+      />,
+    );
+
+    expect(
+      screen.getByText("workflow.actorLine.cancelledYou"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("workflow.actorLine.submittedYou"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("workflow.actorLine.approved:Sara Ali"),
+    ).toBeInTheDocument();
+    useAuthStore.setState({ user: null });
   });
 });

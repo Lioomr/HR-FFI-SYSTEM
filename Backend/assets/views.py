@@ -2,18 +2,6 @@ import logging
 from datetime import timedelta
 from uuid import uuid4
 
-from django.conf import settings
-from django.core import signing
-from django.core.files.base import ContentFile
-from django.db import transaction
-from django.db.models import Count, F, Q
-from django.http import FileResponse, HttpResponse
-from django.utils import timezone
-from django_filters.rest_framework import DjangoFilterBackend
-from rest_framework import filters, status, viewsets
-from rest_framework.decorators import action
-from rest_framework.permissions import IsAuthenticated
-
 from audit.utils import audit
 from core.document_integrity.api import (
     DocumentIntegrityActionsMixin,
@@ -21,6 +9,7 @@ from core.document_integrity.api import (
     involved_q,
     resolve_integrity_object,
 )
+from core.executives import EXECUTIVE_REQUEST_ERROR, is_executive_profile
 from core.files import read_field_file_bytes
 from core.models import WorkflowInstance
 from core.pagination import StandardPagination
@@ -34,7 +23,16 @@ from core.services import (
     send_request_submission_email,
     sync_leave_obligations,
 )
+from core.services.cancellation_requests import request_cancellation_response, withdraw_cancellation_response
 from core.services.request_references import public_reference_for
+from django.conf import settings
+from django.core import signing
+from django.core.files.base import ContentFile
+from django.db import transaction
+from django.db.models import Count, F, Q
+from django.http import FileResponse, HttpResponse
+from django.utils import timezone
+from django_filters.rest_framework import DjangoFilterBackend
 from employees.models import EmployeeIdAlias, EmployeeProfile
 from employees.services.manager_relationships import (
     get_valid_manager_user,
@@ -50,6 +48,9 @@ from organization.services import (
     filter_queryset_by_company_scope,
     get_active_company_for_request,
 )
+from rest_framework import filters, status, viewsets
+from rest_framework.decorators import action
+from rest_framework.permissions import IsAuthenticated
 
 from .document_integrity import (
     DAMAGE_INVOLVED_FIELDS,
@@ -68,23 +69,30 @@ from .serializers import (
     AssetLookupSerializer,
     AssetRequestActionSerializer,
     AssetReturnRequestCreateSerializer,
+    AssetReturnRequestEditSerializer,
     AssetReturnRequestSerializer,
     AssetReturnSerializer,
     AssetSerializer,
     PrintedLabelJobSerializer,
 )
-from .services.damage_reports import AssetDamageTransitionError, approve_damage_report_by_ceo
+from .services.damage_reports import AssetDamageTransitionError, approve_damage_report_by_ceo, cancel_damage_report
 from .services.label_pdf import ASSET_LABEL_QR_SALT, render_labels_pdf
 from .services.return_requests import (
     OPEN_STATUSES as OPEN_RETURN_REQUEST_STATUSES,
 )
 from .services.return_requests import (
+    AssetReturnEditInvalid,
     AssetReturnTransitionError,
     apply_ceo_decision,
     apply_hr_decision,
     apply_manager_decision,
+    cancel_return_request,
+    edit_return_request,
     mark_return_request_processed,
     record_return_request_submission,
+)
+from .services.return_requests import (
+    notify_after_requester_edit as return_request_notify_after_edit,
 )
 from .services.return_requests import (
     submission_status as return_request_submission_status,
@@ -161,6 +169,7 @@ _DAMAGE_STATUS_LABELS = {
     AssetDamageReport.RequestStatus.PENDING_CEO: ("Pending CEO", "بانتظار الرئيس التنفيذي"),
     AssetDamageReport.RequestStatus.APPROVED: ("Approved", "معتمد"),
     AssetDamageReport.RequestStatus.REJECTED: ("Rejected", "مرفوض"),
+    AssetDamageReport.RequestStatus.CANCELLED: ("Cancelled", "ملغى"),
 }
 
 _RETURN_STATUS_LABELS = {
@@ -170,6 +179,7 @@ _RETURN_STATUS_LABELS = {
     AssetReturnRequest.RequestStatus.APPROVED: ("Approved", "معتمد"),
     AssetReturnRequest.RequestStatus.PROCESSED: ("Processed", "تم التنفيذ"),
     AssetReturnRequest.RequestStatus.REJECTED: ("Rejected", "مرفوض"),
+    AssetReturnRequest.RequestStatus.CANCELLED: ("Cancelled", "ملغى"),
 }
 
 
@@ -1011,7 +1021,9 @@ class AssetViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(asset_id=asset_id)
 
         page = self.paginate_queryset(queryset.order_by("-reported_at"))
-        serializer = AssetDamageReportSerializer(page if page is not None else queryset, many=True)
+        serializer = AssetDamageReportSerializer(
+            page if page is not None else queryset, many=True, context={"request": request}
+        )
         if page is not None:
             return self.get_paginated_response(serializer.data)
         return success({"items": serializer.data, "count": queryset.count()})
@@ -1038,10 +1050,195 @@ class AssetViewSet(viewsets.ModelViewSet):
         queryset = _search_return_requests(queryset, request.query_params.get("search"))
 
         page = self.paginate_queryset(queryset.order_by("-requested_at"))
-        serializer = AssetReturnRequestSerializer(page if page is not None else queryset, many=True)
+        serializer = AssetReturnRequestSerializer(
+            page if page is not None else queryset, many=True, context={"request": request}
+        )
         if page is not None:
             return self.get_paginated_response(serializer.data)
         return success({"items": serializer.data, "count": queryset.count()})
+
+    @action(
+        detail=False,
+        methods=["post"],
+        url_path=r"return-requests/(?P<request_id>[^/.]+)/cancel",
+        permission_classes=[IsAuthenticated],
+    )
+    def requester_cancel_return_request(self, request, request_id=None):
+        """The employee withdraws their own return request while it is still pending."""
+        instance = (
+            filter_queryset_by_company_scope(
+                AssetReturnRequest.objects.select_related("asset", "employee", "employee__user"),
+                request,
+                field_name="asset__company_id",
+            )
+            .filter(pk=request_id, employee__user=request.user)
+            .first()
+        )
+        if not instance:
+            return error("Not found", errors=["Not found."], status=status.HTTP_404_NOT_FOUND)
+        try:
+            instance, from_status = cancel_return_request(instance, actor=request.user)
+        except AssetReturnTransitionError as exc:
+            return exc.to_response()
+        audit(
+            request,
+            "asset_return_request_cancelled",
+            entity="AssetReturnRequest",
+            entity_id=instance.id,
+            metadata={"asset_id": instance.asset_id, "from_status": from_status},
+        )
+        return success(AssetReturnRequestSerializer(instance, context={"request": request}).data)
+
+    @action(
+        detail=False,
+        methods=["patch"],
+        url_path=r"return-requests/(?P<request_id>[^/.]+)/edit",
+        permission_classes=[IsAuthenticated],
+    )
+    def requester_edit_return_request(self, request, request_id=None):
+        """The employee changes the note of their own return request while it waits on the manager.
+
+        404 unless the caller owns the request in the active company scope.
+        """
+        instance = self._owned_asset_request(AssetReturnRequest, request_id)
+        if instance is None:
+            return error("Not found", errors=["Not found."], status=status.HTTP_404_NOT_FOUND)
+
+        def validate(locked):
+            serializer = AssetReturnRequestEditSerializer(locked, data=request.data, partial=True)
+            if not serializer.is_valid():
+                raise AssetReturnEditInvalid(serializer.errors)
+            return dict(serializer.validated_data)
+
+        try:
+            result = edit_return_request(instance, actor=request.user, validate=validate)
+        except AssetReturnEditInvalid as exc:
+            return error("Validation error", errors=exc.errors, status=status.HTTP_422_UNPROCESSABLE_ENTITY)
+        except AssetReturnTransitionError as exc:
+            return exc.to_response()
+
+        if result.changed_fields:
+            audit(
+                request,
+                "asset_return_request_edited",
+                entity="AssetReturnRequest",
+                entity_id=instance.id,
+                # Field names only: never the free-text note.
+                metadata={
+                    "asset_id": instance.asset_id,
+                    "changed_fields": list(result.changed_fields),
+                    "from_status": result.from_status,
+                    "to_status": result.instance.status,
+                },
+            )
+            return_request_notify_after_edit(result.instance)
+        instance = self._owned_asset_request(AssetReturnRequest, instance.pk)
+        return success(
+            AssetReturnRequestSerializer(instance, context={"request": request}).data,
+            message="Asset return request updated.",
+        )
+
+    @action(
+        detail=False,
+        methods=["post"],
+        url_path=r"damage-reports/(?P<report_id>[^/.]+)/cancel",
+        permission_classes=[IsAuthenticated],
+    )
+    def requester_cancel_damage_report(self, request, report_id=None):
+        """The employee withdraws their own damage report while it is still pending."""
+        report = (
+            filter_queryset_by_company_scope(
+                AssetDamageReport.objects.select_related("asset", "employee", "employee__user"),
+                request,
+                field_name="asset__company_id",
+            )
+            .filter(pk=report_id, employee__user=request.user)
+            .first()
+        )
+        if not report:
+            return error("Not found", errors=["Not found."], status=status.HTTP_404_NOT_FOUND)
+        try:
+            report, from_status = cancel_damage_report(report, actor=request.user)
+        except AssetDamageTransitionError as exc:
+            title = "Forbidden" if exc.status == status.HTTP_403_FORBIDDEN else "Validation error"
+            return error(title, errors=[exc.message], status=exc.status)
+        audit(
+            request,
+            "asset_damage_report_cancelled",
+            entity="AssetDamageReport",
+            entity_id=report.id,
+            metadata={"asset_id": report.asset_id, "from_status": from_status},
+        )
+        return success(AssetDamageReportSerializer(report, context={"request": request}).data)
+
+    def _owned_asset_request(self, model, object_id):
+        return (
+            filter_queryset_by_company_scope(
+                model.objects.select_related("asset", "employee", "employee__user"),
+                self.request,
+                field_name="asset__company_id",
+            )
+            .filter(pk=object_id, employee__user=self.request.user)
+            .first()
+        )
+
+    def _owned_asset_request_action(self, request, model, serializer_class, object_id, respond):
+        instance = self._owned_asset_request(model, object_id)
+        if instance is None:
+            return error("Not found", errors=["Not found."], status=status.HTTP_404_NOT_FOUND)
+        return respond(
+            request,
+            instance,
+            serialize=lambda obj: (
+                serializer_class(self._owned_asset_request(model, obj.pk), context={"request": request}).data
+            ),
+        )
+
+    @action(
+        detail=False,
+        methods=["post"],
+        url_path=r"return-requests/(?P<request_id>[^/.]+)/request-cancellation",
+        permission_classes=[IsAuthenticated],
+    )
+    def request_return_request_cancellation(self, request, request_id=None):
+        """The employee asks HR to cancel their approved, not yet processed return request (reason required)."""
+        return self._owned_asset_request_action(
+            request, AssetReturnRequest, AssetReturnRequestSerializer, request_id, request_cancellation_response
+        )
+
+    @action(
+        detail=False,
+        methods=["post"],
+        url_path=r"return-requests/(?P<request_id>[^/.]+)/withdraw-cancellation-request",
+        permission_classes=[IsAuthenticated],
+    )
+    def withdraw_return_request_cancellation(self, request, request_id=None):
+        return self._owned_asset_request_action(
+            request, AssetReturnRequest, AssetReturnRequestSerializer, request_id, withdraw_cancellation_response
+        )
+
+    @action(
+        detail=False,
+        methods=["post"],
+        url_path=r"damage-reports/(?P<report_id>[^/.]+)/request-cancellation",
+        permission_classes=[IsAuthenticated],
+    )
+    def request_damage_report_cancellation(self, request, report_id=None):
+        """The employee asks HR to cancel their approved damage report (reason required)."""
+        return self._owned_asset_request_action(
+            request, AssetDamageReport, AssetDamageReportSerializer, report_id, request_cancellation_response
+        )
+
+    @action(
+        detail=False,
+        methods=["post"],
+        url_path=r"damage-reports/(?P<report_id>[^/.]+)/withdraw-cancellation-request",
+        permission_classes=[IsAuthenticated],
+    )
+    def withdraw_damage_report_cancellation(self, request, report_id=None):
+        return self._owned_asset_request_action(
+            request, AssetDamageReport, AssetDamageReportSerializer, report_id, withdraw_cancellation_response
+        )
 
     @action(detail=True, methods=["post"], url_path="damage-report")
     def damage_report(self, request, pk=None):
@@ -1051,6 +1248,8 @@ class AssetViewSet(viewsets.ModelViewSet):
         profile = self._get_request_profile()
         if not profile:
             return error("Employee profile not found.", status=status.HTTP_404_NOT_FOUND)
+        if is_executive_profile(profile):
+            return error(EXECUTIVE_REQUEST_ERROR, errors=[EXECUTIVE_REQUEST_ERROR], status=status.HTTP_403_FORBIDDEN)
 
         asset = self.get_object()
         if not self._is_self_assigned_asset(asset, profile):
@@ -1139,6 +1338,8 @@ class AssetViewSet(viewsets.ModelViewSet):
         profile = self._get_request_profile()
         if not profile:
             return error("Employee profile not found.", status=status.HTTP_404_NOT_FOUND)
+        if is_executive_profile(profile):
+            return error(EXECUTIVE_REQUEST_ERROR, errors=[EXECUTIVE_REQUEST_ERROR], status=status.HTTP_403_FORBIDDEN)
 
         asset = self.get_object()
         if not self._is_self_assigned_asset(asset, profile):

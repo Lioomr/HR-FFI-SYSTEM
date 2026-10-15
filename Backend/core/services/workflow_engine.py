@@ -6,14 +6,15 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
+from audit.utils import audit
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.contenttypes.models import ContentType
 from django.db import transaction
 from django.db.models import F, Prefetch, Q
 from django.utils import timezone
+from in_app_notifications.i18n import normalize_language
 
-from audit.utils import audit
 from core.delegation import (
     get_active_delegation,
     get_pending_approval_roles_for_user,
@@ -21,7 +22,6 @@ from core.delegation import (
 )
 from core.models import WorkflowAction, WorkflowDefinition, WorkflowInstance, WorkflowStageDefinition
 from core.permissions import get_role
-from in_app_notifications.i18n import normalize_language
 
 from .pending_approval_email import get_direct_manager_user
 from .request_references import assign_new_workflow_reference
@@ -82,6 +82,15 @@ WORKFLOW_TEMPLATES = {
             {"key": "manager", "title": "Manager Review", "approver_role": "manager", "order": 1, "is_optional": True},
             {"key": "hr", "title": "HR Review", "approver_role": "hr", "order": 2},
             {"key": "ceo", "title": "CEO Review", "approver_role": "ceo", "order": 3, "is_optional": True},
+        ],
+    },
+    # An HR manager's own damage report starts at the CEO, so the HR stage is optional.
+    "asset_damage_report": {
+        "name": "Asset Damage Report Workflow",
+        "module_key": "assets",
+        "stages": [
+            {"key": "hr", "title": "HR Review", "approver_role": "hr", "order": 1, "is_optional": True},
+            {"key": "ceo", "title": "CEO Review", "approver_role": "ceo", "order": 2},
         ],
     },
     "employee_deletion_request": {
@@ -314,8 +323,9 @@ def _get_manager_user_for_instance(instance, subject_user):
 
 def _get_sole_company_ceo(instance, subject_user):
     """Return the company's CEO only when it is unambiguous, otherwise None."""
-    from core.permissions import CEO_APPROVER_DEPARTMENT_ID
     from employees.models import EmployeeProfile
+
+    from core.permissions import CEO_APPROVER_DEPARTMENT_ID
 
     company_id = getattr(instance, "company_id", None)
     if not company_id:
@@ -936,13 +946,16 @@ def _legacy_status_snapshot_for_asset_return(instance):
     elif instance.status in {AssetReturnRequest.RequestStatus.APPROVED, AssetReturnRequest.RequestStatus.PROCESSED}:
         status = WorkflowInstance.Status.APPROVED
         terminal_at = (
-            instance.processed_at or instance.ceo_decision_at or instance.hr_decision_at or instance.updated_at
+            instance.processed_at or instance.ceo_decision_at or instance.hr_decision_at or instance.requested_at
         )
     elif instance.status == AssetReturnRequest.RequestStatus.REJECTED:
         status = WorkflowInstance.Status.REJECTED
         terminal_at = (
-            instance.ceo_decision_at or instance.hr_decision_at or instance.manager_decision_at or instance.updated_at
+            instance.ceo_decision_at or instance.hr_decision_at or instance.manager_decision_at or instance.requested_at
         )
+    elif instance.status == AssetReturnRequest.RequestStatus.CANCELLED:
+        status = WorkflowInstance.Status.CANCELLED
+        terminal_at = instance.cancelled_at
     current_actor_user = _resolve_current_actor(current_role, instance) if current_role else None
     return {
         "status": status,
@@ -954,7 +967,7 @@ def _legacy_status_snapshot_for_asset_return(instance):
         "decided_at": terminal_at
         if status in {WorkflowInstance.Status.APPROVED, WorkflowInstance.Status.REJECTED}
         else None,
-        "cancelled_at": None,
+        "cancelled_at": terminal_at if status == WorkflowInstance.Status.CANCELLED else None,
     }
 
 
@@ -1046,6 +1059,94 @@ def _legacy_events_for_asset_return(instance) -> list[WorkflowEvent]:
                 note=instance.ceo_decision_note or "",
                 at=instance.ceo_decision_at,
                 metadata={"legacy_signature": "ceo", "workflow_key": "asset_return_request"},
+            )
+        )
+    return events
+
+
+def _legacy_status_snapshot_for_asset_damage(instance):
+    """Damage reports get a workflow only once a transition is recorded (today: the employee's cancel)."""
+    request_status = type(instance).RequestStatus
+    current_stage, current_role = {
+        request_status.PENDING_HR: ("hr", "hr"),
+        request_status.PENDING_CEO: ("ceo", "ceo"),
+    }.get(instance.status, ("", ""))
+    terminal_at = None
+    status = WorkflowInstance.Status.IN_REVIEW
+    if instance.status == request_status.APPROVED:
+        status = WorkflowInstance.Status.APPROVED
+        terminal_at = instance.ceo_decision_at or instance.hr_decision_at
+    elif instance.status == request_status.REJECTED:
+        status = WorkflowInstance.Status.REJECTED
+        terminal_at = instance.ceo_decision_at or instance.hr_decision_at
+    elif instance.status == request_status.CANCELLED:
+        status = WorkflowInstance.Status.CANCELLED
+        terminal_at = instance.cancelled_at
+    return {
+        "status": status,
+        "current_stage": current_stage,
+        "current_role": current_role,
+        "current_actor_user": None,
+        "submitted_by": getattr(instance.employee, "user", None),
+        "submitted_at": instance.reported_at,
+        "decided_at": terminal_at
+        if status in {WorkflowInstance.Status.APPROVED, WorkflowInstance.Status.REJECTED}
+        else None,
+        "cancelled_at": terminal_at if status == WorkflowInstance.Status.CANCELLED else None,
+    }
+
+
+def _legacy_events_for_asset_damage(instance) -> list[WorkflowEvent]:
+    request_status = type(instance).RequestStatus
+    workflow_key = "asset_damage_report"
+    rejected = instance.status == request_status.REJECTED
+    started_at_hr = bool(instance.hr_decision_at) or instance.status == request_status.PENDING_HR
+    events = [
+        WorkflowEvent(
+            signature=f"asset-damage:submitted:{instance.id}",
+            action=WorkflowAction.Action.SUBMIT,
+            approver_role="",
+            from_status="draft",
+            to_status="in_review",
+            from_stage="",
+            to_stage="hr" if started_at_hr else "ceo",
+            actor=getattr(instance.employee, "user", None),
+            note="",
+            at=instance.reported_at,
+            metadata={"legacy_signature": "submitted", "workflow_key": workflow_key},
+        )
+    ]
+    if instance.hr_decision_at:
+        hr_rejected = rejected and not instance.ceo_decision_at
+        events.append(
+            WorkflowEvent(
+                signature=f"asset-damage:hr:{instance.id}:{instance.hr_decision_at.isoformat()}",
+                action=WorkflowAction.Action.REJECT if hr_rejected else WorkflowAction.Action.ADVANCE,
+                approver_role="hr",
+                from_status="in_review",
+                to_status="rejected" if hr_rejected else "in_review",
+                from_stage="hr",
+                to_stage="" if hr_rejected else "ceo",
+                actor=instance.hr_decision_by,
+                note=instance.hr_decision_note or "",
+                at=instance.hr_decision_at,
+                metadata={"legacy_signature": "hr", "workflow_key": workflow_key},
+            )
+        )
+    if instance.ceo_decision_at:
+        events.append(
+            WorkflowEvent(
+                signature=f"asset-damage:ceo:{instance.id}:{instance.ceo_decision_at.isoformat()}",
+                action=WorkflowAction.Action.REJECT if rejected else WorkflowAction.Action.APPROVE,
+                approver_role="ceo",
+                from_status="in_review",
+                to_status="rejected" if rejected else "approved",
+                from_stage="ceo",
+                to_stage="",
+                actor=instance.ceo_decision_by,
+                note=instance.ceo_decision_note or "",
+                at=instance.ceo_decision_at,
+                metadata={"legacy_signature": "ceo", "workflow_key": workflow_key},
             )
         )
     return events
@@ -1621,6 +1722,8 @@ def _legacy_status_snapshot_for_annual_leave_payment(instance):
         status = WorkflowInstance.Status.APPROVED
     elif instance.status == request_status.REJECTED:
         status = WorkflowInstance.Status.REJECTED
+    elif instance.status == request_status.CANCELLED:
+        status = WorkflowInstance.Status.CANCELLED
     else:
         status = WorkflowInstance.Status.IN_REVIEW
     terminal = status in {WorkflowInstance.Status.APPROVED, WorkflowInstance.Status.REJECTED}
@@ -1632,7 +1735,7 @@ def _legacy_status_snapshot_for_annual_leave_payment(instance):
         "submitted_by": instance.submitted_by or instance.employee,
         "submitted_at": instance.submitted_at,
         "decided_at": (instance.ceo_decided_at or instance.settled_at) if terminal else None,
-        "cancelled_at": None,
+        "cancelled_at": instance.cancelled_at if status == WorkflowInstance.Status.CANCELLED else None,
     }
 
 
@@ -1723,6 +1826,8 @@ def _adapter_for_instance(instance):
         return "attendance_request", _legacy_status_snapshot_for_attendance, _legacy_events_for_attendance
     if class_name == "AssetReturnRequest":
         return "asset_return_request", _legacy_status_snapshot_for_asset_return, _legacy_events_for_asset_return
+    if class_name == "AssetDamageReport":
+        return "asset_damage_report", _legacy_status_snapshot_for_asset_damage, _legacy_events_for_asset_damage
     if class_name == "EmployeeDeletionRequest":
         return (
             "employee_deletion_request",
@@ -1983,7 +2088,14 @@ def _workflow_action_snapshot(action) -> dict[str, Any]:
     }
 
 
-def _workflow_snapshot_from_instance(instance, workflow, *, actor=None, use_prefetched_actions=False) -> dict[str, Any]:
+_UNSET = object()
+
+
+def _workflow_snapshot_from_instance(
+    instance, workflow, *, actor=None, use_prefetched_actions=False, cancellation_request=_UNSET
+) -> dict[str, Any]:
+    from .cancellation_requests import UNSET, cancellation_snapshot
+
     if workflow is None:
         _, snapshot_builder, events_builder = _adapter_for_instance(instance)
         legacy_snapshot = snapshot_builder(instance)
@@ -2049,16 +2161,79 @@ def _workflow_snapshot_from_instance(instance, workflow, *, actor=None, use_pref
         "current_approver_role": workflow.current_approver_role,
         "can_approve": can_user_act_on_instance(actor, instance, workflow) if actor else False,
         "can_reject": can_user_act_on_instance(actor, instance, workflow) if actor else False,
-        "can_cancel": bool(
-            actor
-            and actor.is_authenticated
-            and workflow.status in {WorkflowInstance.Status.SUBMITTED, WorkflowInstance.Status.IN_REVIEW}
-            and getattr(_get_subject_user(instance), "id", None) == actor.id
-            # Employees cannot cancel their own leave requests; only HR can.
-            and instance.__class__.__name__ != "LeaveRequest"
+        "can_cancel": _requester_can_cancel(instance, workflow, actor),
+        "can_edit": _requester_can_edit(instance, workflow, actor),
+        # Approved requests: the owner asks HR to cancel (core.services.cancellation_requests).
+        **cancellation_snapshot(
+            instance, actor, latest=UNSET if cancellation_request is _UNSET else cancellation_request
         ),
         "history": history,
     }
+
+
+def _requester_can_cancel(instance, workflow, actor) -> bool:
+    """Whether ``actor`` may withdraw their own request while it is still pending.
+
+    The domain cancel services enforce the same rules server-side; this only drives the UI flag.
+    """
+
+    if not (actor and actor.is_authenticated):
+        return False
+    if workflow.status not in {WorkflowInstance.Status.SUBMITTED, WorkflowInstance.Status.IN_REVIEW}:
+        return False
+    class_name = instance.__class__.__name__
+    if class_name in {"AssetReturnRequest", "AssetDamageReport"}:
+        # ``employee`` is the EmployeeProfile on asset requests, not the user.
+        owner_id = getattr(getattr(instance, "employee", None), "user_id", None)
+    else:
+        owner_id = getattr(_get_subject_user(instance), "id", None)
+    if owner_id is None or owner_id != actor.id:
+        return False
+    if class_name == "LeaveRequest":
+        return bool(getattr(instance, "is_active", True))
+    if class_name == "AnnualLeavePaymentRequest":
+        # Only a settlement the employee filed themselves; never a termination or HR-opened one.
+        return instance.submitted_by_id == actor.id and not instance.is_termination_settlement
+    if class_name == "LoanRequest":
+        # ``pending_disbursement`` is still in review but finance-approved: only HR cancels it,
+        # through the employee's cancellation request.
+        from loans.services import CANCELLABLE_STATUSES
+
+        return instance.status in CANCELLABLE_STATUSES
+    return True
+
+
+def _requester_can_edit(instance, workflow, actor) -> bool:
+    """Whether ``actor`` may still edit their own request: owner only, before the HR stage.
+
+    Each domain module owns its edit window; its edit service enforces the same rule
+    under the row lock. Request kinds without an edit service are never editable.
+    """
+
+    if not (actor and actor.is_authenticated):
+        return False
+    if workflow.status not in {WorkflowInstance.Status.SUBMITTED, WorkflowInstance.Status.IN_REVIEW}:
+        return False
+    class_name = instance.__class__.__name__
+    if class_name == "AssetReturnRequest":
+        from assets.services.return_requests import requester_edit_refusal
+
+        # ``employee`` is the EmployeeProfile on asset requests, not the user.
+        owner_id = getattr(getattr(instance, "employee", None), "user_id", None)
+    else:
+        if class_name == "LeaveRequest":
+            from leaves.services import requester_edit_refusal
+        elif class_name == "PermissionRequest":
+            from permission_requests.services import requester_edit_refusal
+        elif class_name == "LoanRequest":
+            from loans.services import requester_edit_refusal
+        else:
+            return False
+        # These models store the requesting user directly as ``employee``.
+        owner_id = instance.employee_id
+    if owner_id is None or owner_id != actor.id:
+        return False
+    return requester_edit_refusal(instance) is None
 
 
 def get_workflow_snapshots(instances, *, actor=None) -> dict[int, dict[str, Any]]:
@@ -2086,6 +2261,9 @@ def get_workflow_snapshots(instances, *, actor=None) -> dict[int, dict[str, Any]
         )
         workflows.update({(content_type_id, workflow.object_id): workflow for workflow in queryset})
 
+    from .cancellation_requests import latest_cancellation_requests
+
+    cancellation_requests = latest_cancellation_requests(instances)
     snapshots = {}
     for instance in instances:
         content_type_id = ContentType.objects.get_for_model(instance.__class__).id
@@ -2094,6 +2272,7 @@ def get_workflow_snapshots(instances, *, actor=None) -> dict[int, dict[str, Any]
             workflows.get((content_type_id, instance.pk)),
             actor=actor,
             use_prefetched_actions=True,
+            cancellation_request=cancellation_requests.get((content_type_id, instance.pk)),
         )
     return snapshots
 
@@ -2169,6 +2348,7 @@ _PENDING_LABEL_AR = {
     "loan_request": "قرض",
     "attendance_request": "الحضور",
     "asset_return_request": "إرجاع عهدة",
+    "asset_damage_report": "بلاغ تلف عهدة",
     "employee_deletion_request": "حذف موظف",
     "contract_decision": "قرار العقد",
     "contract_rating": "تقييم عقد الموظف",
@@ -2191,6 +2371,7 @@ def build_pending_approval_item(workflow: WorkflowInstance, *, language: str = "
         "loan_request": "Loan",
         "attendance_request": "Attendance",
         "asset_return_request": "Asset Return",
+        "asset_damage_report": "Asset Damage Report",
         "employee_deletion_request": "Employee Deletion",
         "contract_decision": "Contract Decision",
         "contract_rating": "Employee Contract Rating",

@@ -6,16 +6,16 @@ from decimal import Decimal
 from unittest.mock import patch
 
 import pymupdf
+from attendance.models import BioTimeEmployeeMap
+from audit.models import AuditLog
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
 from django.utils import timezone
-from rest_framework.test import APIClient
-
-from audit.models import AuditLog
 from employees.models import EmployeeProfile
 from organization.models import OrganizationNode, UserOrganizationAccess
+from rest_framework.test import APIClient
 
 from .catalog import CATALOG
 from .models import PenaltyCatalog, PenaltyRecord, PenaltyWarningNotice
@@ -65,6 +65,8 @@ class WarningNoticeHashTests(TestCase):
             basic_salary=Decimal("3000.00"),
             employment_status=EmployeeProfile.EmploymentStatus.ACTIVE,
         )
+        # Attendance penalties only apply to BioTime-mapped employees.
+        BioTimeEmployeeMap.objects.create(employee_profile=cls.profile, biotime_emp_code="HW-001")
         UserOrganizationAccess.objects.create(user=cls.user, organization=cls.company)
         cls.hr = User.objects.create_user(email="hashwarn-hr@ffi.test", password="test")
         cls.hr.groups.add(hr_group)

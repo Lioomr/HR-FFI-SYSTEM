@@ -1,9 +1,9 @@
 from decimal import Decimal
 
-from django.db.models import Q
-from rest_framework import serializers
-
 from core.services import get_workflow_snapshot
+from django.db.models import Q
+from django.utils import timezone
+from rest_framework import serializers
 
 from .models import (
     AttendanceAdjustment,
@@ -27,9 +27,22 @@ class AttendanceDailyResultSerializer(serializers.ModelSerializer):
     class Meta:
         model = AttendanceDailyResult
         fields = [
-            "date", "shift", "shift_start_at", "shift_end_at", "scheduled_minutes", "first_check_in_at", "final_check_out_at",
-            "physical_work_minutes", "unpaid_break_minutes", "approved_permission_minutes", "accounted_attendance_minutes",
-            "missing_minutes", "status_input", "is_attendance_exempt", "grace", "violation",
+            "date",
+            "shift",
+            "shift_start_at",
+            "shift_end_at",
+            "scheduled_minutes",
+            "first_check_in_at",
+            "final_check_out_at",
+            "physical_work_minutes",
+            "unpaid_break_minutes",
+            "approved_permission_minutes",
+            "accounted_attendance_minutes",
+            "missing_minutes",
+            "status_input",
+            "is_attendance_exempt",
+            "grace",
+            "violation",
         ]
 
     def get_shift(self, obj):
@@ -66,9 +79,23 @@ class AttendanceLateViolationSerializer(serializers.ModelSerializer):
     class Meta:
         model = AttendanceLateViolation
         fields = [
-            "id", "employee_profile_id", "employee_code", "employee_name", "employee_name_en", "employee_name_ar",
-            "date", "occurrence_number", "daily_rate", "penalty_percent",
-            "penalty_amount", "lifecycle", "reason", "void_reason", "payroll_status", "created_at", "updated_at",
+            "id",
+            "employee_profile_id",
+            "employee_code",
+            "employee_name",
+            "employee_name_en",
+            "employee_name_ar",
+            "date",
+            "occurrence_number",
+            "daily_rate",
+            "penalty_percent",
+            "penalty_amount",
+            "lifecycle",
+            "reason",
+            "void_reason",
+            "payroll_status",
+            "created_at",
+            "updated_at",
         ]
 
     def get_payroll_status(self, obj):
@@ -92,9 +119,19 @@ class AttendanceLateNoticeSerializer(serializers.ModelSerializer):
     class Meta:
         model = AttendanceLateNotice
         fields = [
-            "id", "violation_id", "employee_profile_id", "employee_name", "employee_code", "violation_date",
-            "occurrence_number", "notice_level", "reference_number", "issued_at", "delivery_status",
-            "delivery_message", "filename",
+            "id",
+            "violation_id",
+            "employee_profile_id",
+            "employee_name",
+            "employee_code",
+            "violation_date",
+            "occurrence_number",
+            "notice_level",
+            "reference_number",
+            "issued_at",
+            "delivery_status",
+            "delivery_message",
+            "filename",
         ]
 
     def get_employee_name(self, obj):
@@ -204,10 +241,14 @@ class AttendanceRecordSerializer(serializers.ModelSerializer):
         # BioTime remains the immutable source for the raw LATE row. A final
         # Late Permission creates this separate auditable marker, which is the
         # effective attendance outcome shown to the employee.
-        if AttendanceAdjustment.objects.filter(
-            employee_profile_id=obj.employee_profile_id,
-            kind=AttendanceAdjustment.Kind.LATE_PERMISSION,
-        ).filter(Q(date=obj.date) | Q(effective_date=obj.date)).exists():
+        if (
+            AttendanceAdjustment.objects.filter(
+                employee_profile_id=obj.employee_profile_id,
+                kind=AttendanceAdjustment.Kind.LATE_PERMISSION,
+            )
+            .filter(Q(date=obj.date) | Q(effective_date=obj.date))
+            .exists()
+        ):
             return "EXCUSED"
         return resolved.effective_status if resolved else obj.status
 
@@ -291,8 +332,24 @@ class BioTimeEmployeeMapSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = BioTimeEmployeeMap
-        fields = ["id", "employee_profile", "employee_name", "department", "biotime_emp_code", "created_at"]
+        fields = [
+            "id",
+            "employee_profile",
+            "employee_name",
+            "department",
+            "biotime_emp_code",
+            "attendance_start_date",
+            "created_at",
+        ]
         read_only_fields = ["id", "created_at", "employee_name", "department"]
+        # Optional on create (defaults to today), never clearable: a null start would re-open past days.
+        extra_kwargs = {"attendance_start_date": {"required": False, "allow_null": False}}
+
+    def create(self, validated_data):
+        # A new mapping enforces attendance from today; earlier days never produce absences.
+        if not validated_data.get("attendance_start_date"):
+            validated_data["attendance_start_date"] = timezone.localdate()
+        return super().create(validated_data)
 
     def validate_biotime_emp_code(self, value):
         value = value.strip()

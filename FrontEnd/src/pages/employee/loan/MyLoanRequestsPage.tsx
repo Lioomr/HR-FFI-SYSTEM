@@ -18,6 +18,8 @@ import {
   type LoanStatus,
 } from "../../../services/api/loanApi";
 import AmountWithSAR from "../../../components/ui/AmountWithSAR";
+import RequestCancellationPanel from "../../../components/requests/RequestCancellationPanel";
+import EmployeeEditButton from "../../../components/requests/EmployeeEditButton";
 import { useI18n } from "../../../i18n/useI18n";
 import {
   getDetailedApiMessage,
@@ -186,7 +188,7 @@ export default function MyLoanRequestsPage() {
       title: t("common.actions"),
       key: "actions",
       align: "center",
-      width: 110,
+      width: 144,
       fixed: screens.lg ? "right" : undefined,
       render: (_, record) => {
         const isPending =
@@ -197,7 +199,13 @@ export default function MyLoanRequestsPage() {
           record.status === "pending_cfo" ||
           record.status === "pending_ceo";
         return (
-          <div style={{ display: "flex", gap: 8 }}>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <RequestCancellationPanel
+              compact
+              kind="loan"
+              request={record}
+              onChanged={loadData}
+            />
             <Tooltip title={t("loans.list.viewDetails")}>
               <Button
                 aria-label={t("common.view")}
@@ -206,6 +214,10 @@ export default function MyLoanRequestsPage() {
                 onClick={() => navigate(`/employee/loans/${record.id}`)}
               />
             </Tooltip>
+            <EmployeeEditButton
+              request={record}
+              to={`/employee/loans/${record.id}/edit`}
+            />
             {isPending ? (
               <Tooltip title={t("loans.list.cancelReq")}>
                 <Button

@@ -2,6 +2,9 @@ from datetime import date, timedelta
 from io import BytesIO
 from unittest.mock import patch
 
+from audit.models import AuditLog
+from core.models import RequestObligation, WorkflowAction, WorkflowInstance
+from core.services import get_workflow_snapshot
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -9,19 +12,16 @@ from django.db import connection
 from django.test import TestCase
 from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
+from employees.models import EmployeeProfile
+from organization.models import OrganizationNode, UserOrganizationAccess
 from pypdf import PdfReader
 from rest_framework import status
 from rest_framework.test import APIClient
 
-from audit.models import AuditLog
-from core.models import RequestObligation, WorkflowAction, WorkflowInstance
-from core.services import get_workflow_snapshot
-from employees.models import EmployeeProfile
 from leaves.models import LeaveRequest, LeaveType
 from leaves.pdf_leave_request import load_field_map
 from leaves.serializers import LeaveRequestSerializer
 from leaves.views import _approval_path_rows, _leave_read_queryset, _leave_type_labels
-from organization.models import OrganizationNode, UserOrganizationAccess
 
 User = get_user_model()
 
@@ -389,7 +389,26 @@ class LeaveManagementTests(TestCase):
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
 
-    def test_employee_contacts_hr_who_cancels_leave_request(self):
+    def test_employee_cancels_pending_leave_request(self):
+        req = LeaveRequest.objects.create(
+            employee=self.emp1,
+            leave_type=self.sick_leave,
+            start_date=date.today() + timedelta(days=10),
+            end_date=date.today() + timedelta(days=12),
+            status=LeaveRequest.RequestStatus.PENDING_HR,
+        )
+
+        self.client.force_authenticate(user=self.emp1)
+        response = self.client.post(f"/api/leaves/leave-requests/{req.id}/cancel/")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        req.refresh_from_db()
+        self.assertEqual(req.status, "cancelled")
+        workflow = get_workflow_snapshot(req, actor=self.emp1)
+        cancel_entry = next(item for item in workflow["history"] if item["action"] == "cancel")
+        self.assertEqual(cancel_entry["actor"]["id"], self.emp1.id)
+
+    def test_employee_contacts_hr_who_cancels_approved_leave_request(self):
         start = date.today() + timedelta(days=10)
         end = date.today() + timedelta(days=12)
         req = LeaveRequest.objects.create(
@@ -397,15 +416,15 @@ class LeaveManagementTests(TestCase):
             leave_type=self.sick_leave,
             start_date=start,
             end_date=end,
-            status=LeaveRequest.RequestStatus.PENDING_HR,
+            status=LeaveRequest.RequestStatus.APPROVED,
         )
 
-        # Employees cannot cancel their own request at any stage.
+        # Approved leave is no longer the employee's to cancel directly; HR cancels it.
         self.client.force_authenticate(user=self.emp1)
         response = self.client.post(f"/api/leaves/leave-requests/{req.id}/cancel/")
-        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
         req.refresh_from_db()
-        self.assertEqual(req.status, LeaveRequest.RequestStatus.PENDING_HR)
+        self.assertEqual(req.status, LeaveRequest.RequestStatus.APPROVED)
 
         self.client.force_authenticate(user=self.hr)
         response = self.client.post(

@@ -1,19 +1,18 @@
 from datetime import date, datetime, time
 from decimal import Decimal
 
+from admin_portal.models import SystemSettings
+from attendance.models import AttendanceAdjustment, AttendanceDailyResult, AttendanceLateViolation
+from attendance.policy import AttendancePolicyService
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.db import transaction
 from django.test import TestCase
 from django.utils import timezone
-from rest_framework import status
-from rest_framework.test import APIClient
-
-from admin_portal.models import SystemSettings
-from attendance.models import AttendanceAdjustment, AttendanceDailyResult, AttendanceLateViolation
-from attendance.policy import AttendancePolicyService
 from employees.models import EmployeeProfile
 from organization.models import OrganizationNode, UserOrganizationAccess
+from rest_framework import status
+from rest_framework.test import APIClient
 
 from .models import AttendancePayrollDeduction, PayrollRun, PayrollRunItem, Payslip
 from .services import PayrollRunNotDraftError, finalize_attendance_deductions, sync_attendance_deductions
@@ -37,6 +36,7 @@ class AttendancePayrollDeductionTests(TestCase):
             user=self.user,
             company=self.company,
             employee_id="ATTPAY-001",
+            hire_date=date(2024, 1, 1),
             employment_status=EmployeeProfile.EmploymentStatus.ACTIVE,
             basic_salary=Decimal("3000.00"),
             total_salary=Decimal("3000.00"),
@@ -164,7 +164,7 @@ class AttendancePayrollDeductionTests(TestCase):
         first = client.post(url, {"confirm": True}, format="json", **headers)
         second = client.post(url, {"confirm": True}, format="json", **headers)
 
-        self.assertEqual(first.status_code, status.HTTP_200_OK)
+        self.assertEqual(first.status_code, status.HTTP_200_OK, first.data)
         self.assertEqual(second.status_code, status.HTTP_200_OK)
         self.assertEqual(second.data["data"]["message"], "Payroll run already finalized.")
         run.refresh_from_db()

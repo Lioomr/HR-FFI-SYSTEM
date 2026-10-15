@@ -1,5 +1,12 @@
-import { useEffect, useMemo, useState } from "react";
+import EmployeeEditButton from "../../../components/requests/EmployeeEditButton";
+import EmployeeCancelButton from "../../../components/requests/EmployeeCancelButton";
+import RequestCancellationPanel from "../../../components/requests/RequestCancellationPanel";
+import AssetDamageApprovalMap from "../../../components/assets/AssetDamageApprovalMap";
+import AssetReturnApprovalMap from "../../../components/assets/AssetReturnApprovalMap";
+import PendingActionBanner from "../../../components/requests/PendingActionBanner";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  Alert,
   Button,
   Descriptions,
   Form,
@@ -31,6 +38,9 @@ import DocumentIntegrityPanel from "../../../components/documents/DocumentIntegr
 import { isDocumentFinal } from "../../../components/documents/documentTypes";
 import {
   listMyAssetDamageReports,
+  cancelAssetDamageReport,
+  cancelAssetReturnRequest,
+  editAssetReturnRequest,
   listMyAssetReturnRequests,
   listMyAssets,
   reportAssetIssue,
@@ -65,6 +75,7 @@ const requestStatusColorMap: Record<string, string> = {
   APPROVED: "green",
   PROCESSED: "blue",
   REJECTED: "red",
+  CANCELLED: "default",
 };
 
 export default function MyAssetsPage() {
@@ -91,6 +102,12 @@ export default function MyAssetsPage() {
   const [returning, setReturning] = useState(false);
   const [reportForm] = Form.useForm();
   const [returnForm] = Form.useForm();
+  const [editReturnTarget, setEditReturnTarget] =
+    useState<AssetReturnRequest | null>(null);
+  const [editReturnForm] = Form.useForm();
+  const [editingReturn, setEditingReturn] = useState(false);
+  const [editReturnError, setEditReturnError] = useState<string | null>(null);
+  const editReturnInFlight = useRef(false);
   const [returnOpen, setReturnOpen] = useState(false);
 
   const [requestAssetFilter, setRequestAssetFilter] = useState<
@@ -223,6 +240,26 @@ export default function MyAssetsPage() {
 
   const damageColumns: ColumnsType<AssetDamageReport> = [
     {
+      title: t("common.actions"),
+      key: "actions",
+      width: 160,
+      render: (_, record) => (
+        <Space size={4} wrap>
+          <EmployeeCancelButton
+            request={record}
+            cancelRequest={cancelAssetDamageReport}
+            onCancelled={loadRequestHistory}
+          />
+          <RequestCancellationPanel
+            compact
+            kind="asset_damage"
+            request={record}
+            onChanged={loadRequestHistory}
+          />
+        </Space>
+      ),
+    },
+    {
       title: t("assets.assetCode"),
       dataIndex: "asset_code",
       key: "asset_code",
@@ -257,6 +294,30 @@ export default function MyAssetsPage() {
   ];
 
   const returnColumns: ColumnsType<AssetReturnRequest> = [
+    {
+      title: t("common.actions"),
+      key: "actions",
+      width: 160,
+      render: (_, record) => (
+        <Space size={4} wrap>
+          <EmployeeEditButton
+            request={record}
+            onEdit={() => openEditReturn(record)}
+          />
+          <EmployeeCancelButton
+            request={record}
+            cancelRequest={cancelAssetReturnRequest}
+            onCancelled={loadRequestHistory}
+          />
+          <RequestCancellationPanel
+            compact
+            kind="asset_return"
+            request={record}
+            onChanged={loadRequestHistory}
+          />
+        </Space>
+      ),
+    },
     {
       title: t("permissionRequests.list.reference"),
       key: "reference_no",
@@ -450,6 +511,79 @@ export default function MyAssetsPage() {
       }
     } finally {
       setReporting(false);
+    }
+  };
+
+  const openEditReturn = (record: AssetReturnRequest) => {
+    setEditReturnError(null);
+    setEditReturnTarget(record);
+    editReturnForm.setFieldsValue({ note: record.note || "" });
+  };
+
+  const closeEditReturn = () => {
+    if (editReturnInFlight.current) return;
+    setEditReturnTarget(null);
+    setEditReturnError(null);
+    editReturnForm.resetFields();
+  };
+
+  const handleEditReturnRequest = async () => {
+    if (!editReturnTarget || editReturnInFlight.current) return;
+    let values: { note?: string };
+    try {
+      values = await editReturnForm.validateFields();
+    } catch {
+      return;
+    }
+    editReturnInFlight.current = true;
+    setEditingReturn(true);
+    try {
+      const response = await editAssetReturnRequest(editReturnTarget.id, {
+        note: (values.note || "").trim(),
+      });
+      if (isApiError(response)) {
+        throw { response: { status: 422, data: response } };
+      }
+      void apiMessage.success(t("requests.edit.success"));
+      editReturnInFlight.current = false;
+      setEditReturnTarget(null);
+      editReturnForm.resetFields();
+      await loadRequestHistory();
+    } catch (err: any) {
+      const status = err?.response?.status;
+      const data = err?.response?.data;
+      const rawErrors: unknown[] = Array.isArray(data?.errors)
+        ? data.errors
+        : [];
+      const noteErrors = rawErrors.flatMap((item) =>
+        item &&
+        typeof item === "object" &&
+        (item as { field?: unknown }).field === "note" &&
+        typeof (item as { message?: unknown }).message === "string"
+          ? [(item as { message: string }).message]
+          : [],
+      );
+      if (status === 422 && noteErrors.length > 0) {
+        editReturnForm.setFields([{ name: "note", errors: noteErrors }]);
+        setEditReturnError(noteErrors.join(", "));
+      } else if (status === 422) {
+        // Not editable in this status: show the server message and refresh.
+        const description =
+          (typeof data?.message === "string" && data.message.trim()) ||
+          t("requests.edit.notEditable");
+        setEditReturnError(description);
+        await loadRequestHistory();
+      } else if (status === 404) {
+        setEditReturnError(t("requests.edit.notEditable"));
+        await loadRequestHistory();
+      } else {
+        setEditReturnError(
+          getDetailedHttpErrorMessage(t, err, "requests.edit.failed"),
+        );
+      }
+    } finally {
+      editReturnInFlight.current = false;
+      setEditingReturn(false);
     }
   };
 
@@ -652,13 +786,20 @@ export default function MyAssetsPage() {
           // The owner's read-only view of the frozen form (CEO-approved).
           expandable={{
             rowExpandable: (record) =>
+              Boolean(record.workflow) ||
               isDocumentFinal("asset_damage", record.status),
             expandedRowRender: (record) => (
-              <DocumentIntegrityPanel
-                documentType="asset_damage"
-                requestId={record.id}
-                isFinal={isDocumentFinal("asset_damage", record.status)}
-              />
+              <Space direction="vertical" style={{ width: "100%" }}>
+                <PendingActionBanner workflow={record.workflow} />
+                <AssetDamageApprovalMap report={record} />
+                {isDocumentFinal("asset_damage", record.status) && (
+                  <DocumentIntegrityPanel
+                    documentType="asset_damage"
+                    requestId={record.id}
+                    isFinal
+                  />
+                )}
+              </Space>
             ),
           }}
           pagination={{
@@ -709,13 +850,20 @@ export default function MyAssetsPage() {
           // The owner's read-only view of the frozen form (processed returns).
           expandable={{
             rowExpandable: (record) =>
+              Boolean(record.workflow) ||
               isDocumentFinal("asset_return", record.status),
             expandedRowRender: (record) => (
-              <DocumentIntegrityPanel
-                documentType="asset_return"
-                requestId={record.id}
-                isFinal={isDocumentFinal("asset_return", record.status)}
-              />
+              <Space direction="vertical" style={{ width: "100%" }}>
+                <PendingActionBanner workflow={record.workflow} />
+                <AssetReturnApprovalMap request={record} t={t} />
+                {isDocumentFinal("asset_return", record.status) && (
+                  <DocumentIntegrityPanel
+                    documentType="asset_return"
+                    requestId={record.id}
+                    isFinal
+                  />
+                )}
+              </Space>
             ),
           }}
           pagination={{
@@ -965,6 +1113,58 @@ export default function MyAssetsPage() {
             ]}
           >
             <Input.TextArea rows={3} placeholder={t("assets.describeIssue")} />
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      <Modal
+        title={`${t("requests.edit.button")}${editReturnTarget ? `: ${editReturnTarget.asset_code}` : ""}`}
+        open={editReturnTarget !== null}
+        onCancel={closeEditReturn}
+        onOk={() => void handleEditReturnRequest()}
+        okText={t("requests.edit.save")}
+        cancelText={t("common.cancel")}
+        confirmLoading={editingReturn}
+        okButtonProps={{
+          style: { minHeight: 44 },
+          "aria-label": t("requests.edit.save"),
+          disabled:
+            editReturnTarget !== null &&
+            editReturnTarget.workflow?.can_edit !== true,
+        }}
+        cancelButtonProps={{
+          style: { minHeight: 44 },
+          "aria-label": t("common.cancel"),
+          disabled: editingReturn,
+        }}
+        maskClosable={!editingReturn}
+        width="min(520px, 96vw)"
+        style={{ top: 16 }}
+        destroyOnClose
+      >
+        <Alert
+          style={{ marginBottom: 16 }}
+          showIcon
+          type={editReturnError ? "warning" : "info"}
+          message={editReturnError || t("requests.edit.hint")}
+        />
+        <Form form={editReturnForm} layout="vertical">
+          <Form.Item
+            name="note"
+            label={t("common.notes")}
+            rules={[
+              {
+                required: true,
+                whitespace: true,
+                message: t("assets.provideIssueDetails"),
+              },
+            ]}
+          >
+            <Input.TextArea
+              rows={3}
+              aria-label={t("common.notes")}
+              placeholder={t("assets.describeIssue")}
+            />
           </Form.Item>
         </Form>
       </Modal>

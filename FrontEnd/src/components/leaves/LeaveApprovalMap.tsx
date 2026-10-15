@@ -3,6 +3,7 @@ import ApprovalFlowMap, {
   type ApprovalFlowStage,
 } from "../requests/ApprovalFlowMap";
 
+import { isNonStageAction } from "../requests/workflowPresentation";
 import type { LeaveRequest } from "../../services/api/leaveApi";
 import type { WorkflowActor } from "../../types/workflow";
 
@@ -33,21 +34,40 @@ function getActorDisplayName(actor?: WorkflowActor | null) {
   return shortEmployeeName(actor?.full_name) || actor?.email || "";
 }
 
-function getWorkflowStageActorName(request: LeaveRequest, stageKey: string) {
+function getWorkflowStageActor(
+  request: LeaveRequest,
+  stageKey: string,
+): WorkflowActor | null {
   const workflow = request.workflow;
-  if (!workflow) return "";
+  if (!workflow) return null;
 
-  if (workflow.current_stage === stageKey) {
-    const currentActorName = getActorDisplayName(workflow.current_actor);
-    if (currentActorName) return currentActorName;
+  if (workflow.current_stage === stageKey && workflow.current_actor) {
+    return workflow.current_actor;
   }
 
   const historyEntry = [...(workflow.history || [])]
     .reverse()
     .find(
-      (item) => item.approver_role === stageKey || item.from_stage === stageKey,
+      (item) =>
+        !isNonStageAction(item.action) &&
+        (item.approver_role === stageKey || item.from_stage === stageKey),
     );
-  return getActorDisplayName(historyEntry?.actor);
+  return historyEntry?.actor ?? null;
+}
+
+function getWorkflowStageActorName(request: LeaveRequest, stageKey: string) {
+  return getActorDisplayName(getWorkflowStageActor(request, stageKey));
+}
+
+// The recorded actor of an action, e.g. who cancelled the request.
+function getHistoryActor(
+  request: LeaveRequest,
+  action: string,
+): WorkflowActor | null {
+  const entry = [...(request.workflow?.history || [])]
+    .reverse()
+    .find((item) => item.action === action);
+  return entry?.actor ?? null;
 }
 
 function buildStages(
@@ -189,6 +209,7 @@ function buildStages(
       title: t("leave.approvalMap.submitted"),
       state: "completed",
       note: t("leave.approvalMap.requestSent"),
+      actor: getHistoryActor(request, "submit") ?? request.employee,
       at: request.created_at,
     },
     {
@@ -207,6 +228,10 @@ function buildStages(
           ? t("leave.approvalMap.notRequired")
           : request.delegate_decision_note ||
             t(`leave.approvalMap.${delegateState}`),
+      actor:
+        getWorkflowStageActor(request, "delegate") ??
+        request.delegated_to ??
+        null,
       at: request.delegate_decision_at,
     },
     {
@@ -225,6 +250,7 @@ function buildStages(
           ? t("leave.approvalMap.notRequired")
           : request.manager_decision_note ||
             t(`leave.approvalMap.${managerState}`),
+      actor: getWorkflowStageActor(request, "manager"),
       at: request.manager_decision_at,
     },
     {
@@ -244,6 +270,7 @@ function buildStages(
         (hrState === "completed"
           ? t("leave.approvalMap.forwarded")
           : t(`leave.approvalMap.${hrState}`)),
+      actor: getWorkflowStageActor(request, "hr"),
       at: request.decided_at,
     },
     {
@@ -254,6 +281,7 @@ function buildStages(
         ? t("leave.approvalMap.ceoName", { name: ceoName }, `CEO: ${ceoName}`)
         : undefined,
       note: request.ceo_decision_note || t(`leave.approvalMap.${ceoState}`),
+      actor: getWorkflowStageActor(request, "ceo"),
       at: request.ceo_decision_at,
     },
     {
@@ -279,14 +307,20 @@ function buildStages(
   ];
 
   if (finalCancelled) {
+    // A cancelled request never reaches its remaining stages: show them as
+    // skipped instead of leaving them "upcoming".
+    for (const stage of stages) {
+      if (stage.state === "upcoming" || stage.state === "current") {
+        stage.state = "skipped";
+        stage.note = t("leave.approvalMap.notRequired");
+      }
+    }
     stages.push({
       key: "cancelled",
       title: t("status.cancelled"),
       state: "cancelled",
-      note:
-        t("leave.cancelled") === "leave.cancelled"
-          ? "Request cancelled by HR."
-          : t("leave.cancelled"),
+      note: t("leave.cancelled"),
+      actor: getHistoryActor(request, "cancel") ?? request.employee,
       at: request.updated_at,
     });
   }

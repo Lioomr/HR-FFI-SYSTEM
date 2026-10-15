@@ -105,6 +105,8 @@ export interface ListEmployeesParams {
   archive_state?: "active" | "archived" | "all";
   /** "unlinked": only employees without a user account (invite candidates). */
   account?: "unlinked";
+  /** "exclude": leave out the CEO and General Manager (pickers choosing who a request is for). */
+  executives?: "exclude";
   /** Iqama (non-Saudi ID) or contract expiring within `expiring_days`, expired included. */
   expiring?: "iqama" | "contract";
   expiring_days?: number;

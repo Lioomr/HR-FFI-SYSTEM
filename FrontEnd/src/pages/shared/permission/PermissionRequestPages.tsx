@@ -1,11 +1,12 @@
 import { shortEmployeeName } from "../../../utils/employeeName";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useI18n } from "../../../i18n/useI18n";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   Alert,
   Button,
   Card,
+  Col,
   DatePicker,
   Descriptions,
   Empty,
@@ -13,6 +14,7 @@ import {
   Form,
   Input,
   Modal,
+  Row,
   Segmented,
   Select,
   Space,
@@ -22,6 +24,7 @@ import {
   Typography,
   notification,
 } from "antd";
+import { EditOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import PageHeader from "../../../components/ui/PageHeader";
 import {
@@ -34,6 +37,11 @@ import ApprovalFlowMap, {
   type ApprovalFlowStage,
 } from "../../../components/requests/ApprovalFlowMap";
 import ApprovalActions from "../../../components/ceo/ApprovalActions";
+import RequestCancellationPanel from "../../../components/requests/RequestCancellationPanel";
+import {
+  actorSentenceKey,
+  stageActorFromWorkflow,
+} from "../../../components/requests/workflowPresentation";
 import StickyDecisionBar from "../../../components/ceo/StickyDecisionBar";
 import { formatDateTime } from "../../../utils/dateTime";
 import { fieldErrorsFromResponse } from "../../../utils/attendancePolicy";
@@ -45,11 +53,13 @@ import {
   createPermissionRequest,
   decidePermissionRequest,
   downloadPermissionRequestPdf,
+  editPermissionRequest,
   getHrPermissionRequests,
   getManagerPermissionRequests,
   getMyPermissionRequests,
   getPermissionRequest,
   type CreatePermissionRequestPayload,
+  type EditPermissionRequestPayload,
   type ExitType,
   type PermissionRequest,
   type PermissionStatus,
@@ -238,12 +248,84 @@ function useLateUsage(
   return monthKey ? usage : null;
 }
 
-export function PermissionRequestFormPage() {
+function clockToDayjs(value?: string | null) {
+  const match = /^(\d{1,2}):(\d{2})/.exec(value ?? "");
+  return match
+    ? dayjs().hour(Number(match[1])).minute(Number(match[2])).second(0)
+    : undefined;
+}
+
+/**
+ * Create form, also used (mode="edit") to edit the employee's own request
+ * while it is pending the manager. The server decides editability.
+ */
+export function PermissionRequestFormPage({
+  mode = "create",
+}: {
+  mode?: "create" | "edit";
+}) {
+  const isEdit = mode === "edit";
+  const { id: requestId = "" } = useParams();
   const { t } = useI18n();
   const navigate = useNavigate();
   const [form] = Form.useForm<PermissionFormValues>();
   const [submitting, setSubmitting] = useState(false);
+  const [editRequest, setEditRequest] = useState<PermissionRequest | null>(
+    null,
+  );
+  const [editLoading, setEditLoading] = useState(isEdit);
+  const [notEditable, setNotEditable] = useState<string | null>(null);
+  const detailsPath = `/employee/permission-requests/${requestId}`;
+  const applyEditRequest = useCallback(
+    (current: PermissionRequest) => {
+      setEditRequest(current);
+      if (current.workflow?.can_edit !== true) {
+        setNotEditable(t("requests.edit.notEditable"));
+      }
+    },
+    [t],
+  );
   const [formErrors, setFormErrors] = useState<string[]>([]);
+  useEffect(() => {
+    if (!isEdit || !requestId) return;
+    let cancelled = false;
+    setEditLoading(true);
+    getPermissionRequest(requestId)
+      .then((response) => {
+        if (cancelled) return;
+        if (isApiError(response)) setFormErrors([response.message]);
+        else applyEditRequest(response.data);
+      })
+      .catch((error) => {
+        if (!cancelled)
+          setFormErrors([
+            errorText(t, error, t("permissionRequests.error.load")),
+          ]);
+      })
+      .finally(() => {
+        if (!cancelled) setEditLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+    // Reload only when the target request changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isEdit, requestId]);
+  // The form mounts after loading ends, so prefill from an effect.
+  const prefilledId = useRef<number | null>(null);
+  useEffect(() => {
+    if (!isEdit || editLoading || !editRequest) return;
+    if (prefilledId.current === editRequest.id) return;
+    prefilledId.current = editRequest.id;
+    form.setFieldsValue({
+      permission_type: editRequest.permission_type ?? "exit",
+      request_date: dayjs(editRequest.request_date),
+      from_time: clockToDayjs(editRequest.from_time),
+      to_time: clockToDayjs(editRequest.to_time),
+      exit_type: (editRequest.exit_type || undefined) as ExitType | undefined,
+      reason: editRequest.reason,
+    });
+  }, [isEdit, editLoading, editRequest, form]);
   const [companyRequired, setCompanyRequired] = useState(false);
   const policy = usePermissionPolicy();
   const today = dayjs();
@@ -314,7 +396,80 @@ export function PermissionRequestFormPage() {
     setFormErrors(other.length ? other : fields.length ? [] : [fallback]);
   }
 
+  async function submitEdit(values: PermissionFormValues) {
+    if (!editRequest || submitting) return;
+    setSubmitting(true);
+    setFormErrors([]);
+    try {
+      const payload: EditPermissionRequestPayload = {
+        permission_type: editRequest.permission_type ?? "exit",
+        // Exit Permission has no date field; its date is kept as submitted.
+        request_date:
+          values.permission_type === "exit"
+            ? editRequest.request_date
+            : (values.request_date ?? dayjs()).format("YYYY-MM-DD"),
+        reason: values.reason.trim(),
+      };
+      if (values.permission_type !== "late") {
+        payload.from_time = (values.from_time as dayjs.Dayjs).format("HH:mm");
+        payload.to_time = (values.to_time as dayjs.Dayjs).format("HH:mm");
+      }
+      if (values.permission_type === "exit") {
+        payload.exit_type = values.exit_type ?? "personal";
+        payload.duration_minutes = duration;
+      }
+      const response = await editPermissionRequest(requestId, payload);
+      if (isApiError(response)) {
+        throw { response: { status: 422, data: response } };
+      }
+      notification.success({ message: t("requests.edit.success") });
+      navigate(detailsPath);
+    } catch (error) {
+      const status = httpStatus(error);
+      // DRF reports whole-request errors under non_field_errors: that is the
+      // "no longer editable" case, not a field error.
+      const fieldErrors = Object.fromEntries(
+        Object.entries(fieldErrorsFromResponse(error)).filter(
+          ([field]) => field !== "non_field_errors" && field !== "__all__",
+        ),
+      );
+      if (status === 422 && Object.keys(fieldErrors).length === 0) {
+        // Not editable in this status: show the server message and refresh.
+        const message = errorText(t, error, t("requests.edit.notEditable"));
+        setNotEditable(message);
+        notification.error({
+          message: t("requests.edit.failed"),
+          description: message,
+        });
+        try {
+          const refreshed = await getPermissionRequest(requestId);
+          if (!isApiError(refreshed)) setEditRequest(refreshed.data);
+        } catch {
+          // Keep the current view.
+        }
+      } else if (status === 422) {
+        showServerErrors(
+          fieldErrors,
+          errorText(t, error, t("requests.edit.failed")),
+        );
+      } else {
+        const message =
+          status === 404
+            ? t("requests.edit.notEditable")
+            : errorText(t, error, t("requests.edit.failed"));
+        setFormErrors([message]);
+        notification.error({
+          message: t("requests.edit.failed"),
+          description: message,
+        });
+      }
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
   async function submit(values: PermissionFormValues) {
+    if (isEdit) return submitEdit(values);
     setSubmitting(true);
     setFormErrors([]);
     setCompanyRequired(false);
@@ -365,15 +520,38 @@ export function PermissionRequestFormPage() {
   return (
     <div style={{ maxWidth: 720, margin: "0 auto" }}>
       <PageHeader
-        title={t("permissionRequests.newTitle")}
+        title={
+          isEdit
+            ? t("permissionRequests.edit.title")
+            : t("permissionRequests.newTitle")
+        }
         subtitle={
-          // Late and During Shift explain their date window under the date field.
-          type === "exit"
-            ? `${t("permissionRequests.formSubtitle")} (${today.format("YYYY-MM-DD")})`
-            : undefined
+          isEdit
+            ? t("requests.edit.hint")
+            : type === "exit"
+              ? `${t("permissionRequests.formSubtitle")} (${today.format("YYYY-MM-DD")})`
+              : undefined
+        }
+        actions={
+          isEdit ? (
+            <Button
+              style={{ minHeight: 44 }}
+              onClick={() => navigate(detailsPath)}
+            >
+              {t("requests.edit.backToDetails")}
+            </Button>
+          ) : undefined
         }
       />
-      <Card>
+      <Card loading={isEdit && editLoading}>
+        {isEdit && (
+          <Alert
+            type={notEditable ? "warning" : "info"}
+            showIcon
+            title={notEditable || t("requests.edit.hint")}
+            style={{ marginBottom: 16 }}
+          />
+        )}
         {companyRequired && (
           <Alert
             type="warning"
@@ -419,10 +597,11 @@ export function PermissionRequestFormPage() {
           <Form.Item
             label={t("permissionRequests.type.label")}
             name="permission_type"
-            extra={typeHint}
+            extra={isEdit ? t("permissionRequests.edit.typeLocked") : typeHint}
           >
             <Segmented
               block
+              disabled={isEdit}
               options={PERMISSION_TYPES.map((value) => ({
                 value,
                 label: permissionTypeLabel(t, value),
@@ -571,7 +750,7 @@ export function PermissionRequestFormPage() {
             <Input.TextArea rows={5} maxLength={1000} showCount />
           </Form.Item>
 
-          {type !== "exit" && (
+          {type !== "exit" && !isEdit && (
             <Form.Item
               label={
                 type === "late"
@@ -604,9 +783,16 @@ export function PermissionRequestFormPage() {
             type="primary"
             htmlType="submit"
             loading={submitting}
-            disabled={durationInvalid}
+            disabled={
+              durationInvalid ||
+              (isEdit &&
+                (!editRequest || editRequest.workflow?.can_edit !== true))
+            }
+            style={{ minHeight: 44 }}
           >
-            {t("permissionRequests.form.submit")}
+            {isEdit
+              ? t("requests.edit.save")
+              : t("permissionRequests.form.submit")}
           </Button>
         </Form>
       </Card>
@@ -940,6 +1126,9 @@ function ApprovalTrail({ request }: { request: PermissionRequest }) {
       state: "completed",
       note: t("permissionRequests.detail.submitted"),
       detail: shortEmployeeName(request.employee.full_name),
+      actor:
+        stageActorFromWorkflow(request.workflow, "submitted") ??
+        request.employee,
       at: request.created_at,
     },
     {
@@ -957,6 +1146,9 @@ function ApprovalTrail({ request }: { request: PermissionRequest }) {
             .filter(Boolean)
             .join(" - ") || t("leave.approvalMap.current"),
       detail: managerActor ? managerActor : undefined,
+      actor:
+        request.manager_decision_by ??
+        stageActorFromWorkflow(request.workflow, "manager"),
       at: request.manager_decision_at,
     },
     {
@@ -974,9 +1166,18 @@ function ApprovalTrail({ request }: { request: PermissionRequest }) {
             .filter(Boolean)
             .join(" - ") || t("leave.approvalMap.current"),
       detail: hrActor ? hrActor : undefined,
+      actor:
+        request.hr_decision_by ??
+        stageActorFromWorkflow(request.workflow, "hr"),
       at: request.hr_decision_at,
     },
   ];
+  // A stage closed by cancellation names who cancelled, not its reviewer.
+  const cancelledBy =
+    stageActorFromWorkflow(request.workflow, "cancelled") ?? request.employee;
+  for (const stage of stages) {
+    if (stage.state === "cancelled") stage.actor = cancelledBy;
+  }
   return (
     <ApprovalFlowMap
       eyebrow={t("leave.approvalMap.eyebrow")}
@@ -993,6 +1194,7 @@ export function PermissionRequestDetailPage({
   role: "employee" | "manager" | "hr";
 }) {
   const { t, language } = useI18n();
+  const navigate = useNavigate();
   const { id } = useParams();
   const [request, setRequest] = useState<PermissionRequest | null>(null);
   const [loading, setLoading] = useState(true);
@@ -1114,7 +1316,7 @@ export function PermissionRequestDetailPage({
   const attachments = request.attachments ?? [];
   const canDecide = request.workflow.can_approve || request.workflow.can_reject;
   return (
-    <div>
+    <div style={{ maxWidth: 1400, margin: "0 auto" }}>
       <PageHeader
         title={request.public_reference || request.reference_no}
         actions={
@@ -1126,118 +1328,146 @@ export function PermissionRequestDetailPage({
           ) : undefined
         }
       />
-      <Card>
-        <Descriptions bordered column={1}>
-          <Descriptions.Item label={t("permissionRequests.detail.employee")}>
-            {shortEmployeeName(request.employee.full_name)}
-          </Descriptions.Item>
-          <Descriptions.Item
-            label={t("permissionRequests.detail.permissionType")}
-          >
-            <PermissionTypeTag type={permissionType} />
-          </Descriptions.Item>
-          <Descriptions.Item label={t("permissionRequests.detail.date")}>
-            {request.request_date}
-          </Descriptions.Item>
-          {timeRange && (
-            <Descriptions.Item label={t("permissionRequests.detail.time")}>
-              <span
-                dir="ltr"
-                style={{ unicodeBidi: "isolate", whiteSpace: "nowrap" }}
-              >
-                {timeRange}
-              </span>{" "}
-              {t("permissionRequests.detail.duration", {
-                minutes: request.duration_minutes,
-              })}
-            </Descriptions.Item>
-          )}
-          {isExit && (
-            <Descriptions.Item label={t("permissionRequests.detail.exitType")}>
-              {typeLabel}
-            </Descriptions.Item>
-          )}
-          {permissionType === "late" &&
-            request.monthly_late_permission_usage != null &&
-            request.monthly_late_permission_limit != null && (
+      <Row gutter={[18, 18]} align="top">
+        <Col xs={24} xl={10}>
+          <ApprovalTrail request={request} />
+        </Col>
+        <Col xs={24} xl={14}>
+          <Card>
+            <Descriptions bordered column={1}>
               <Descriptions.Item
-                label={t("permissionRequests.detail.lateUsageLabel")}
+                label={t("permissionRequests.detail.employee")}
               >
-                {t("permissionRequests.detail.lateUsage", {
-                  usage: request.monthly_late_permission_usage,
-                  limit: request.monthly_late_permission_limit,
-                })}
+                {shortEmployeeName(request.employee.full_name)}
               </Descriptions.Item>
+              <Descriptions.Item
+                label={t("permissionRequests.detail.permissionType")}
+              >
+                <PermissionTypeTag type={permissionType} />
+              </Descriptions.Item>
+              <Descriptions.Item label={t("permissionRequests.detail.date")}>
+                {request.request_date}
+              </Descriptions.Item>
+              {timeRange && (
+                <Descriptions.Item label={t("permissionRequests.detail.time")}>
+                  <span
+                    dir="ltr"
+                    style={{ unicodeBidi: "isolate", whiteSpace: "nowrap" }}
+                  >
+                    {timeRange}
+                  </span>{" "}
+                  {t("permissionRequests.detail.duration", {
+                    minutes: request.duration_minutes,
+                  })}
+                </Descriptions.Item>
+              )}
+              {isExit && (
+                <Descriptions.Item
+                  label={t("permissionRequests.detail.exitType")}
+                >
+                  {typeLabel}
+                </Descriptions.Item>
+              )}
+              {permissionType === "late" &&
+                request.monthly_late_permission_usage != null &&
+                request.monthly_late_permission_limit != null && (
+                  <Descriptions.Item
+                    label={t("permissionRequests.detail.lateUsageLabel")}
+                  >
+                    {t("permissionRequests.detail.lateUsage", {
+                      usage: request.monthly_late_permission_usage,
+                      limit: request.monthly_late_permission_limit,
+                    })}
+                  </Descriptions.Item>
+                )}
+              <Descriptions.Item label={t("permissionRequests.detail.reason")}>
+                {request.reason}
+              </Descriptions.Item>
+              <Descriptions.Item label={t("permissionRequests.list.status")}>
+                <Tag color={statusColors[request.status]}>
+                  {(language === "ar"
+                    ? request.status_label_ar
+                    : request.status_label) || statusLabel(t, request.status)}
+                </Tag>
+              </Descriptions.Item>
+              <Descriptions.Item
+                label={t("permissionRequests.detail.directManager")}
+              >
+                {request.direct_manager?.full_name ||
+                  t("permissionRequests.detail.none")}
+              </Descriptions.Item>
+            </Descriptions>
+            {canDecide && (
+              // The decision buttons live in the sticky bar below.
+              <Input.TextArea
+                value={comment}
+                onChange={(event) => setComment(event.target.value)}
+                maxLength={1000}
+                showCount
+                placeholder={t("permissionRequests.detail.decisionComment")}
+                style={{ marginTop: 16 }}
+              />
             )}
-          <Descriptions.Item label={t("permissionRequests.detail.reason")}>
-            {request.reason}
-          </Descriptions.Item>
-          <Descriptions.Item label={t("permissionRequests.list.status")}>
-            <Tag color={statusColors[request.status]}>
-              {(language === "ar"
-                ? request.status_label_ar
-                : request.status_label) || statusLabel(t, request.status)}
-            </Tag>
-          </Descriptions.Item>
-          <Descriptions.Item
-            label={t("permissionRequests.detail.directManager")}
-          >
-            {request.direct_manager?.full_name ||
-              t("permissionRequests.detail.none")}
-          </Descriptions.Item>
-        </Descriptions>
-        {canDecide && (
-          // The decision buttons live in the sticky bar below.
-          <Input.TextArea
-            value={comment}
-            onChange={(event) => setComment(event.target.value)}
-            maxLength={1000}
-            showCount
-            placeholder={t("permissionRequests.detail.decisionComment")}
-            style={{ marginTop: 16 }}
-          />
-        )}
-        <Typography.Title level={5} style={{ marginTop: 24 }}>
-          {t("permissionRequests.detail.history")}
-        </Typography.Title>
-        {request.workflow.history.length ? (
-          request.workflow.history.map((entry) => (
-            <Typography.Paragraph key={entry.id}>
-              {historyLabel(t, entry.action)} -{" "}
-              {entry.actor?.full_name || t("permissionRequests.detail.system")}{" "}
-              ({formatDateTime(entry.at)}){entry.note ? `: ${entry.note}` : ""}
-            </Typography.Paragraph>
-          ))
-        ) : (
-          <Empty description={t("permissionRequests.list.empty")} />
-        )}
-      </Card>
-      {(!isExit || attachments.length > 0) && (
-        <PermissionAttachmentsSection
-          request={request}
-          // `can_cancel` is exactly "the owner, while pending", the same
-          // condition the server applies to adding evidence.
-          canAdd={request.workflow.can_cancel}
-          onUpdated={setRequest}
-        />
-      )}
-      <ApprovalTrail request={request} />
-      <div style={{ marginTop: 16 }}>
-        <DocumentIntegrityPanel
-          documentType="permission"
-          requestId={request.id}
-          isFinal={isDocumentFinal("permission", request.status)}
-          // The /hr surface is HRManager/SystemAdmin only; employees and
-          // managers get a read-only card with plain-text names.
-          canRetrySeal={role === "hr"}
-          profilePath={
-            role === "hr"
-              ? (profileId) => `/hr/employees/${profileId}`
-              : undefined
-          }
-        />
-      </div>
-      {(canDecide || request.workflow.can_cancel) && (
+            <Typography.Title level={5} style={{ marginTop: 24 }}>
+              {t("permissionRequests.detail.history")}
+            </Typography.Title>
+            {request.workflow.history.length ? (
+              request.workflow.history.map((entry) => (
+                <Typography.Paragraph key={entry.id}>
+                  {actorSentenceKey(entry.action)
+                    ? t(actorSentenceKey(entry.action) as string, {
+                        name:
+                          entry.actor?.full_name ||
+                          t("permissionRequests.detail.system"),
+                      })
+                    : `${historyLabel(t, entry.action)} - ${
+                        entry.actor?.full_name ||
+                        t("permissionRequests.detail.system")
+                      }`}{" "}
+                  ({formatDateTime(entry.at)})
+                  {entry.note ? `: ${entry.note}` : ""}
+                </Typography.Paragraph>
+              ))
+            ) : (
+              <Empty description={t("permissionRequests.list.empty")} />
+            )}
+          </Card>
+          {(!isExit || attachments.length > 0) && (
+            <PermissionAttachmentsSection
+              request={request}
+              // `can_cancel` is exactly "the owner, while pending", the same
+              // condition the server applies to adding evidence.
+              canAdd={request.workflow.can_cancel}
+              onUpdated={setRequest}
+            />
+          )}
+          <div style={{ marginTop: 16 }}>
+            <RequestCancellationPanel
+              kind="permission"
+              request={request}
+              onChanged={load}
+            />
+          </div>
+          <div style={{ marginTop: 16 }}>
+            <DocumentIntegrityPanel
+              documentType="permission"
+              requestId={request.id}
+              isFinal={isDocumentFinal("permission", request.status)}
+              // The /hr surface is HRManager/SystemAdmin only; employees and
+              // managers get a read-only card with plain-text names.
+              canRetrySeal={role === "hr"}
+              profilePath={
+                role === "hr"
+                  ? (profileId) => `/hr/employees/${profileId}`
+                  : undefined
+              }
+            />
+          </div>
+        </Col>
+      </Row>
+      {(canDecide ||
+        request.workflow.can_cancel ||
+        request.workflow.can_edit === true) && (
         // Only the owner's cancel is not a decision, so it shows no hint.
         <StickyDecisionBar hint={canDecide ? undefined : null}>
           <Space size={8} wrap>
@@ -1253,6 +1483,19 @@ export function PermissionRequestDetailPage({
                 onApprove={() => void act("approve")}
                 onReject={() => void act("reject")}
               />
+            )}
+            {request.workflow.can_edit === true && (
+              <Button
+                size="large"
+                icon={<EditOutlined aria-hidden />}
+                aria-label={t("requests.edit.button")}
+                onClick={() =>
+                  navigate(`/employee/permission-requests/${request.id}/edit`)
+                }
+                style={{ borderRadius: 8, fontWeight: 600, minHeight: 44 }}
+              >
+                {t("requests.edit.button")}
+              </Button>
             )}
             {request.workflow.can_cancel && (
               <Button

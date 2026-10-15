@@ -1,5 +1,7 @@
 # Geofenced Attendance: Synced Agent Prompts
 
+> Task-specific prompts for the original coordinated attendance sessions. Agent assignments, surface ownership, approval gates, and stop points apply only when a particular prompt is explicitly adopted for a task. They do not restrict later user-authorized work. Verify technical contracts in current source and preserve security and production-data safeguards.
+
 This document is the execution contract for three agents. Run the prompts in order:
 
 1. Backend Codex: implement and publish the authoritative API contract.

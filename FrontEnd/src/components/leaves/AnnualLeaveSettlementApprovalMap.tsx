@@ -1,6 +1,7 @@
 import ApprovalFlowMap, {
   type ApprovalFlowStage,
 } from "../requests/ApprovalFlowMap";
+import { stageActorFromWorkflow } from "../requests/workflowPresentation";
 import type { AnnualLeavePaymentRequest } from "../../services/api/annualLeavePaymentsApi";
 
 type TranslateFn = (
@@ -12,25 +13,30 @@ type TranslateFn = (
 /**
  * Employee -> HR review -> CEO decision, read from the settlement's own
  * decision fields (`hr_reviewed_at`, `ceo_decided_at` and their notes). The
- * serializer carries no workflow snapshot, so these fields are the trail.
+ * workflow snapshot additionally supplies the recorded history to the employee panel.
  */
 function buildStages(
   request: AnnualLeavePaymentRequest,
   t: TranslateFn,
 ): ApprovalFlowStage[] {
+  const cancelled = request.status === "cancelled";
   const hrState: ApprovalFlowStage["state"] = request.hr_reviewed_at
     ? "completed"
-    : request.status === "pending_hr"
-      ? "current"
-      : "upcoming";
+    : cancelled
+      ? "skipped"
+      : request.status === "pending_hr"
+        ? "current"
+        : "upcoming";
 
   const ceoState: ApprovalFlowStage["state"] = request.ceo_decided_at
     ? request.status === "rejected"
       ? "rejected"
       : "completed"
-    : request.status === "pending_ceo"
-      ? "current"
-      : "upcoming";
+    : cancelled
+      ? "skipped"
+      : request.status === "pending_ceo"
+        ? "current"
+        : "upcoming";
 
   const resolutionLabel =
     request.resolution === "carry_forward"
@@ -43,6 +49,9 @@ function buildStages(
       title: t("leave.approvalMap.submitted"),
       state: "completed",
       note: request.employee_note || t("leave.approvalMap.requestSent"),
+      actor:
+        stageActorFromWorkflow(request.workflow, "submitted") ??
+        (request.employee_name ? { full_name: request.employee_name } : null),
       at: request.submitted_at,
     },
     {
@@ -58,6 +67,7 @@ function buildStages(
         (hrState === "completed"
           ? t("leave.approvalMap.forwarded")
           : t(`leave.approvalMap.${hrState}`)),
+      actor: stageActorFromWorkflow(request.workflow, "hr"),
       at: request.hr_reviewed_at,
     },
     {
@@ -65,8 +75,21 @@ function buildStages(
       title: t("leave.approvalMap.ceoReview"),
       state: ceoState,
       note: request.ceo_decision_note || t(`leave.approvalMap.${ceoState}`),
+      actor: stageActorFromWorkflow(request.workflow, "ceo"),
       at: request.ceo_decided_at,
     },
+    ...(cancelled
+      ? [
+          {
+            key: "cancelled",
+            title: t("status.cancelled"),
+            state: "cancelled" as const,
+            note: t("requests.cancel.success"),
+            actor: stageActorFromWorkflow(request.workflow, "cancelled"),
+            at: request.cancelled_at,
+          },
+        ]
+      : []),
   ];
 }
 

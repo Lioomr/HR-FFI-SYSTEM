@@ -1,14 +1,13 @@
 from unittest.mock import patch
 
+from audit.models import AuditLog
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.test import RequestFactory, TestCase
-from rest_framework import status
-from rest_framework.test import APIClient
-
-from audit.models import AuditLog
 from employees.models import EmployeeProfile
 from organization.models import OrganizationNode
+from rest_framework import status
+from rest_framework.test import APIClient
 
 from .models import PayrollRun, Payslip
 from .views import _export_payroll_run_response
@@ -174,6 +173,6 @@ class EmployeePayslipSecurityTests(TestCase):
             response = _export_payroll_run_response(request, self.completed_run)
 
             self.assertEqual(response["Content-Type"], "application/octet-stream")
-            self.assertTrue(response["Content-Disposition"].startswith("attachment; filename=\""))
+            self.assertTrue(response["Content-Disposition"].startswith('attachment; filename="'))
             self.assertEqual(response["X-Content-Type-Options"], "nosniff")
             self.assertEqual(response["Cache-Control"], "private, no-store")

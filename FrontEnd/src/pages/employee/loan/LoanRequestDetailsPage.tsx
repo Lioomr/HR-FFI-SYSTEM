@@ -1,7 +1,7 @@
 import BackButton from "../../../components/ui/BackButton";
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { Card, Descriptions, Tag, notification } from "antd";
+import { Card, Col, Descriptions, Row, Tag, notification } from "antd";
 
 import PageHeader from "../../../components/ui/PageHeader";
 import { isApiError } from "../../../services/api/apiTypes";
@@ -17,6 +17,8 @@ import LoanPdfDownloadButton from "../../../components/loan/LoanPdfDownloadButto
 import DocumentIntegrityPanel from "../../../components/documents/DocumentIntegrityPanel";
 import { isDocumentFinal } from "../../../components/documents/documentTypes";
 import PendingActionBanner from "../../../components/requests/PendingActionBanner";
+import RequestCancellationPanel from "../../../components/requests/RequestCancellationPanel";
+import EmployeeEditButton from "../../../components/requests/EmployeeEditButton";
 import { formatDateTime } from "../../../utils/dateTime";
 
 function statusColor(status: LoanStatus) {
@@ -52,6 +54,7 @@ export default function EmployeeLoanRequestDetailsPage() {
   const { id = "" } = useParams();
   const [loading, setLoading] = useState(false);
   const [item, setItem] = useState<LoanRequest | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     async function load() {
@@ -74,7 +77,7 @@ export default function EmployeeLoanRequestDetailsPage() {
       }
     }
     load();
-  }, [id, t]);
+  }, [id, t, reloadKey]);
 
   const getStatusLabel = (status: LoanStatus) => {
     if (!status) return "";
@@ -111,12 +114,23 @@ export default function EmployeeLoanRequestDetailsPage() {
       : Number(item?.requested_amount || 0);
 
   return (
-    <div style={{ maxWidth: 960, margin: "0 auto" }}>
+    <div style={{ maxWidth: 1400, margin: "0 auto" }}>
       <PageHeader
-        title={t("loans.details.titlePrefix") + " " + (item?.public_reference || "#" + id)}
+        title={
+          t("loans.details.titlePrefix") +
+          " " +
+          (item?.public_reference || "#" + id)
+        }
         breadcrumb={t("loans.details.subtitle")}
         actions={
           <>
+            {item ? (
+              <EmployeeEditButton
+                request={item}
+                to={`/employee/loans/${item.id}/edit`}
+                iconOnly={false}
+              />
+            ) : null}
             {item ? <LoanPdfDownloadButton loanId={item.id} /> : null}
             <BackButton
               onClick={() => navigate("/employee/loans")}
@@ -127,98 +141,111 @@ export default function EmployeeLoanRequestDetailsPage() {
           </>
         }
       />
-      <Card loading={loading} style={{ borderRadius: 16 }}>
-        {!item ? null : (
-          <>
-            <div style={{ marginBottom: 24 }}>
-              <PendingActionBanner workflow={item.workflow} />
-            </div>
-
-            <div style={{ marginBottom: 24 }}>
-              <LoanApprovalMap request={item} t={t} />
-            </div>
-
-            <Descriptions
-              column={{ xs: 1, sm: 2 }}
-              layout="vertical"
-              bordered
-              style={{ borderRadius: 8, overflow: "hidden" }}
-            >
-              <Descriptions.Item label={t("loans.list.colAmount")}>
-                <AmountWithSAR
-                  amount={item.requested_amount || 0}
-                  size={18}
-                  color="#f97316"
-                  fontWeight="bold"
-                  style={{ fontSize: 18 }}
-                />
-              </Descriptions.Item>
-              <Descriptions.Item label={t("loans.request.formLoanType")}>
-                {getLoanTypeLabel(item.loan_type)}
-              </Descriptions.Item>
-              <Descriptions.Item label={t("loans.list.colStatus")}>
-                <Tag
-                  color={statusColor(item.status)}
-                  style={{
-                    borderRadius: 4,
-                    padding: "2px 10px",
-                    fontSize: 13,
-                    fontWeight: 600,
-                  }}
-                >
-                  {getStatusLabel(item.status)}
-                </Tag>
-              </Descriptions.Item>
-              <Descriptions.Item
-                label={t("loans.request.formInstallmentMonths")}
-              >
-                {item.loan_type === "installment"
-                  ? item.installment_months || "-"
-                  : "-"}
-              </Descriptions.Item>
-              <Descriptions.Item
-                label={t("loans.request.monthlyDeductionLabel")}
-              >
-                <AmountWithSAR amount={monthlyDeduction} />
-              </Descriptions.Item>
-              <Descriptions.Item
-                label={t("loans.details.targetDeductionPeriod")}
-              >
-                {item.target_deduction_period ||
-                  (item.target_deduction_year && item.target_deduction_month
-                    ? `${item.target_deduction_year}-${String(item.target_deduction_month).padStart(2, "0")}`
-                    : "-")}
-              </Descriptions.Item>
-              <Descriptions.Item label={t("loans.list.colReason")} span={2}>
-                {item.reason || "-"}
-              </Descriptions.Item>
-              <Descriptions.Item label={t("loans.list.colCreated")}>
-                {formatDateTime(item.created_at)}
-              </Descriptions.Item>
-              {item.approved_amount && (
-                <Descriptions.Item
-                  label={t("loans.details.approvedAmount") || "Approved Amount"}
-                >
-                  <AmountWithSAR
-                    amount={item.approved_amount}
-                    fontWeight="bold"
-                  />
-                </Descriptions.Item>
-              )}
-            </Descriptions>
-          </>
-        )}
-      </Card>
-
       {item ? (
-        <div style={{ marginTop: 20 }}>
-          <DocumentIntegrityPanel
-            documentType="loan"
-            requestId={item.id}
-            isFinal={isDocumentFinal("loan", item.status)}
+        <div style={{ display: "grid", gap: 18, marginBottom: 18 }}>
+          <PendingActionBanner workflow={item.workflow} />
+          <RequestCancellationPanel
+            kind="loan"
+            request={item}
+            onChanged={() => setReloadKey((key) => key + 1)}
           />
         </div>
       ) : null}
+      <Row gutter={[18, 18]} align="top">
+        <Col xs={24} xl={10}>
+          {item ? (
+            <LoanApprovalMap request={item} t={t} />
+          ) : (
+            <Card loading={loading} style={{ borderRadius: 16 }} />
+          )}
+        </Col>
+        <Col xs={24} xl={14} style={{ display: "grid", gap: 18 }}>
+          <Card loading={loading} style={{ borderRadius: 16 }}>
+            {!item ? null : (
+              <>
+                <Descriptions
+                  column={{ xs: 1, sm: 2 }}
+                  layout="vertical"
+                  bordered
+                  style={{ borderRadius: 8, overflow: "hidden" }}
+                >
+                  <Descriptions.Item label={t("loans.list.colAmount")}>
+                    <AmountWithSAR
+                      amount={item.requested_amount || 0}
+                      size={18}
+                      color="#f97316"
+                      fontWeight="bold"
+                      style={{ fontSize: 18 }}
+                    />
+                  </Descriptions.Item>
+                  <Descriptions.Item label={t("loans.request.formLoanType")}>
+                    {getLoanTypeLabel(item.loan_type)}
+                  </Descriptions.Item>
+                  <Descriptions.Item label={t("loans.list.colStatus")}>
+                    <Tag
+                      color={statusColor(item.status)}
+                      style={{
+                        borderRadius: 4,
+                        padding: "2px 10px",
+                        fontSize: 13,
+                        fontWeight: 600,
+                      }}
+                    >
+                      {getStatusLabel(item.status)}
+                    </Tag>
+                  </Descriptions.Item>
+                  <Descriptions.Item
+                    label={t("loans.request.formInstallmentMonths")}
+                  >
+                    {item.loan_type === "installment"
+                      ? item.installment_months || "-"
+                      : "-"}
+                  </Descriptions.Item>
+                  <Descriptions.Item
+                    label={t("loans.request.monthlyDeductionLabel")}
+                  >
+                    <AmountWithSAR amount={monthlyDeduction} />
+                  </Descriptions.Item>
+                  <Descriptions.Item
+                    label={t("loans.details.targetDeductionPeriod")}
+                  >
+                    {item.target_deduction_period ||
+                      (item.target_deduction_year && item.target_deduction_month
+                        ? `${item.target_deduction_year}-${String(item.target_deduction_month).padStart(2, "0")}`
+                        : "-")}
+                  </Descriptions.Item>
+                  <Descriptions.Item label={t("loans.list.colReason")} span={2}>
+                    {item.reason || "-"}
+                  </Descriptions.Item>
+                  <Descriptions.Item label={t("loans.list.colCreated")}>
+                    {formatDateTime(item.created_at)}
+                  </Descriptions.Item>
+                  {item.approved_amount && (
+                    <Descriptions.Item
+                      label={
+                        t("loans.details.approvedAmount") || "Approved Amount"
+                      }
+                    >
+                      <AmountWithSAR
+                        amount={item.approved_amount}
+                        fontWeight="bold"
+                      />
+                    </Descriptions.Item>
+                  )}
+                </Descriptions>
+              </>
+            )}
+          </Card>
+
+          {item ? (
+            <DocumentIntegrityPanel
+              documentType="loan"
+              requestId={item.id}
+              isFinal={isDocumentFinal("loan", item.status)}
+            />
+          ) : null}
+        </Col>
+      </Row>
     </div>
   );
 }

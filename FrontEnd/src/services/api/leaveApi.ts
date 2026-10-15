@@ -72,6 +72,7 @@ export interface LeaveRequest {
   created_at?: string;
   updated_at?: string;
   workflow?: WorkflowSnapshot;
+  can_cancel?: boolean;
   obligations_summary?: RequestObligationSummary;
   employee_documents?: EmployeeDocument[];
   // Travel & delegation fields
@@ -134,6 +135,27 @@ export interface CreateLeaveRequestPayload {
   airplane_ticket_payer?: "company" | "employee" | "";
   airplane_ticket_address?: string;
   delegated_to?: number | null;
+  delegation_note?: string;
+}
+
+/**
+ * Editable fields of a pending leave request. `delegated_to` is deliberately
+ * absent: the alternative employee changes only through the set-delegate flow.
+ */
+export interface EditLeaveRequestPayload {
+  leave_type?: number;
+  start_date?: string;
+  end_date?: string;
+  reason?: string;
+  document?: File;
+  will_travel?: boolean;
+  will_require_visa?: boolean;
+  other_leave_description?: string;
+  date_of_rejoin?: string | null;
+  po_box?: string;
+  full_address?: string;
+  airplane_ticket_payer?: "company" | "employee" | "";
+  airplane_ticket_address?: string;
   delegation_note?: string;
 }
 
@@ -386,7 +408,7 @@ export async function deleteHRManualLeaveRequest(
   return data;
 }
 
-// Employees cannot cancel their own leave requests; HR cancels them with a reason.
+// HR cancellation requires a reason and can also apply to approved requests.
 export async function hrCancelLeaveRequest(
   id: string | number,
   comment: string,
@@ -543,5 +565,41 @@ export async function rejectCEOLeaveRequest(
     `/api/leaves/ceo/leave-requests/${id}/reject/`,
     { comment },
   );
+  return data;
+}
+
+export async function cancelLeaveRequest(
+  id: string | number,
+): Promise<ApiResponse<LeaveRequest>> {
+  const { data } = await api.post<ApiResponse<LeaveRequest>>(
+    `/api/leaves/leave-requests/${id}/cancel/`,
+  );
+  return data;
+}
+
+/**
+ * Owner edit while the request has not reached HR. Multipart only when a new
+ * `document` file is included; otherwise plain JSON.
+ */
+export async function editLeaveRequest(
+  id: string | number,
+  payload: EditLeaveRequestPayload,
+): Promise<ApiResponse<LeaveRequest>> {
+  const url = `/api/leaves/leave-requests/${id}/edit/`;
+  if (payload.document instanceof File) {
+    const form = new FormData();
+    Object.entries(payload).forEach(([key, value]) => {
+      if (value === undefined) return;
+      if (value instanceof File) form.append(key, value, value.name);
+      else form.append(key, value === null ? "" : String(value));
+    });
+    const { data } = await api.patch<ApiResponse<LeaveRequest>>(url, form, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+    return data;
+  }
+  const { document: _document, ...fields } = payload;
+  void _document;
+  const { data } = await api.patch<ApiResponse<LeaveRequest>>(url, fields);
   return data;
 }

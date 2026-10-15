@@ -8,11 +8,11 @@ Frontend lives in `FrontEnd/`. React 19 + TypeScript + Vite + Ant Design + React
 
 ## Before Editing
 
-1. Inspect the page/component, route config (`routes.tsx`), API service (`services/api/<domain>Api.ts`), store, and related types.
+1. Inspect the affected page/component and its direct consumers/tests. Inspect routes, API services, stores, and related types when the change affects those behaviors; expand investigation only as needed.
 2. Check whether the page needs a `RequireRole` guard.
 3. Confirm i18n: all user-facing strings must use `useI18n` — no hardcoded English.
 4. Check whether text content needs Arabic translations added to `translations.ar.ts`.
-5. Read `.agents/context/frontend_architecture.md` for the full folder map.
+5. Use `.agents/context/frontend_architecture.md` when architecture or cross-page behavior needs clarification; a narrow local edit does not require the full folder map.
 
 ## Implementation Rules
 
@@ -53,5 +53,5 @@ Do this while building the page, not in a later refactor pass. It is part of the
 cd FrontEnd && npm run type-check
 cd FrontEnd && npm run lint
 cd FrontEnd && npm run build       # for route/import-impacting changes
-cd FrontEnd && npm run test        # for component behavior changes
+cd FrontEnd && npm run test -- --run <test-files>  # focused component behavior checks
 ```

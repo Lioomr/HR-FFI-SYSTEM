@@ -9,12 +9,11 @@ from __future__ import annotations
 
 import logging
 
-from django.db import transaction
-from django.utils import timezone
-
 from core.models import WorkflowAction
 from core.services import get_ceo_approver_users, get_hr_approver_users, notify_users_for_pending_status
 from core.services.workflow_engine import begin_recorded_transition, record_workflow_transition
+from django.db import transaction
+from django.utils import timezone
 from in_app_notifications.dispatcher import dispatch_notification_channels
 from in_app_notifications.models import Notification
 
@@ -36,6 +35,11 @@ EMPLOYEE_ACTION_PATH = "/employee/leave/requests"
 NOT_PENDING_HR_MESSAGE = "Payment request is not pending HR review."
 NOT_PENDING_CEO_MESSAGE = "Payment request is not pending CEO approval."
 LOCKED_PAYOUT_TERMINATION_ONLY_MESSAGE = "Leave-only days can be paid out only by a termination settlement that pays."
+NOT_REQUESTER_MESSAGE = "Only the employee who submitted this settlement request can cancel it."
+NOT_CANCELLABLE_MESSAGE = "Only settlement requests pending HR or CEO review can be cancelled."
+
+# The employee withdraws their own request before the CEO decides; this frees the cycle.
+REQUESTER_CANCELLABLE_STATUSES = frozenset({Status.PENDING_HR, Status.PENDING_CEO})
 
 
 def _lock(instance: AnnualLeavePaymentRequest) -> AnnualLeavePaymentRequest:
@@ -219,6 +223,74 @@ def apply_annual_payment_ceo_rejection(
         locked.ceo_decision_note = comment
         locked.save()
         record_workflow_transition(locked, start, action=Action.REJECT, actor=actor, note=comment, approver_role="ceo")
+    return locked
+
+
+def is_requester_cancellable_by(instance: AnnualLeavePaymentRequest, user) -> bool:
+    """Owner filed it, it is not a termination settlement, and it is still pending HR/CEO."""
+    return bool(
+        user
+        and user.is_authenticated
+        and instance.employee_id == user.pk
+        and instance.submitted_by_id == user.pk
+        and not instance.is_termination_settlement
+        and instance.status in REQUESTER_CANCELLABLE_STATUSES
+    )
+
+
+def apply_annual_payment_requester_cancellation(
+    instance: AnnualLeavePaymentRequest, *, actor
+) -> AnnualLeavePaymentRequest:
+    """The employee withdraws a settlement they filed themselves while it is pending.
+
+    HR-opened and termination settlements are HR's to decide, so the employee cannot
+    cancel them. A cancelled request no longer blocks a new one for the same cycle.
+    """
+
+    if instance.employee_id != actor.pk:
+        raise LeaveTransitionError(NOT_REQUESTER_MESSAGE, status=403)
+    if instance.submitted_by_id != actor.pk or instance.is_termination_settlement:
+        raise LeaveTransitionError(NOT_REQUESTER_MESSAGE, status=403)
+
+    with transaction.atomic():
+        locked = _lock(instance)
+        if locked.status not in REQUESTER_CANCELLABLE_STATUSES:
+            raise LeaveTransitionError(NOT_CANCELLABLE_MESSAGE)
+
+        start = begin_recorded_transition(locked, actor=actor)
+        locked.status = Status.CANCELLED
+        locked.cancelled_at = timezone.now()
+        locked.save()
+        record_workflow_transition(locked, start, action=Action.CANCEL, actor=actor, approver_role="")
+    return locked
+
+
+NOT_HR_CANCELLABLE_MESSAGE = "Only an approved settlement can be cancelled by HR."
+SELF_CANCELLATION_MESSAGE = "Another HR member must cancel your own settlement."
+
+
+def apply_annual_payment_hr_cancellation(
+    instance: AnnualLeavePaymentRequest, *, actor, note: str = ""
+) -> AnnualLeavePaymentRequest:
+    """HR cancels an approved settlement (the employee's cancellation request, confirmed).
+
+    Like the employee's own cancel, ``cancelled`` frees the cycle and is ignored by
+    carry-forward, so the cycle can be settled again.
+    """
+
+    if instance.employee_id == actor.pk:
+        raise LeaveTransitionError(SELF_CANCELLATION_MESSAGE, status=403)
+
+    with transaction.atomic():
+        locked = _lock(instance)
+        if locked.status != Status.APPROVED:
+            raise LeaveTransitionError(NOT_HR_CANCELLABLE_MESSAGE)
+
+        start = begin_recorded_transition(locked, actor=actor)
+        locked.status = Status.CANCELLED
+        locked.cancelled_at = timezone.now()
+        locked.save()
+        record_workflow_transition(locked, start, action=Action.CANCEL, actor=actor, note=note, approver_role="hr")
     return locked
 
 

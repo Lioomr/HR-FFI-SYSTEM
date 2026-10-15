@@ -12,18 +12,22 @@ Manager and HR "reject" are recommendations that still move the request on.
 
 from __future__ import annotations
 
-from django.db import transaction
-from django.utils import timezone
+import logging
+from dataclasses import dataclass
 
 from core.models import WorkflowAction
 from core.responses import error
 from core.services.stage_coverage import MANAGER_OWN_SOURCES, is_in_group, manager_covers_hr, record_covered_stage
 from core.services.workflow_engine import begin_recorded_transition, record_workflow_transition
+from django.db import transaction
+from django.utils import timezone
 from employees.services.manager_relationships import get_valid_manager_user, manager_approval_actor_source
 
 from .document_integrity import on_loan_stage_approved
 from .models import LoanRequest
 from .permissions import get_active_workflow_config, is_cfo_requester
+
+logger = logging.getLogger(__name__)
 
 Status = LoanRequest.RequestStatus
 Recommendation = LoanRequest.Recommendation
@@ -466,6 +470,174 @@ def apply_cancellation(instance: LoanRequest, *, actor) -> LoanRequest:
     return locked
 
 
+# ---------------------------------------------------------------------------
+# Requester edit (before the HR stage)
+# ---------------------------------------------------------------------------
+
+# The requester edits only while the loan waits on their manager; ``pending_hr`` is
+# already the HR stage, so from there they cancel and resubmit.
+REQUESTER_EDITABLE_STATUSES = frozenset({Status.SUBMITTED, Status.PENDING_MANAGER})
+NOT_REQUESTER_EDITOR_MESSAGE = "Only the requester can edit this loan request."
+NOT_REQUESTER_EDITABLE_MESSAGE = (
+    "This loan request can no longer be edited because it has reached HR review or a decision was recorded. "
+    "Cancel it and submit a new request instead."
+)
+#: API field name -> stored field, in a stable order for history and audit.
+EDITABLE_FIELDS = (
+    ("amount", "requested_amount"),
+    ("loan_type", "loan_type"),
+    ("installment_months", "installment_months"),
+    ("reason", "reason"),
+)
+_DECISION_FIELDS = ("manager_decision_at", "finance_decision_at", "cfo_decision_at", "ceo_decision_at", "disbursed_at")
+
+
+class LoanEditInvalid(Exception):
+    """The edited loan failed the create rules; ``errors`` is the serializer error dict."""
+
+    def __init__(self, errors):
+        super().__init__("Validation error")
+        self.errors = errors
+
+
+@dataclass(frozen=True)
+class LoanEdit:
+    instance: LoanRequest
+    from_status: str
+    changed_fields: tuple[str, ...]
+
+
+def requester_edit_refusal(instance: LoanRequest) -> str | None:
+    """Why the requester can no longer edit ``instance``, or ``None`` while they still can."""
+
+    if (
+        not instance.is_active
+        or instance.status not in REQUESTER_EDITABLE_STATUSES
+        or any(getattr(instance, name) for name in _DECISION_FIELDS)
+    ):
+        return NOT_REQUESTER_EDITABLE_MESSAGE
+    return None
+
+
+def apply_requester_edit(instance: LoanRequest, *, actor, validate) -> LoanEdit:
+    """The requester changes their own loan while it waits on the manager.
+
+    ``validate(locked)`` re-runs the create rules on the merged request and returns
+    the validated values keyed by API field name, or raises ``LoanEditInvalid``.
+    The approval route never depends on the amount, so status and route are kept;
+    nothing is derived from the amount before approval (``approved_amount`` and the
+    deduction period are set by the approving stage) and the PDF renders live.
+    """
+
+    if instance.employee_id != actor.pk:
+        raise LoanTransitionError(NOT_REQUESTER_EDITOR_MESSAGE, status=403)
+
+    with transaction.atomic():
+        locked = _lock(instance)
+        refusal = requester_edit_refusal(locked)
+        if refusal:
+            raise LoanTransitionError(refusal)
+
+        values = validate(locked)
+        changes = {
+            stored: values[api]
+            for api, stored in EDITABLE_FIELDS
+            if api in values and getattr(locked, stored) != values[api]
+        }
+        if not changes:
+            return LoanEdit(locked, locked.status, ())
+
+        from_status = locked.status
+        start = begin_recorded_transition(locked, actor=actor)
+        refusal = requester_edit_refusal(locked)
+        if refusal:
+            raise LoanTransitionError(refusal)
+        for name, value in changes.items():
+            setattr(locked, name, value)
+        locked.save(update_fields=[*changes, "updated_at"])
+        summary = [api for api, stored in EDITABLE_FIELDS if stored in changes]
+        # Field names only: the free-text reason never enters the workflow history.
+        record_workflow_transition(
+            locked,
+            start,
+            action=Action.EDIT,
+            actor=actor,
+            note="Edited: " + ", ".join(summary),
+            approver_role="",
+            metadata={"changed_fields": summary},
+        )
+    return LoanEdit(locked, from_status, tuple(summary))
+
+
+def notify_after_requester_edit(instance: LoanRequest) -> None:
+    """Tell the manager the loan waiting on them was changed (after commit, never raises)."""
+
+    def send():
+        from in_app_notifications.dispatcher import dispatch_notification_channels
+        from in_app_notifications.i18n import notification_text, profile_name
+        from in_app_notifications.models import Notification
+
+        manager = get_valid_manager_user(instance.employee_profile, cross_company_capability=LOAN_APPROVAL_CAPABILITY)
+        if manager is None or manager.pk == instance.employee_id:
+            return None
+        fallback = instance.employee.full_name or instance.employee.email
+        stamp = int(instance.updated_at.timestamp()) if instance.updated_at else 0
+        return dispatch_notification_channels(
+            recipient=manager,
+            event_key="loan.updated",
+            **notification_text(
+                "loan.updated",
+                employee_name=profile_name(instance.employee_profile, fallback),
+                request_id=instance.pk,
+            ),
+            category=Notification.Category.LOAN,
+            action_url=f"/manager/loan-requests/{instance.pk}",
+            related_object=instance,
+            deduplication_key=f"loan.updated:{instance.pk}:{manager.pk}:{stamp}",
+            whatsapp_enabled=False,
+        )
+
+    def dispatch():
+        try:
+            # A savepoint keeps a database error inside the notification pipeline from
+            # poisoning any surrounding transaction.
+            with transaction.atomic():
+                send()
+        except Exception:
+            logger.exception(
+                "loan_edit_notification_failed",
+                extra={"entity_id": instance.pk, "notification_type": "loan_updated"},
+            )
+
+    transaction.on_commit(dispatch)
+
+
+NOT_HR_CANCELLABLE_MESSAGE = "Only a loan waiting for disbursement can be cancelled by HR."
+SELF_CANCELLATION_MESSAGE = "Another HR member must cancel your own loan request."
+
+
+def apply_hr_cancellation(instance: LoanRequest, *, actor, note: str = "") -> LoanRequest:
+    """HR cancels an approved loan before any money is paid out (``pending_disbursement`` only).
+
+    Nothing is reserved in payroll before disbursement, so the loan simply leaves the
+    disbursement queue.
+    """
+
+    if instance.employee_id == actor.pk:
+        raise LoanTransitionError(SELF_CANCELLATION_MESSAGE, status=403)
+
+    with transaction.atomic():
+        locked = _lock(instance)
+        if locked.status != Status.PENDING_DISBURSEMENT:
+            raise LoanTransitionError(NOT_HR_CANCELLABLE_MESSAGE)
+
+        start = begin_recorded_transition(locked, actor=actor)
+        locked.status = Status.CANCELLED
+        locked.save(update_fields=["status", "updated_at"])
+        record_workflow_transition(locked, start, action=Action.CANCEL, actor=actor, note=note, approver_role="hr")
+    return locked
+
+
 def apply_payroll_deduction(loan: LoanRequest, *, run) -> LoanRequest:
     """Mark a disbursed loan deducted in ``run``. Call with the loan row already locked."""
 
@@ -483,5 +655,36 @@ def apply_payroll_deduction(loan: LoanRequest, *, run) -> LoanRequest:
         note=f"Deducted amount: {loan.deducted_amount}",
         approver_role="",
         metadata={"payroll_run_id": run.id},
+    )
+    return loan
+
+
+def restore_payroll_deduction(loan: LoanRequest, *, run, actor, reason) -> LoanRequest:
+    """Release a draft reservation through the same recorded workflow trail."""
+    if run.status != "DRAFT" or loan.deduction_payroll_run_id != run.pk:
+        raise ValueError("Only the owning DRAFT can restore a payroll deduction.")
+    start = begin_recorded_transition(loan)
+    loan.status = (loan.payroll_pre_deduction_snapshot or {}).get("status", Status.APPROVED)
+    loan.deduction_payroll_run = None
+    loan.deducted_at = loan.deducted_amount = None
+    loan.payroll_pre_deduction_snapshot = None
+    loan.save(
+        update_fields=[
+            "status",
+            "deduction_payroll_run",
+            "deducted_at",
+            "deducted_amount",
+            "payroll_pre_deduction_snapshot",
+            "updated_at",
+        ]
+    )
+    record_workflow_transition(
+        loan,
+        start,
+        action=Action.OVERRIDE,
+        actor=actor,
+        note=reason,
+        approver_role="",
+        metadata={"payroll_run_id": run.pk, "payroll_deduction_restored": True},
     )
     return loan

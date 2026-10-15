@@ -1,12 +1,11 @@
 from pathlib import Path
 
-from django.conf import settings
-from django.utils import timezone
-from rest_framework import serializers
-
 from core.services import get_workflow_snapshot
 from core.services.request_references import public_reference_for
+from django.conf import settings
+from django.utils import timezone
 from employees.models import EmployeeProfile
+from rest_framework import serializers
 
 from .models import Asset, AssetAssignment, AssetDamageReport, AssetReturnRequest, PrintedLabelJob
 
@@ -187,6 +186,9 @@ class AssetDamageReportSerializer(serializers.ModelSerializer):
     asset_name = serializers.CharField(source="asset.name_en", read_only=True)
     company_id = serializers.PrimaryKeyRelatedField(source="asset.company", read_only=True)
     company_name = serializers.CharField(source="asset.company.name", read_only=True)
+    # ``can_cancel`` stays top-level for clients that read it without the workflow snapshot.
+    can_cancel = serializers.SerializerMethodField()
+    workflow = serializers.SerializerMethodField()
 
     class Meta:
         model = AssetDamageReport
@@ -209,7 +211,22 @@ class AssetDamageReportSerializer(serializers.ModelSerializer):
             "ceo_decision_by",
             "ceo_decision_at",
             "ceo_decision_note",
+            "cancelled_at",
+            "can_cancel",
+            "workflow",
         ]
+
+    def get_workflow(self, obj):
+        from core.services import get_workflow_snapshot_read_only
+
+        request = self.context.get("request")
+        return get_workflow_snapshot_read_only(obj, actor=getattr(request, "user", None))
+
+    def get_can_cancel(self, obj):
+        from .services.damage_reports import is_requester_cancellable_by
+
+        request = self.context.get("request")
+        return is_requester_cancellable_by(obj, getattr(request, "user", None))
 
 
 class AssetReturnRequestCreateSerializer(serializers.ModelSerializer):
@@ -221,6 +238,18 @@ class AssetReturnRequestCreateSerializer(serializers.ModelSerializer):
         if not value.strip():
             raise serializers.ValidationError("Note is required.")
         return value
+
+
+class AssetReturnRequestEditSerializer(AssetReturnRequestCreateSerializer):
+    """The requester's edit: ``note`` only (optional), with the create rules; the asset never changes."""
+
+    SERVER_FIELDS = ("asset", "employee", "status")
+
+    def validate(self, attrs):
+        sent = [name for name in self.SERVER_FIELDS if name in self.initial_data]
+        if sent:
+            raise serializers.ValidationError({name: "This field cannot be changed." for name in sent})
+        return super().validate(attrs)
 
 
 class AssetReturnRequestSerializer(serializers.ModelSerializer):
@@ -260,6 +289,7 @@ class AssetReturnRequestSerializer(serializers.ModelSerializer):
             "ceo_decision_by",
             "ceo_decision_at",
             "ceo_decision_note",
+            "cancelled_at",
             "workflow",
         ]
 

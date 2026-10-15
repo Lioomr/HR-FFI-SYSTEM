@@ -372,8 +372,8 @@ describe("BaseLayout manager navigation", () => {
       document.querySelectorAll(".ant-menu-item-group-title"),
     ).map((node) => node.textContent);
     expect(headings).toEqual([
-      "Work Inbox",
       "People",
+      "Work Inbox",
       "Hiring",
       "Payroll & Assets",
       "Communication",
@@ -386,8 +386,8 @@ describe("BaseLayout manager navigation", () => {
         .querySelector(`a[href="${href}"]`)
         ?.closest(".ant-menu-item-group")
         ?.querySelector(".ant-menu-item-group-title")?.textContent;
-    expect(groupOf("/hr/invites")).toBe("People");
-    expect(groupOf("/hr/import/employees")).toBe("People");
+    expect(document.querySelector('a[href="/hr/invites"]')).toBeNull();
+    expect(document.querySelector('a[href="/hr/import/employees"]')).toBeNull();
     expect(groupOf("/hr/job-offers")).toBe("Hiring");
     expect(groupOf("/hr/starting-work-acknowledgments")).toBe("Hiring");
     expect(groupOf("/hr/templates")).toBe("Hiring");

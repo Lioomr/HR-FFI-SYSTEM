@@ -5,26 +5,6 @@ from datetime import date
 from glob import glob
 from io import BytesIO
 
-from django.conf import settings
-from django.contrib.auth import get_user_model
-from django.contrib.contenttypes.models import ContentType
-from django.db import transaction
-from django.db.models import Prefetch, Q
-from django.http import FileResponse
-from django.utils import timezone
-from django_filters.rest_framework import DjangoFilterBackend
-from pypdf import PdfReader, PdfWriter
-from reportlab.lib.utils import simpleSplit
-from reportlab.pdfbase import pdfmetrics
-from reportlab.pdfbase.ttfonts import TTFont
-from reportlab.pdfgen import canvas
-from rest_framework import filters, status, viewsets
-from rest_framework.decorators import action
-from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
-from rest_framework.permissions import IsAuthenticated
-from rest_framework.response import Response
-from rest_framework.views import APIView
-
 from audit.utils import audit
 from core.document_integrity.api import (
     DocumentIntegrityActionsMixin,
@@ -44,7 +24,16 @@ from core.services import (
     sync_leave_obligations,
     sync_workflow,
 )
+from core.services.cancellation_requests import request_cancellation_response, withdraw_cancellation_response
 from core.views_templates import resolve_template_path
+from django.conf import settings
+from django.contrib.auth import get_user_model
+from django.contrib.contenttypes.models import ContentType
+from django.db import transaction
+from django.db.models import Prefetch, Q
+from django.http import FileResponse
+from django.utils import timezone
+from django_filters.rest_framework import DjangoFilterBackend
 from employees.models import EmployeeDocument, EmployeeProfile
 from employees.permissions import IsHRManagerOrAdmin
 from employees.services.manager_relationships import (
@@ -56,11 +45,23 @@ from organization.services import (
     filter_queryset_by_company_scope,
     get_active_company_for_request,
 )
+from pypdf import PdfReader, PdfWriter
+from reportlab.lib.utils import simpleSplit
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
+from reportlab.pdfgen import canvas
+from rest_framework import filters, status, viewsets
+from rest_framework.decorators import action
+from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+from rest_framework.views import APIView
 
 from .annual_payment_services import (
     apply_annual_payment_ceo_approval,
     apply_annual_payment_ceo_rejection,
     apply_annual_payment_hr_review,
+    apply_annual_payment_requester_cancellation,
     ensure_pending_hr_review,
     notify_after_annual_payment_hr_review,
     notify_after_annual_payment_submission,
@@ -90,10 +91,13 @@ from .serializers import (
     LeaveRequestCompleteSerializer,
     LeaveRequestCreateSerializer,
     LeaveRequestDelegationSerializer,
+    LeaveRequestEditSerializer,
     LeaveRequestSerializer,
     LeaveTypeSerializer,
 )
 from .services import (
+    EDIT_DELEGATE_NOT_ALLOWED_MESSAGE,
+    LeaveEditInvalid,
     LeaveTransitionError,
     apply_ceo_approval,
     apply_ceo_referral,
@@ -107,6 +111,8 @@ from .services import (
     apply_hr_rejection,
     apply_manager_approval,
     apply_manager_rejection,
+    apply_requester_cancellation,
+    apply_requester_edit,
     ensure_awaiting_hr_completion,
     ensure_delegate_assignable,
     notify_after_ceo_approval,
@@ -121,8 +127,8 @@ from .services import (
     notify_after_hr_rejection,
     notify_after_manager_approval,
     notify_after_manager_rejection,
+    notify_after_requester_edit,
     record_leave_submission,
-    refuse_requester_cancellation,
     submission_status,
 )
 from .services import (
@@ -1367,7 +1373,7 @@ class LeaveRequestViewSet(DocumentIntegrityActionsMixin, viewsets.ModelViewSet):
         if self.action in ["delegate_approve", "delegate_reject"]:
             return [IsAuthenticated()]
 
-        if self.action in ["cancel", "set_delegate"]:
+        if self.action in ["cancel", "edit", "set_delegate", "request_cancellation", "withdraw_cancellation_request"]:
             # Owner only
             return [IsAuthenticated()]
 
@@ -1769,8 +1775,9 @@ class LeaveRequestViewSet(DocumentIntegrityActionsMixin, viewsets.ModelViewSet):
 
     @action(detail=True, methods=["post"], permission_classes=[IsAuthenticated, IsLeaveRequestOwner])
     def cancel(self, request, pk=None):
+        """The requester withdraws their own leave request while it is still pending."""
         try:
-            filter_queryset_by_company_scope(LeaveRequest.objects.all(), request).get(
+            instance = filter_queryset_by_company_scope(LeaveRequest.objects.all(), request).get(
                 pk=pk,
                 employee=request.user,
                 is_active=True,
@@ -1779,9 +1786,64 @@ class LeaveRequestViewSet(DocumentIntegrityActionsMixin, viewsets.ModelViewSet):
             return error("Not found", errors=["Not found."], status=404)
 
         try:
-            refuse_requester_cancellation()
+            transition = apply_requester_cancellation(instance, actor=request.user)
         except LeaveTransitionError as exc:
             return exc.to_response()
+        instance = transition.instance
+
+        audit(
+            request,
+            "cancel",
+            entity="LeaveRequest",
+            entity_id=instance.id,
+            metadata={"from_status": transition.from_status, "cancelled_by": "employee"},
+        )
+        return success(LeaveRequestSerializer(instance, context={"request": request}).data)
+
+    @action(detail=True, methods=["patch"], permission_classes=[IsAuthenticated], url_path="edit")
+    def edit(self, request, pk=None):
+        """The requester changes their own leave request before it reaches HR.
+
+        Takes the create fields (all optional) except ``delegated_to``; the merged
+        request is revalidated with the create rules. 404 unless the caller owns it.
+        """
+        try:
+            instance = filter_queryset_by_company_scope(LeaveRequest.objects.all(), request).get(
+                pk=pk,
+                employee=request.user,
+                is_active=True,
+            )
+        except LeaveRequest.DoesNotExist:
+            return error("Not found", errors=["Not found."], status=404)
+        if "delegated_to" in request.data:
+            return error("Validation error", errors=[f"delegated_to: {EDIT_DELEGATE_NOT_ALLOWED_MESSAGE}"], status=422)
+
+        def validate(locked):
+            serializer = LeaveRequestEditSerializer(
+                locked, data=request.data, partial=True, context={"request": request}
+            )
+            if not serializer.is_valid():
+                raise LeaveEditInvalid(_flatten_errors(serializer.errors))
+            return dict(serializer.validated_data)
+
+        try:
+            result = apply_requester_edit(instance, actor=request.user, validate=validate)
+        except LeaveTransitionError as exc:
+            return exc.to_response()
+        except LeaveEditInvalid as exc:
+            return error("Validation error", errors=exc.errors, status=422)
+        instance = result.instance
+
+        if result.changed_fields:
+            audit(
+                request,
+                "leave_request_edited",
+                entity="LeaveRequest",
+                entity_id=instance.id,
+                metadata={"changed_fields": list(result.changed_fields), "from_status": result.from_status},
+            )
+            notify_after_requester_edit(instance, actor_id=request.user.id)
+        return success(LeaveRequestSerializer(instance, context={"request": request}).data)
 
     @action(
         detail=True,
@@ -1815,6 +1877,35 @@ class LeaveRequestViewSet(DocumentIntegrityActionsMixin, viewsets.ModelViewSet):
         )
         notify_after_hr_cancellation(instance, reason=comment, actor_id=request.user.id)
         return success(LeaveRequestSerializer(instance, context={"request": request}).data)
+
+    def _owned_leave(self, request, pk):
+        return (
+            filter_queryset_by_company_scope(LeaveRequest.objects.all(), request)
+            .filter(pk=pk, employee=request.user, is_active=True)
+            .first()
+        )
+
+    def _serialize_owned(self, request):
+        return lambda obj: (
+            LeaveRequestSerializer(self._base_queryset().get(pk=obj.pk), context={"request": request}).data
+        )
+
+    @action(detail=True, methods=["post"], permission_classes=[IsAuthenticated], url_path="request-cancellation")
+    def request_cancellation(self, request, pk=None):
+        """The requester asks HR to cancel their approved leave (reason required); HR confirms or declines."""
+        instance = self._owned_leave(request, pk)
+        if instance is None:
+            return error("Not found", errors=["Not found."], status=404)
+        return request_cancellation_response(request, instance, serialize=self._serialize_owned(request))
+
+    @action(
+        detail=True, methods=["post"], permission_classes=[IsAuthenticated], url_path="withdraw-cancellation-request"
+    )
+    def withdraw_cancellation_request(self, request, pk=None):
+        instance = self._owned_leave(request, pk)
+        if instance is None:
+            return error("Not found", errors=["Not found."], status=404)
+        return withdraw_cancellation_response(request, instance, serialize=self._serialize_owned(request))
 
     @action(detail=True, methods=["get"], permission_classes=[IsAuthenticated, IsOwnerOrHR])
     def document(self, request, pk=None):
@@ -2415,7 +2506,10 @@ class AnnualLeavePaymentRequestViewSet(DocumentIntegrityActionsMixin, viewsets.M
             },
         )
         notify_after_annual_payment_submission(instance, actor_id=request.user.id)
-        return success(AnnualLeavePaymentRequestSerializer(instance).data, status=status.HTTP_201_CREATED)
+        return success(
+            AnnualLeavePaymentRequestSerializer(instance, context={"request": request}).data,
+            status=status.HTTP_201_CREATED,
+        )
 
     @action(detail=True, methods=["post"])
     def review(self, request, pk=None):
@@ -2495,6 +2589,53 @@ class AnnualLeavePaymentRequestViewSet(DocumentIntegrityActionsMixin, viewsets.M
             metadata={"comment": comment},
         )
         return success(AnnualLeavePaymentRequestSerializer(instance).data)
+
+    @action(detail=True, methods=["post"])
+    def cancel(self, request, pk=None):
+        """The employee withdraws a settlement they filed themselves while it is pending HR or CEO review."""
+        instance = filter_queryset_by_company_scope(self.queryset, request).filter(pk=pk, employee=request.user).first()
+        if instance is None:
+            return error("Not found", errors=["Not found."], status=404)
+        from_status = instance.status
+        try:
+            instance = apply_annual_payment_requester_cancellation(instance, actor=request.user)
+        except LeaveTransitionError as exc:
+            return exc.to_response()
+        audit(
+            request,
+            "annual_leave_payment_cancelled",
+            entity="AnnualLeavePaymentRequest",
+            entity_id=instance.id,
+            metadata={
+                "from_status": from_status,
+                "cycle_start": str(instance.cycle_start),
+                "cycle_end": str(instance.cycle_end),
+            },
+        )
+        return success(AnnualLeavePaymentRequestSerializer(instance, context={"request": request}).data)
+
+    def _owned_settlement(self, request, pk):
+        return filter_queryset_by_company_scope(self.queryset, request).filter(pk=pk, employee=request.user).first()
+
+    def _serialize_settlement(self, request):
+        return lambda obj: (
+            AnnualLeavePaymentRequestSerializer(self.queryset.get(pk=obj.pk), context={"request": request}).data
+        )
+
+    @action(detail=True, methods=["post"], url_path="request-cancellation")
+    def request_cancellation(self, request, pk=None):
+        """The employee asks HR to cancel an approved settlement they filed themselves (reason required)."""
+        instance = self._owned_settlement(request, pk)
+        if instance is None:
+            return error("Not found", errors=["Not found."], status=404)
+        return request_cancellation_response(request, instance, serialize=self._serialize_settlement(request))
+
+    @action(detail=True, methods=["post"], url_path="withdraw-cancellation-request")
+    def withdraw_cancellation_request(self, request, pk=None):
+        instance = self._owned_settlement(request, pk)
+        if instance is None:
+            return error("Not found", errors=["Not found."], status=404)
+        return withdraw_cancellation_response(request, instance, serialize=self._serialize_settlement(request))
 
     @action(detail=True, methods=["get"], permission_classes=[IsAuthenticated])
     def pdf(self, request, pk=None):

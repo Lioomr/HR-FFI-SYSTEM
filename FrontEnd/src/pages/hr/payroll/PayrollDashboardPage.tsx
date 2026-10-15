@@ -77,9 +77,7 @@ export default function PayrollDashboardPage() {
         if (status === "DRAFT") color = "orange";
         if (status === "PAID") color = "blue";
         if (status === "CANCELLED") color = "red";
-        return (
-          <Tag color={color}>{t(`payroll.status.${status}`, status)}</Tag>
-        );
+        return <Tag color={color}>{t(`payroll.status.${status}`, status)}</Tag>;
       },
       width: 120,
     },

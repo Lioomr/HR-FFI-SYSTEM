@@ -1,7 +1,6 @@
 from django.conf import settings
 from django.db import models
 from django.utils.translation import gettext_lazy as _
-
 from employees.models import EmployeeProfile
 from organization.models import OrganizationNode
 from payroll.models import PayrollRun
@@ -104,6 +103,7 @@ class LoanRequest(models.Model):
     )
     deducted_at = models.DateTimeField(null=True, blank=True)
     deducted_amount = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    payroll_pre_deduction_snapshot = models.JSONField(null=True, blank=True)
     approved_year = models.PositiveIntegerField(null=True, blank=True)
     approved_month = models.PositiveIntegerField(null=True, blank=True)
     target_deduction_year = models.PositiveIntegerField(null=True, blank=True)

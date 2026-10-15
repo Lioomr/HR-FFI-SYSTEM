@@ -1,17 +1,17 @@
-from django.db.models import Q
-from django.http import HttpResponse
-from rest_framework import viewsets
-from rest_framework.decorators import action
-from rest_framework.exceptions import PermissionDenied
-from rest_framework.permissions import IsAuthenticated
-
 from core.document_integrity.api import DocumentIntegrityActionsMixin, frozen_pdf_response
+from core.executives import executive_profile_q
 from core.pagination import StandardPagination
 from core.permissions import is_department_ceo_approver_user, is_hr_workflow_approver_user
 from core.responses import error, success
 from core.services.request_references import public_reference_for
+from django.db.models import Q
+from django.http import HttpResponse
 from employees.services.manager_relationships import CONTRACT_RATING_CAPABILITY, manager_scope_q
 from organization.services import ensure_company_write_allowed, filter_queryset_by_company_scope
+from rest_framework import viewsets
+from rest_framework.decorators import action
+from rest_framework.exceptions import PermissionDenied
+from rest_framework.permissions import IsAuthenticated
 
 from . import services
 from .criteria import CRITERIA, GRADE_RANGES
@@ -34,7 +34,8 @@ class ContractRatingViewSet(DocumentIntegrityActionsMixin, viewsets.ReadOnlyMode
 
     def get_queryset(self):
         user = self.request.user
-        base = ContractRating.objects.select_related(
+        # Executives are never rated; any rating left from before stays out of every list.
+        base = ContractRating.objects.exclude(executive_profile_q("employee_profile__")).select_related(
             "employee_profile",
             "employee_profile__manager_profile__user",
             "contract_decision",

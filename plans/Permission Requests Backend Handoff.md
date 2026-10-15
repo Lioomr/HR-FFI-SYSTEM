@@ -17,6 +17,9 @@ Base path: `/api/permission-requests/` (trailing slash optional on every route).
 | `GET` | `/api/permission-requests/` | Any authenticated user — returns **only the caller's own** requests in the active company | `status` (a status value or `all`, default all), `date_from`, `date_to` (`YYYY-MM-DD`), `page`, `page_size` | `200` paginated list | `403` company; `422` bad filter |
 | `GET` | `/api/permission-requests/{id}/` | Owner; the requester's manager (direct, delegated, or from another company with `permission_requests.approve`), or the manager who decided it; HR approvers | — | `200` detail object | `404` (also for anything outside the caller's visibility or company) |
 | `POST` | `/api/permission-requests/{id}/cancel/` | Owner only, while `pending_manager` or `pending_hr` | none | `200` detail object | `403` visible but not the owner; `404`; `422` not pending |
+| `PATCH` | `/api/permission-requests/{id}/edit/` | Owner only, while `pending_manager` with no decision (added 2026-10-13) | Any create field, all optional; JSON or multipart (new `attachments` are added) | `200` detail object | `404` not the owner (manager/HR included) or not visible; `422` no longer editable (`non_field_errors`) or the merged request fails the create rules |
+| `POST` | `/api/permission-requests/{id}/request-cancellation/` | Owner only, while `approved` and `request_date` is today or later (added 2026-10-13, Phase 3) | `{reason}` required, trimmed 5..1000 chars | `201` detail object | `404` not the owner / not visible; `422` field `reason`, not eligible, or a cancellation request is already pending |
+| `POST` | `/api/permission-requests/{id}/withdraw-cancellation-request/` | Owner only, while their cancellation request is pending | none | `200` detail object | `404`; `422` nothing pending |
 | `GET` | `/api/permission-requests/{id}/pdf/` | Same visibility as detail (owner, direct/delegated/deciding manager, HR approvers incl. SystemAdmin). An unrelated CEO gets `404`. | — | `200` `application/pdf` attachment (§5) | `404` |
 | `GET` | `/api/permission-requests/manager/` | Users with manager access (active direct reports, or an active manager delegation) | `status` (default `pending_manager`; `all` for history), `date_from`, `date_to`, `page`, `page_size` | `200` paginated list | `403` no manager access; `422` bad filter |
 | `POST` | `/api/permission-requests/{id}/manager-approve/` | The requester's manager (same-company, or from another company when their assignment carries `permission_requests.approve`) or their active delegate. Never the requester. | Decision payload (§2.4) | `200` detail object | `403` no manager access / not this requester's manager / self; `404`; `422` stale state or comment too long |
@@ -107,6 +110,7 @@ This is a list item plus `direct_manager`: `{id, employee_profile_id, full_name}
   "can_approve": false,
   "can_reject": false,
   "can_cancel": true,
+  "can_edit": true,
   "history": [
     {
       "id": 101, "action": "submit", "stage": "", "approver_role": "",
@@ -125,8 +129,30 @@ This is a list item plus `direct_manager`: `{id, employee_profile_id, full_name}
 - `current_actor` is the resolved manager (or their active delegate) at the manager stage. At the HR stage it is the
   caller when the caller can act, otherwise `null`.
 - `can_approve` / `can_reject` mirror exactly what the decision endpoints accept for **this caller**. They are always
-  false for the requester. `can_cancel` is true only for the owner of a pending request.
-- `history[].action`: `submit`, `advance` (manager approved, moved to HR), `approve`, `reject`, `cancel`.
+  false for the requester. `can_cancel` is true only for the owner of a pending request. `can_edit` is true only for
+  the owner while the request is `pending_manager` with no decision (`pending_hr` is already the HR stage).
+- `history[].action`: `submit`, `advance` (manager approved, moved to HR), `approve`, `reject`, `cancel`, `edit`
+  (the requester changed the request; `note` is `Edited: <field names>` and `metadata.changed_fields` lists them; the
+  reason text is never recorded), and since 2026-10-13 `cancellation_requested` (empty note: the reason is never
+  recorded), `cancellation_declined` (HR's note) and `cancellation_withdrawn`. An HR-confirmed cancellation is a
+  `cancel` row with the HR actor and `approver_role: "hr"`.
+- Cancellation request for an approved permission (added 2026-10-13): `workflow.can_request_cancellation` (owner, `approved`,
+  `request_date` today or later, nothing pending), `workflow.can_withdraw_cancellation_request` (owner with a pending one) and
+  `workflow.cancellation_request` (`null` or the latest `{id, status, reason, requested_at, decided_at, decided_by_name,
+  decision_note}`; `status` is `pending`/`confirmed`/`declined`/`withdrawn`). HR decides it in
+  `/api/core/cancellation-requests/` (see `plans/API Route Status Matrix.md`); confirming sets `cancelled`, removes the
+  attendance adjustment the approval created and recalculates that day after commit.
+
+### 2.3.1 Requester edit (`PATCH /{id}/edit/`)
+
+The body takes the create fields (§2.1, plus `permission_type`, `attachments`, `attachment_metadata`), all optional.
+The stored request overlaid with the submitted fields is checked with the create rules: date window, time shape and
+duration cap, Late evidence (stored attachments count), and the interval conflict / Late monthly limit excluding this
+request. Switching to Late clears the times and exit type; switching away from Late needs `from_time`, `to_time` (and
+`exit_type` for Exit). Server-assigned keys are refused as on create. The edit is re-checked under the row lock, so an
+approval that lands first makes it `422`. It records a workflow `edit` row, audits `permission_request_edited`
+(`changed_fields`, `from_status`), and notifies the manager (`permission.updated`) after commit; a notification
+failure never undoes the edit. A body that changes nothing returns `200` and records nothing.
   `history[].metadata.decision` carries `approved`/`rejected` on manager/HR entries.
 
 ### 2.4 Decision payload (all four decision routes)

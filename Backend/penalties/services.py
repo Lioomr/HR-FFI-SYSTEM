@@ -3,13 +3,13 @@
 from datetime import date, datetime, timedelta
 from decimal import ROUND_HALF_UP, Decimal
 
+from audit.utils import audit
+from core.executives import executive_profile_q, is_executive_profile
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
 from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
-
-from audit.utils import audit
 from employees.models import EmployeeProfile
 
 from .catalog import monetary_amount
@@ -530,6 +530,13 @@ def _candidate_automation(catalog, occurred_on):
 def _candidate(
     profile, catalog_code, occurred_on, source_kind, *, result=None, attendance_record=None, note="", evidence=None
 ):
+    from attendance.biotime_policy import is_attendance_enforced_on
+
+    if is_executive_profile(profile):
+        return None
+    # Automatic attendance penalties need a BioTime mapping in force on that day.
+    if not is_attendance_enforced_on(profile, occurred_on):
+        return None
     catalog = PenaltyCatalog.objects.get(code=catalog_code)
     source = {"attendance_result": result} if result else {"attendance_record": attendance_record}
     record, created = PenaltyRecord.objects.get_or_create(
@@ -678,6 +685,64 @@ def _invalidate_record(record, reason="Attendance evidence no longer supports th
         waive(record, reason=reason)
 
 
+#: Executives (CEO, General Manager) are never penalized; their automatic candidates are withdrawn.
+EXECUTIVE_PENALTY_REASON = "Penalties do not apply to the CEO or General Manager."
+
+
+def invalidate_executive_candidates():
+    """Withdraw automatic candidates raised for executives before they were excluded. Idempotent."""
+    pending = PenaltyRecord.objects.filter(
+        executive_profile_q("employee_profile__"),
+        source=PenaltyRecord.Source.AUTOMATIC,
+        status=PenaltyRecord.Status.PENDING_HR_MARK,
+    )
+    withdrawn = 0
+    for record_id, profile_id in list(pending.values_list("pk", "employee_profile_id").distinct()):
+        with transaction.atomic():
+            EmployeeProfile.objects.select_for_update().get(pk=profile_id)
+            record = PenaltyRecord.objects.select_for_update().get(pk=record_id)
+            if record.status == PenaltyRecord.Status.PENDING_HR_MARK:
+                _invalidate_record(record, reason=EXECUTIVE_PENALTY_REASON)
+                withdrawn += 1
+    return withdrawn
+
+
+#: Attendance is only enforced for BioTime-mapped employees from their mapping start date.
+UNMAPPED_PENALTY_REASON = "Attendance is not enforced: the employee is not BioTime-mapped on this date."
+
+
+def invalidate_unmapped_candidates(profile_ids=None):
+    """Withdraw pending automatic candidates dated before the BioTime mapping start, or for unmapped staff.
+
+    Runs after a mapping is deleted or its start date moves. Issued records are
+    left to HR. Idempotent.
+    """
+    from attendance.biotime_policy import active_biotime_mappings
+
+    pending = PenaltyRecord.objects.filter(
+        source=PenaltyRecord.Source.AUTOMATIC,
+        status=PenaltyRecord.Status.PENDING_HR_MARK,
+    )
+    if profile_ids is not None:
+        pending = pending.filter(employee_profile_id__in=list(profile_ids))
+    starts = dict(
+        active_biotime_mappings()
+        .filter(employee_profile_id__in=pending.values("employee_profile_id"))
+        .values_list("employee_profile_id", "attendance_start_date")
+    )
+    withdrawn = 0
+    for record_id, profile_id, occurred_on in list(pending.values_list("pk", "employee_profile_id", "occurred_on")):
+        if profile_id in starts and (starts[profile_id] is None or occurred_on >= starts[profile_id]):
+            continue
+        with transaction.atomic():
+            EmployeeProfile.objects.select_for_update().get(pk=profile_id)
+            record = PenaltyRecord.objects.select_for_update().get(pk=record_id)
+            if record.status == PenaltyRecord.Status.PENDING_HR_MARK:
+                _invalidate_record(record, reason=UNMAPPED_PENALTY_REASON)
+                withdrawn += 1
+    return withdrawn
+
+
 def _invalidate_missing(result, observed_kinds):
     for record in (
         PenaltyRecord.objects.select_for_update()
@@ -771,9 +836,15 @@ def sync_attendance_candidates(result):
     """Use final attendance projections; HR must verify permission and disruption."""
     if result.date < effective_from():
         return
+    from attendance.biotime_policy import is_attendance_enforced_on
+
     profile = result.employee_profile
     EmployeeProfile.objects.select_for_update().get(pk=profile.pk)
-    if not (result.calculation_inputs or {}).get("policy", {}).get("working_day", True):
+    if (
+        is_executive_profile(profile)
+        or not is_attendance_enforced_on(profile, result.date)
+        or not (result.calculation_inputs or {}).get("policy", {}).get("working_day", True)
+    ):
         _invalidate_missing(result, set())
         return
     specs = _attendance_candidate_specs(result)
@@ -784,12 +855,17 @@ def sync_attendance_candidates(result):
         reconcile_absence_candidates(profile, result.date)
 
 
-def _is_absence_eligible(record, *, punch_dates=None):
+def _is_absence_eligible(record, *, punch_dates=None, enforced=None):
+    from attendance.biotime_policy import attendance_enforced_from
     from attendance.leave_resolution import with_leave_resolution
     from attendance.models import AttendanceDailyResult, AttendanceRecord
     from attendance.schedule import is_working_day
 
     if record.status != AttendanceRecord.Status.ABSENT or record.source != AttendanceRecord.Source.SYSTEM:
+        return False
+    # Only BioTime-mapped employees, and only from the mapping start date.
+    mapped, start = enforced if enforced is not None else attendance_enforced_from(record.employee_profile)
+    if not mapped or (start is not None and record.date < start):
         return False
     if not is_working_day(record.employee_profile, record.date):
         return False
@@ -813,8 +889,13 @@ def _is_absence_eligible(record, *, punch_dates=None):
 
 
 def _eligible_absences(profile, start, end):
+    from attendance.biotime_policy import attendance_enforced_from
     from attendance.leave_resolution import with_leave_resolution
     from attendance.models import AttendanceDailyResult, AttendanceRecord
+
+    enforced = attendance_enforced_from(profile)
+    if not enforced[0]:
+        return []
 
     punch_dates = set(
         AttendanceDailyResult.objects.filter(employee_profile=profile, date__gte=start, date__lte=end)
@@ -834,7 +915,7 @@ def _eligible_absences(profile, start, end):
         .select_related("employee_profile")
         .order_by("date", "id")
     )
-    return [row for row in rows if _is_absence_eligible(row, punch_dates=punch_dates)]
+    return [row for row in rows if _is_absence_eligible(row, punch_dates=punch_dates, enforced=enforced)]
 
 
 def _continuous_absence_streak(profile, record, by_date, cycle_start):
@@ -876,6 +957,7 @@ def reconcile_absence_candidates(profile, changed_date):
 
     if (
         changed_date < effective_from()
+        or is_executive_profile(profile)
         or not PenaltyRecord.objects.filter(employee_profile=profile, source_kind="absence").exists()
     ):
         return

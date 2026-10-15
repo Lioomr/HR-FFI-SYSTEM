@@ -1,3 +1,5 @@
+> Task-specific instructions for the original Phase 10 mobile session. The surface restrictions below apply only when this task is explicitly adopted. For later work, follow the current user request and repository guidance; investigate contract mismatches in source, and pause only the affected action if a required decision remains unresolved. Do not guess security or API behavior.
+
 Implement Phase 10 of geofenced attendance in D:\HR-FFI-SYSTEM\MobileApp only.
 
 Do not modify Backend/ or FrontEnd/. The backend contract is authoritative. If any required contract detail is missing or contradicts source, return BLOCKED rather than guessing.

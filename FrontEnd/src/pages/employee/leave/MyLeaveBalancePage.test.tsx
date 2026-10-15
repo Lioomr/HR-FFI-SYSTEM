@@ -20,6 +20,7 @@ vi.mock("../../../services/api/annualLeavePaymentsApi", async () => {
     getAnnualLeavePaymentRequests: vi.fn(),
     getAnnualLeaveEligibility: vi.fn(),
     createEmployeeAnnualLeavePaymentRequest: vi.fn(),
+    cancelAnnualLeavePaymentRequest: vi.fn(),
   };
 });
 
@@ -507,5 +508,66 @@ describe("MyLeaveBalancePage — settlement focus from notifications", () => {
     expect(
       container.querySelector("#annual-leave-settlement"),
     ).not.toHaveAttribute("data-highlighted");
+  });
+});
+
+describe("employee settlement cancellation", () => {
+  it("refreshes settlements, eligibility and balance after confirmation", async () => {
+    const pending = makeSettlement({ status: "pending_hr", can_cancel: true });
+    const cancelled = { ...pending, status: "cancelled", can_cancel: false };
+    getAnnualLeavePaymentRequests
+      .mockResolvedValueOnce(listResponse([pending]))
+      .mockResolvedValue(
+        listResponse([cancelled as AnnualLeavePaymentRequest]),
+      );
+    vi.mocked(annualApi.cancelAnnualLeavePaymentRequest).mockResolvedValue({
+      status: "success",
+      data: cancelled as AnnualLeavePaymentRequest,
+    });
+    renderPage();
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Cancel request" }, FIND),
+    );
+    fireEvent.click(
+      within(await screen.findByRole("dialog")).getByRole("button", {
+        name: "Cancel request",
+      }),
+    );
+    await waitFor(
+      () =>
+        expect(annualApi.cancelAnnualLeavePaymentRequest).toHaveBeenCalledWith(
+          9,
+        ),
+      FIND,
+    );
+    await waitFor(
+      () => expect(getAnnualLeaveEligibility).toHaveBeenCalledTimes(2),
+      FIND,
+    );
+    await waitFor(
+      () => expect(getMyLeaveBalance).toHaveBeenCalledTimes(2),
+      FIND,
+    );
+    expect(
+      (await screen.findAllByText("Cancelled", {}, FIND)).length,
+    ).toBeGreaterThan(0);
+    expect(
+      screen.queryByRole("button", { name: "Cancel request" }),
+    ).not.toBeInTheDocument();
+  });
+  it("workflow false overrides a true fallback", async () => {
+    getAnnualLeavePaymentRequests.mockResolvedValue(
+      listResponse([
+        makeSettlement({
+          can_cancel: true,
+          workflow: { status: "in_review", history: [], can_cancel: false },
+        }),
+      ]),
+    );
+    renderPage();
+    await screen.findByText("#9", {}, FIND);
+    expect(
+      screen.queryByRole("button", { name: "Cancel request" }),
+    ).not.toBeInTheDocument();
   });
 });
