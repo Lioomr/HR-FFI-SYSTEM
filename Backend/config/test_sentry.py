@@ -2,6 +2,8 @@ import sys
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
+from django.core.exceptions import DisallowedHost
+
 from config.sentry import initialize_sentry
 
 
@@ -34,6 +36,7 @@ def test_sentry_uses_privacy_preserving_options_when_configured():
         )
 
     init.assert_called_once_with(
+        ignore_errors=[DisallowedHost],
         dsn="https://public@example.ingest.sentry.io/1",
         environment="production",
         traces_sample_rate=0.1,

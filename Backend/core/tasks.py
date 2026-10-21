@@ -33,7 +33,7 @@ def send_error_report_email(subject: str, text_body: str, html_body: str) -> boo
     """Deliver a frontend crash report to the admin mailbox out of the request cycle."""
     recipient = (getattr(settings, "ADMIN_ERROR_REPORT_EMAIL", "") or "").strip()
     if not recipient:
-        logger.error("error_report_email_recipient_not_configured")
+        logger.warning("error_report_email_recipient_not_configured")
         return False
 
     result = send_email_notification(

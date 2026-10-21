@@ -13,6 +13,8 @@ from .models import AttendanceDailyResult, AttendanceRecord, BioTimeConfig, BioT
 
 logger = logging.getLogger(__name__)
 
+SYNC_DISABLED_MESSAGE = "Sync is disabled in settings."
+
 
 class BioTimeIntegrationError(Exception):
     """Raised when BioTime data cannot be loaded safely."""
@@ -61,7 +63,7 @@ class SyncBioTimeService:
 
         if not config.is_active:
             logger.info("BioTime sync skipped because the integration is disabled.")
-            return False, {**counts, "message": "Sync is disabled in settings."}
+            return False, {**counts, "message": SYNC_DISABLED_MESSAGE}
 
         if not all([config.server_ip, config.server_port, config.username, config.password]):
             logger.error("BioTime sync failed because the configuration is incomplete.")

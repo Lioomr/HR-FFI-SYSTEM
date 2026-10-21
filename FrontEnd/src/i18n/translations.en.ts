@@ -2262,6 +2262,8 @@ const en: TranslationMap = {
   "leave.statusNote": "Status Note",
   "leave.ceoApprovalWait":
     "This request is awaiting CEO approval. No further HR action required.",
+  "leave.employeeArchivedNotice":
+    "This employee is archived. The request can no longer be approved or sent on; reject or cancel it instead.",
   "leave.ceoApproveSuccess": "Approved and sent to HR for completion.",
   "leave.rejected": "Leave request rejected",
   "leave.hrCompletionWait":

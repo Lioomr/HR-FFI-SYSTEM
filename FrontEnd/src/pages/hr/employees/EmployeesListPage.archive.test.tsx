@@ -337,6 +337,21 @@ describe("EmployeesListPage archive filtering", () => {
     expect(await screen.findByText("Omar Khalid")).toBeInTheDocument();
   });
 
+  it("ignores the status filter on the archived tab", async () => {
+    useHrEmployeeListStore
+      .getState()
+      .setFilters({ archiveState: "archived", status: "ACTIVE" });
+    listEmployees.mockResolvedValue(employeesResponse([ARCHIVED_EMPLOYEE]));
+
+    render(<EmployeesListPage />);
+
+    expect(await screen.findByText("Omar Khalid")).toBeInTheDocument();
+    await waitFor(() =>
+      expect(latestTableCall()).toMatchObject({ archive_state: "archived" }),
+    );
+    expect(latestTableCall()?.status).toBeUndefined();
+  });
+
   it("hides the archive filter from roles that cannot list archived employees", async () => {
     useAuthStore.setState({
       isAuthenticated: true,

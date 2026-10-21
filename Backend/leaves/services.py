@@ -36,6 +36,7 @@ from core.services.request_obligations import close_leave_obligations, is_busine
 from core.services.stage_coverage import MANAGER_OWN_SOURCES
 from core.services.workflow_engine import begin_recorded_transition, record_workflow_transition
 from django.db import transaction
+from django.db.models import Q
 from django.utils import timezone
 from employees.document_extraction import extract_visa_fields
 from employees.models import EmployeeDocument
@@ -133,6 +134,10 @@ NOT_REQUESTER_MESSAGE = "Only the requester can cancel this leave request."
 NOT_REQUESTER_CANCELLABLE_MESSAGE = "Only pending leave requests can be cancelled. Contact HR to cancel approved leave."
 SELF_CANCELLATION_MESSAGE = "Another HR member must cancel your own leave request."
 NOT_CANCELLABLE_MESSAGE = "Rejected or cancelled requests cannot be cancelled."
+ARCHIVED_EMPLOYEE_MESSAGE = (
+    "This employee is archived, so the leave request cannot be approved or advanced. Reject or cancel it instead."
+)
+ARCHIVED_EMPLOYEE_CANCEL_NOTE = "Archived employee ({reason}): open leave request cancelled automatically."
 NOT_REQUESTER_EDITOR_MESSAGE = "Only the requester can edit this leave request."
 NOT_REQUESTER_EDITABLE_MESSAGE = (
     "This leave request can no longer be edited because it has reached HR review or a decision was recorded. "
@@ -433,6 +438,17 @@ def _lock(instance: LeaveRequest) -> LeaveRequest:
     return LeaveRequest.objects.select_for_update().get(pk=instance.pk)
 
 
+def _ensure_employee_not_archived(locked: LeaveRequest) -> None:
+    """Refuse to move a request forward for an archived employee (rejecting or cancelling stays allowed)."""
+
+    from employees.models import EmployeeProfile
+
+    if locked.employee_profile_id and EmployeeProfile._base_manager.filter(
+        pk=locked.employee_profile_id, is_archived=True
+    ).exists():
+        raise LeaveTransitionError(ARCHIVED_EMPLOYEE_MESSAGE)
+
+
 def record_leave_submission(instance: LeaveRequest, *, actor) -> None:
     """Start the recorded workflow history of a newly created leave request."""
 
@@ -492,6 +508,7 @@ def apply_delegate_assignment(instance: LeaveRequest, *, actor, delegated_to, no
     with transaction.atomic():
         locked = _lock(instance)
         ensure_delegate_assignable(locked)
+        _ensure_employee_not_archived(locked)
 
         from_status = locked.status
         start = begin_recorded_transition(locked, actor=actor)
@@ -530,6 +547,7 @@ def apply_delegate_approval(instance: LeaveRequest, *, actor, note: str = "") ->
         locked = _lock(instance)
         if locked.status != Status.PENDING_DELEGATE:
             raise LeaveTransitionError(NOT_DELEGATE_PENDING_MESSAGE)
+        _ensure_employee_not_archived(locked)
 
         from_status = locked.status
         start = begin_recorded_transition(locked, actor=actor)
@@ -621,6 +639,7 @@ def apply_manager_approval(instance: LeaveRequest, *, actor, note: str = "") -> 
         locked = _lock(instance)
         if locked.status not in MANAGER_DECIDABLE_STATUSES:
             raise LeaveTransitionError(NOT_MANAGER_APPROVABLE_MESSAGE)
+        _ensure_employee_not_archived(locked)
 
         from_status = locked.status
         start = begin_recorded_transition(locked, actor=actor)
@@ -692,6 +711,7 @@ def apply_hr_approval(instance: LeaveRequest, *, actor, note: str = "") -> Trans
         locked = _lock(instance)
         if locked.status not in HR_APPROVABLE_STATUSES:
             raise LeaveTransitionError(NOT_HR_APPROVABLE_MESSAGE)
+        _ensure_employee_not_archived(locked)
 
         from_status = locked.status
         start = begin_recorded_transition(locked, actor=actor)
@@ -743,6 +763,7 @@ def apply_ceo_referral(instance: LeaveRequest, *, actor, note: str = "") -> Tran
             raise LeaveTransitionError(ALREADY_WITH_CEO_MESSAGE)
         if locked.status not in CEO_REFERRABLE_STATUSES:
             raise LeaveTransitionError(NOT_CEO_REFERRABLE_MESSAGE)
+        _ensure_employee_not_archived(locked)
 
         from_status = locked.status
         start = begin_recorded_transition(locked, actor=actor)
@@ -788,6 +809,7 @@ def apply_ceo_approval(
         locked = _lock(instance)
         if locked.status != Status.PENDING_CEO:
             raise LeaveTransitionError(NOT_CEO_APPROVABLE_MESSAGE)
+        _ensure_employee_not_archived(locked)
 
         from_status = locked.status
         obligations_summary = sync_leave_obligations(locked, actor=actor)
@@ -875,6 +897,7 @@ def apply_hr_completion(
                 .get(pk=instance.pk)
             )
             ensure_awaiting_hr_completion(locked)
+            _ensure_employee_not_archived(locked)
             profile = leave_profile(locked)
             if not profile:
                 raise LeaveTransitionError(PROFILE_NOT_FOUND_MESSAGE)
@@ -1087,6 +1110,37 @@ def apply_hr_cancellation(instance: LeaveRequest, *, actor, comment: str) -> Tra
 
         close_pending_after_direct_cancel(locked, actor=actor, note=comment)
     return Transition(locked, from_status)
+
+
+def cancel_open_requests_for_archived_employee(profile, *, actor, reason: str = "") -> list[int]:
+    """Cancel every still-pending leave request of a freshly archived employee.
+
+    Approved leave is left alone: it is a decision already taken. The requester's
+    account is disabled by the archive, so nobody is notified; the reason is kept
+    in the request history. Returns the ids that were cancelled.
+    """
+
+    note = ARCHIVED_EMPLOYEE_CANCEL_NOTE.format(reason=reason or "archived")
+    open_statuses = HR_CANCELLABLE_STATUSES - {Status.APPROVED}
+    cancelled: list[int] = []
+    owner = Q(employee_profile_id=profile.pk)
+    if profile.user_id:
+        owner |= Q(employee_id=profile.user_id)
+    for leave in LeaveRequest.objects.filter(owner, is_active=True, status__in=open_statuses):
+        with transaction.atomic():
+            locked = _lock(leave)
+            if locked.status not in open_statuses:
+                continue
+            start = begin_recorded_transition(locked, actor=actor)
+            locked.status = Status.CANCELLED
+            locked.save(update_fields=["status", "updated_at"])
+            record_workflow_transition(locked, start, action=Action.CANCEL, actor=actor, note=note, approver_role="hr")
+            close_leave_obligations(locked, note=note, actor=actor)
+            from core.services.cancellation_requests import close_pending_after_direct_cancel
+
+            close_pending_after_direct_cancel(locked, actor=actor, note=note)
+        cancelled.append(locked.pk)
+    return cancelled
 
 
 # ---------------------------------------------------------------------------
@@ -1314,6 +1368,8 @@ def notify_after_hr_cancellation(instance: LeaveRequest, *, reason: str, actor_i
     """Tell the requester HR cancelled their leave request, and why."""
 
     employee = instance.employee
+    if employee is None:
+        return
     try:
         from in_app_notifications.i18n import notification_text
 

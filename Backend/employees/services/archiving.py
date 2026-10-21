@@ -37,16 +37,38 @@ def retire_biotime_mapping_and_archive_profile(profile, execution_snapshot, acto
         archived_at=archived_at,
         archived_by=actor,
         archive_reason=archive_reason,
+        employment_status=EmployeeProfile.EmploymentStatus.TERMINATED,
         updated_at=archived_at,
     )
     profile.is_archived = True
     profile.archived_at = archived_at
     profile.archived_by = actor
     profile.archive_reason = archive_reason
+    profile.employment_status = EmployeeProfile.EmploymentStatus.TERMINATED
     profile.updated_at = archived_at
     from django.utils import timezone
+    from assets.services import return_requests as asset_return_requests
+    from leaves import annual_payment_services
+    from leaves import services as leave_services
+    from loans import services as loan_services
+    from permission_requests import services as permission_services
+
+    from employees.services import profile_change_requests
     from payroll.accommodation import end_profile_assignments
 
     end_profile_assignments(
         profile, timezone.localtime(archived_at).date(), actor=actor, reason=archive_reason or "Employee archived"
     )
+    reason = archive_reason or ""
+    cancellers = (
+        ("leave_requests_cancelled", leave_services),
+        ("annual_leave_payment_requests_cancelled", annual_payment_services),
+        ("loan_requests_cancelled", loan_services),
+        ("permission_requests_cancelled", permission_services),
+        ("asset_return_requests_cancelled", asset_return_requests),
+        ("profile_change_requests_cancelled", profile_change_requests),
+    )
+    for key, module in cancellers:
+        cancelled_ids = module.cancel_open_requests_for_archived_employee(profile, actor=actor, reason=reason)
+        if cancelled_ids:
+            execution_snapshot[key] = cancelled_ids

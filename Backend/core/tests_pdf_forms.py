@@ -474,6 +474,8 @@ UNMAPPED_TEMPLATES = frozenset(
         "employment_certificate_blank.pdf",
         "salary_certificate_blank.pdf",
         "termination_letter_blank.pdf",
+        # Canva-style leave design draft; the live leave form renders from leave_request_blank.pdf.
+        "leave_request_blank_canva_style.pdf",
     }
 )
 

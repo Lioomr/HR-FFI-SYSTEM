@@ -30,6 +30,8 @@ export interface LeaveRequest {
     full_name: string;
   };
   employee_profile?: number | null;
+  /** True when the requester's profile is archived; approvals are refused. */
+  employee_archived?: boolean;
   leave_type: LeaveType;
   start_date: string;
   end_date: string;

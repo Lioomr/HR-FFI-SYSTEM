@@ -1863,9 +1863,13 @@ class EmployeeListCacheTests(TestCase):
         self.assertEqual(second_response.data, first_response.data)
         # Permission/role/active-company resolution still runs before the
         # cache lookup, so a hit isn't literally zero queries -- but it must
-        # skip the expensive queryset/serialization work entirely, so the
-        # count drops dramatically.
-        self.assertLess(len(second_ctx.captured_queries), len(first_ctx.captured_queries) / 2)
+        # skip the expensive queryset/serialization work entirely. Assert that
+        # directly: comparing raw query counts breaks whenever the fixed
+        # permission overhead grows.
+        self.assertLess(len(second_ctx.captured_queries), len(first_ctx.captured_queries))
+        second_sql = [query["sql"] for query in second_ctx.captured_queries]
+        self.assertFalse([sql for sql in second_sql if '"employees_employeeprofile"' in sql])
+        self.assertFalse([sql for sql in second_sql if '"core_crosscompanymanagerassignment"' in sql])
 
     def test_two_companies_never_see_each_others_cached_employee_list(self):
         # HR of company A, then HR of company B, hitting the same endpoint

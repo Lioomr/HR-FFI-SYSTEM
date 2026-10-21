@@ -16,6 +16,8 @@ export type ManagerLeaveRequest = {
     email: string;
     full_name: string;
   };
+  /** True when the requester profile is archived; manager approvals are blocked. */
+  employee_archived?: boolean;
   leave_type: {
     id: number;
     name: string;

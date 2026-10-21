@@ -11,6 +11,7 @@ import logging
 
 from core.models import WorkflowAction
 from core.services import get_ceo_approver_users, get_hr_approver_users, notify_users_for_pending_status
+from core.services.archived_employee import archived_cancel_note, is_profile_archived
 from core.services.workflow_engine import begin_recorded_transition, record_workflow_transition
 from django.db import transaction
 from django.utils import timezone
@@ -37,6 +38,9 @@ NOT_PENDING_CEO_MESSAGE = "Payment request is not pending CEO approval."
 LOCKED_PAYOUT_TERMINATION_ONLY_MESSAGE = "Leave-only days can be paid out only by a termination settlement that pays."
 NOT_REQUESTER_MESSAGE = "Only the employee who submitted this settlement request can cancel it."
 NOT_CANCELLABLE_MESSAGE = "Only settlement requests pending HR or CEO review can be cancelled."
+ARCHIVED_EMPLOYEE_MESSAGE = (
+    "This employee is archived, so the payment request cannot be approved or advanced. Reject or cancel it instead."
+)
 
 # The employee withdraws their own request before the CEO decides; this frees the cycle.
 REQUESTER_CANCELLABLE_STATUSES = frozenset({Status.PENDING_HR, Status.PENDING_CEO})
@@ -66,11 +70,23 @@ def record_annual_payment_submission(instance: AnnualLeavePaymentRequest, *, act
         on_annual_payment_stage_approved(instance, role="hr", actor=instance.hr_reviewed_by, at=instance.hr_reviewed_at)
 
 
+def _ensure_employee_not_archived(instance: AnnualLeavePaymentRequest) -> None:
+    """Refuse to move a request forward for an archived employee (rejecting or cancelling stays allowed).
+
+    A termination settlement is exempt: HR raises and decides it after the employee is
+    archived, that is its whole purpose.
+    """
+
+    if not instance.is_termination_settlement and is_profile_archived(instance.employee_profile_id):
+        raise LeaveTransitionError(ARCHIVED_EMPLOYEE_MESSAGE)
+
+
 def ensure_pending_hr_review(instance: AnnualLeavePaymentRequest) -> None:
     """Refuse early, so the state error wins over input validation errors."""
 
     if instance.status != Status.PENDING_HR:
         raise LeaveTransitionError(NOT_PENDING_HR_MESSAGE)
+    _ensure_employee_not_archived(instance)
 
 
 def settlement_payable_days(instance: AnnualLeavePaymentRequest):
@@ -176,6 +192,7 @@ def apply_annual_payment_ceo_approval(
         locked = _lock(instance)
         if locked.status != Status.PENDING_CEO:
             raise LeaveTransitionError(NOT_PENDING_CEO_MESSAGE)
+        _ensure_employee_not_archived(locked)
 
         start = begin_recorded_transition(locked, actor=actor)
         now = timezone.now()
@@ -292,6 +309,32 @@ def apply_annual_payment_hr_cancellation(
         locked.save()
         record_workflow_transition(locked, start, action=Action.CANCEL, actor=actor, note=note, approver_role="hr")
     return locked
+
+
+def cancel_open_requests_for_archived_employee(profile, *, actor, reason: str = "") -> list[int]:
+    """Cancel every pending payment request of a freshly archived employee, termination settlements excepted.
+
+    A termination settlement is raised and decided by HR after the employee leaves, so it
+    stays open. Nobody is notified, the requester's account is disabled by the archive.
+    Returns the ids that were cancelled.
+    """
+
+    note = archived_cancel_note("annual leave payment request", reason)
+    cancelled: list[int] = []
+    for payment in AnnualLeavePaymentRequest.objects.filter(
+        employee_profile_id=profile.pk, status__in=REQUESTER_CANCELLABLE_STATUSES, is_termination_settlement=False
+    ):
+        with transaction.atomic():
+            locked = _lock(payment)
+            if locked.status not in REQUESTER_CANCELLABLE_STATUSES or locked.is_termination_settlement:
+                continue
+            start = begin_recorded_transition(locked, actor=actor)
+            locked.status = Status.CANCELLED
+            locked.cancelled_at = timezone.now()
+            locked.save()
+            record_workflow_transition(locked, start, action=Action.CANCEL, actor=actor, note=note, approver_role="hr")
+        cancelled.append(locked.pk)
+    return cancelled
 
 
 # ---------------------------------------------------------------------------

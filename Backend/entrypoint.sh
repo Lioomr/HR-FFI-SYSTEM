@@ -16,8 +16,26 @@ if [ "$#" -gt 0 ]; then
   exec "$@"
 fi
 
+# Uploads must be owned by the same user the Celery workers run as (app), or the
+# worker cannot delete files the web process created. Fix any root-owned leftovers
+# from older containers, then run the web process unprivileged.
+run_as_app() {
+  if [ "$(id -u)" = "0" ] && command -v setpriv >/dev/null 2>&1; then
+    setpriv --reuid=app --regid=app --init-groups "$@"
+  else
+    "$@"
+  fi
+}
+
+if [ "$(id -u)" = "0" ] && [ -d /app/private_uploads ]; then
+  chown -R app:app /app/private_uploads
+fi
+
 echo "Running migrations..."
-python manage.py migrate --noinput
+run_as_app python manage.py migrate --noinput
 
 echo "Starting Daphne ASGI server..."
+if [ "$(id -u)" = "0" ] && command -v setpriv >/dev/null 2>&1; then
+  exec setpriv --reuid=app --regid=app --init-groups daphne -b 0.0.0.0 -p 8000 config.asgi:application
+fi
 exec daphne -b 0.0.0.0 -p 8000 config.asgi:application

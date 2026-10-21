@@ -28,6 +28,7 @@ from core.services import (
     notify_profile_request_status_whatsapp,
     notify_users_for_pending_status,
 )
+from core.services.archived_employee import archived_cancel_note, is_profile_archived
 from core.services.request_references import next_reference_for_profile
 from core.services.stage_coverage import manager_covers_hr, record_covered_stage
 from core.services.workflow_engine import begin_recorded_transition, record_workflow_transition
@@ -67,6 +68,9 @@ INTERVAL_CONFLICT_MESSAGE = "An active Exit or During Shift Permission already o
 NO_APPROVER_MESSAGE = "No eligible approver is available for this permission request. Ask HR to assign your manager."
 MANAGER_STAGE_ACTOR_MESSAGE = "Only the requester's manager or their delegate can decide the manager stage."
 SELF_DECISION_MESSAGE = "You cannot approve or reject your own permission request."
+ARCHIVED_EMPLOYEE_MESSAGE = (
+    "This employee is archived, so the permission request cannot be approved. Reject or cancel it instead."
+)
 
 
 class PermissionRequestError(Exception):
@@ -391,6 +395,13 @@ def _lock(instance: PermissionRequest) -> PermissionRequest:
     )
 
 
+def _ensure_employee_not_archived(locked: PermissionRequest) -> None:
+    """Refuse to approve a request of an archived employee (rejecting stays allowed)."""
+
+    if is_profile_archived(locked.employee_profile_id):
+        raise PermissionRequestError(ARCHIVED_EMPLOYEE_MESSAGE)
+
+
 def _assert_final_approval_allowed(locked: PermissionRequest) -> None:
     """Recheck final-only limits before transition, under the employee lock."""
 
@@ -415,6 +426,8 @@ def apply_manager_decision(instance: PermissionRequest, *, actor, decision: str,
             raise PermissionRequestError(MANAGER_STAGE_ACTOR_MESSAGE, status=403)
         if locked.status != Status.PENDING_MANAGER:
             raise PermissionRequestError("This permission request is no longer pending manager approval.")
+        if decision != Decision.REJECTED:
+            _ensure_employee_not_archived(locked)
 
         from_status = locked.status
         start = begin_recorded_transition(locked, actor=actor)
@@ -483,6 +496,8 @@ def apply_hr_decision(instance: PermissionRequest, *, actor, decision: str, note
             raise PermissionRequestError("Only HR workflow approvers can decide the HR stage.", status=403)
         if locked.status != Status.PENDING_HR:
             raise PermissionRequestError("This permission request is no longer pending HR approval.")
+        if decision != Decision.REJECTED:
+            _ensure_employee_not_archived(locked)
 
         from_status = locked.status
         start = begin_recorded_transition(locked, actor=actor)
@@ -847,3 +862,29 @@ def notify_after_hr_decision(instance: PermissionRequest) -> None:
             _notify_requester(instance, "hr_approved")
 
     transaction.on_commit(send)
+
+
+def cancel_open_requests_for_archived_employee(profile, *, actor, reason: str = "") -> list[int]:
+    """Cancel every pending permission request of a freshly archived employee.
+
+    Approved requests are left alone: they are a decision already taken and their
+    attendance adjustment belongs to history. Nobody is notified, the requester's
+    account is disabled by the archive. Returns the ids that were cancelled.
+    """
+
+    note = archived_cancel_note("permission request", reason)
+    cancelled: list[int] = []
+    for permission in PermissionRequest.objects.filter(employee_profile_id=profile.pk, status__in=PENDING_STATUSES):
+        with transaction.atomic():
+            locked = _lock(permission)
+            if locked.status not in PENDING_STATUSES:
+                continue
+            start = begin_recorded_transition(locked, actor=actor)
+            locked.status = Status.CANCELLED
+            locked.cancelled_at = timezone.now()
+            locked.save(update_fields=["status", "cancelled_at", "updated_at"])
+            record_workflow_transition(
+                locked, start, action=WorkflowAction.Action.CANCEL, actor=actor, note=note, approver_role="hr"
+            )
+        cancelled.append(locked.pk)
+    return cancelled

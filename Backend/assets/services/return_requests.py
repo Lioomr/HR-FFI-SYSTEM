@@ -13,6 +13,7 @@ from dataclasses import dataclass
 
 from core.models import WorkflowAction
 from core.responses import error
+from core.services.archived_employee import archived_cancel_note, is_profile_archived
 from core.services.stage_coverage import manager_covers_hr, record_covered_stage
 from core.services.workflow_engine import begin_recorded_transition, record_workflow_transition
 from django.db import transaction
@@ -42,6 +43,10 @@ MANAGER_CANNOT_APPROVE_MESSAGE = "You cannot approve this asset return request."
 MANAGER_CANNOT_REJECT_MESSAGE = "You cannot reject this asset return request."
 NOT_REQUESTER_MESSAGE = "Only the requester can cancel this asset return request."
 NOT_CANCELLABLE_MESSAGE = "Only pending asset return requests can be cancelled."
+ARCHIVED_EMPLOYEE_MESSAGE = (
+    "This employee is archived, so the asset return request cannot be approved or advanced. "
+    "Reject or cancel it instead."
+)
 
 _ERROR_TITLES = {422: "Validation error", 403: "Forbidden"}
 
@@ -80,6 +85,13 @@ def submission_status(requester, profile) -> str:
 
 def _lock(instance: AssetReturnRequest) -> AssetReturnRequest:
     return AssetReturnRequest.objects.select_for_update().get(pk=instance.pk)
+
+
+def _ensure_employee_not_archived(locked: AssetReturnRequest) -> None:
+    """Refuse to approve or advance a request of an archived employee (rejecting stays allowed)."""
+
+    if is_profile_archived(locked.employee_id):
+        raise AssetReturnTransitionError(ARCHIVED_EMPLOYEE_MESSAGE)
 
 
 def _ensure_not_self_approval(instance: AssetReturnRequest, actor) -> None:
@@ -124,6 +136,8 @@ def apply_manager_decision(
         locked = _lock(instance)
         if locked.status != Status.PENDING_MANAGER:
             raise AssetReturnTransitionError(NOT_PENDING_MANAGER_MESSAGE)
+        if approve:
+            _ensure_employee_not_archived(locked)
 
         start = begin_recorded_transition(locked, actor=actor)
         locked.manager_decision_by = actor
@@ -166,6 +180,8 @@ def apply_hr_decision(instance: AssetReturnRequest, *, actor, approve: bool, com
         locked = _lock(instance)
         if locked.status != Status.PENDING:
             raise AssetReturnTransitionError(NOT_PENDING_HR_MESSAGE)
+        if approve:
+            _ensure_employee_not_archived(locked)
 
         start = begin_recorded_transition(locked, actor=actor)
         locked.status = Status.APPROVED if approve else Status.REJECTED
@@ -198,6 +214,8 @@ def apply_ceo_decision(instance: AssetReturnRequest, *, actor, approve: bool, co
         locked = _lock(instance)
         if locked.status != Status.PENDING_CEO:
             raise AssetReturnTransitionError(NOT_PENDING_CEO_MESSAGE)
+        if approve:
+            _ensure_employee_not_archived(locked)
 
         start = begin_recorded_transition(locked, actor=actor)
         locked.status = Status.APPROVED if approve else Status.REJECTED
@@ -407,3 +425,29 @@ def mark_return_request_processed(request_obj: AssetReturnRequest, *, actor) -> 
     # The "Processed" row completes the form: freeze it once the caller's transaction commits.
     on_asset_return_stage_approved(request_obj, role="asset_received", actor=actor, at=request_obj.processed_at)
     return request_obj
+
+
+def cancel_open_requests_for_archived_employee(profile, *, actor, reason: str = "") -> list[int]:
+    """Cancel every not-yet-approved asset return request of a freshly archived employee.
+
+    Approved requests are left alone: HR still has to receive the asset, which is the
+    point of the return. Nobody is notified, the requester's account is disabled by the
+    archive. Returns the ids that were cancelled.
+    """
+
+    note = archived_cancel_note("asset return request", reason)
+    cancelled: list[int] = []
+    for return_request in AssetReturnRequest.objects.filter(
+        employee_id=profile.pk, status__in=REQUESTER_CANCELLABLE_STATUSES
+    ):
+        with transaction.atomic():
+            locked = _lock(return_request)
+            if locked.status not in REQUESTER_CANCELLABLE_STATUSES:
+                continue
+            start = begin_recorded_transition(locked, actor=actor)
+            locked.status = Status.CANCELLED
+            locked.cancelled_at = timezone.now()
+            locked.save(update_fields=["status", "cancelled_at"])
+            record_workflow_transition(locked, start, action=Action.CANCEL, actor=actor, note=note, approver_role="hr")
+        cancelled.append(locked.pk)
+    return cancelled

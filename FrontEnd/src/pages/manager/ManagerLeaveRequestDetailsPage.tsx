@@ -435,6 +435,15 @@ export default function ManagerLeaveRequestDetailsPage() {
               </div>
             </DashboardPanel>
 
+            {canAction && request.employee_archived && (
+              <Alert
+                type="warning"
+                showIcon
+                style={{ borderRadius: 10 }}
+                message={t("leave.employeeArchivedNotice")}
+              />
+            )}
+
             {!canAction && (
               <DashboardPanel
                 title={t("manager.leaveDetails.decisionSection")}
@@ -521,6 +530,7 @@ export default function ManagerLeaveRequestDetailsPage() {
             subjectLabel={employeeName}
             approveLoading={processing && confirmingApprove}
             disabled={processing}
+            approveDisabled={Boolean(request.employee_archived)}
             onApprove={() => setConfirmingApprove(true)}
             onReject={() => setRejectOpen(true)}
           />

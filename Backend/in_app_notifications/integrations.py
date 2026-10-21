@@ -233,6 +233,9 @@ def notify_pending_approvers(
 def notify_request_status(
     *, profile, request_type, request_id, status_label, details=None, action_path=None, reason=None
 ):
+    if getattr(profile, "is_archived", False):
+        # The account is disabled by the archive: nothing to tell the employee.
+        return {}
     recipient = getattr(profile, "user", None)
     status = status_label_text(status_label)
     request_type_text = request_type_label(request_type)

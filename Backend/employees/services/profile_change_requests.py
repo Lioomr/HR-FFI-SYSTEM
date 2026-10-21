@@ -24,6 +24,7 @@ from core.executives import EXECUTIVE_REQUEST_ERROR, is_executive_profile
 from core.models import WorkflowAction
 from core.responses import error
 from core.services import get_hr_approver_users, notify_profile_request_status_whatsapp, notify_users_for_pending_status
+from core.services.archived_employee import archived_cancel_note
 from core.services.workflow_engine import begin_recorded_transition, record_workflow_transition
 from django.contrib.auth import get_user_model
 from django.contrib.auth.base_user import BaseUserManager
@@ -128,6 +129,9 @@ ATTACHMENT_INVALID_MESSAGE = "One or more attachments are not available. Upload 
 ATTACHMENT_DUPLICATE_TYPE_MESSAGE = "Attach at most one passport and one national ID."
 TOO_MANY_UPLOADS_MESSAGE = "Too many unused uploads. Submit or wait before uploading again."
 NOT_PENDING_MESSAGE = "This request is no longer pending HR review."
+ARCHIVED_EMPLOYEE_MESSAGE = (
+    "This employee is archived, so no profile change can be approved. Reject the request instead."
+)
 NOTE_REQUIRED_MESSAGE = "A rejection reason is required."
 SELF_DECISION_MESSAGE = "You cannot decide your own profile change request."
 NOT_HR_MESSAGE = "Only HR workflow approvers can decide profile change requests."
@@ -500,6 +504,33 @@ def cancel_change_request(instance, *, actor) -> ProfileChangeRequest:
     return locked
 
 
+def cancel_open_requests_for_archived_employee(profile, *, actor, reason: str = "") -> list[int]:
+    """Cancel every profile change request still waiting for HR of a freshly archived employee.
+
+    Nothing is applied to the profile and nobody is notified, the requester's account is
+    disabled by the archive. Returns the ids that were cancelled.
+    """
+
+    note = archived_cancel_note("profile change request", reason)
+    cancelled: list[int] = []
+    for change in ProfileChangeRequest.objects.filter(employee_profile_id=profile.pk, status=Status.PENDING_HR):
+        with transaction.atomic():
+            locked = _lock(change)
+            if locked.status != Status.PENDING_HR:
+                continue
+            start = begin_recorded_transition(locked, actor=actor)
+            locked.status = Status.CANCELLED
+            locked.decided_by = actor
+            locked.decided_at = timezone.now()
+            locked.decision_note = note
+            locked.save(update_fields=["status", "decided_by", "decided_at", "decision_note", "updated_at"])
+            record_workflow_transition(
+                locked, start, action=WorkflowAction.Action.CANCEL, actor=actor, note=note, approver_role="hr"
+            )
+        cancelled.append(locked.pk)
+    return cancelled
+
+
 # ---------------------------------------------------------------------------
 # Decide (every item at once)
 # ---------------------------------------------------------------------------
@@ -628,6 +659,8 @@ def decide_change_request(instance, *, actor, decisions, note: str = ""):
             decision, item_note = parsed[item["field"]]
             item["decision"] = "approved" if decision == APPROVE else "rejected"
             item["note"] = item_note
+        if profile.is_archived and any(item["decision"] == "approved" for item in items):
+            raise ProfileChangeError(ARCHIVED_EMPLOYEE_MESSAGE)
         approved = [item for item in items if item["decision"] == "approved"]
         rejected = [item for item in items if item["decision"] == "rejected"]
 

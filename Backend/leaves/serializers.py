@@ -115,6 +115,7 @@ class LeaveRequestListSerializer(serializers.ListSerializer):
 
 class LeaveRequestSerializer(serializers.ModelSerializer):
     employee = serializers.SerializerMethodField()
+    employee_archived = serializers.SerializerMethodField()
     leave_type = LeaveTypeSerializer(read_only=True)
     decided_by = UserSummarySerializer(read_only=True)
     delegated_to = UserSummarySerializer(read_only=True)
@@ -149,6 +150,10 @@ class LeaveRequestSerializer(serializers.ModelSerializer):
 
     def get_days(self, obj):
         return get_leave_days(obj.start_date, obj.end_date)
+
+    def get_employee_archived(self, obj):
+        profile = obj.employee_profile
+        return bool(profile and profile.is_archived)
 
     def get_employee(self, obj):
         if obj.employee:

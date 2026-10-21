@@ -23,7 +23,11 @@ def initialize_sentry(
         logger.warning("sentry_sdk_not_installed")
         return False
 
+    # Scanners probing the raw server IP trigger DisallowedHost on every request; it is noise, not an app bug.
+    from django.core.exceptions import DisallowedHost
+
     options = {
+        "ignore_errors": [DisallowedHost],
         "dsn": dsn,
         "environment": environment,
         "traces_sample_rate": traces_sample_rate,
@@ -34,4 +38,10 @@ def initialize_sentry(
         options["release"] = release
 
     sentry_sdk.init(**options)
+    try:
+        from sentry_sdk.integrations.logging import ignore_logger
+
+        ignore_logger("django.security.DisallowedHost")
+    except ImportError:
+        pass
     return True

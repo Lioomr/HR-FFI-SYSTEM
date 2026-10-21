@@ -7,7 +7,7 @@ from django.core.cache import cache
 from django.utils import timezone
 
 from .absence import mark_absentees_for_date
-from .services import SyncBioTimeService
+from .services import SYNC_DISABLED_MESSAGE, SyncBioTimeService
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +30,8 @@ def sync_biotime_attendance(days_back=1):
 
     if successful:
         logger.info("Scheduled BioTime sync completed: %s (%s)", message, result)
+    elif message == SYNC_DISABLED_MESSAGE:
+        logger.info("Scheduled BioTime sync skipped: %s", message)
     else:
         logger.error("Scheduled BioTime sync failed: %s (%s)", message, result)
 

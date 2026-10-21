@@ -434,7 +434,7 @@ export default function EmployeesListPage() {
         search: search || undefined,
         department: filters.department || undefined,
         position: filters.position || undefined,
-        status: filters.status || undefined,
+        status: viewingArchived ? undefined : filters.status || undefined,
         nationality: filters.nationality || undefined,
         manager: filters.manager || undefined,
         join_date_order: filters.joinDateOrder || undefined,
@@ -1097,11 +1097,15 @@ export default function EmployeesListPage() {
       dataIndex: "employment_status",
       key: "employment_status",
       width: 120,
-      filters: Object.keys(STATUS_LABEL_KEY).map((status) => ({
-        text: t(STATUS_LABEL_KEY[status]),
-        value: status,
-      })),
-      filteredValue: filters.status ? [filters.status] : null,
+      // Archiving ends employment, so the status filter does not apply there.
+      filters: viewingArchived
+        ? undefined
+        : Object.keys(STATUS_LABEL_KEY).map((status) => ({
+            text: t(STATUS_LABEL_KEY[status]),
+            value: status,
+          })),
+      filteredValue:
+        !viewingArchived && filters.status ? [filters.status] : null,
       filterMultiple: false,
       render: (status) => <StatusBadge status={status} t={t} />,
     },
@@ -1200,7 +1204,7 @@ export default function EmployeesListPage() {
         search: search || undefined,
         department: filters.department || undefined,
         position: filters.position || undefined,
-        status: filters.status || undefined,
+        status: viewingArchived ? undefined : filters.status || undefined,
         nationality: filters.nationality || undefined,
         manager: filters.manager || undefined,
         join_date_order: filters.joinDateOrder || undefined,
@@ -1389,8 +1393,9 @@ export default function EmployeesListPage() {
           <Select
             placeholder={t("employees.list.statusPlaceholder")}
             aria-label={t("employees.list.statusPlaceholder")}
-            value={filters.status || undefined}
+            value={viewingArchived ? undefined : filters.status || undefined}
             onChange={(value) => setFilters({ status: value })}
+            disabled={viewingArchived}
             allowClear
             className="employees-toolbar__select"
           >

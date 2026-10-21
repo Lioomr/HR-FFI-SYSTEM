@@ -39,6 +39,7 @@ from core.services import (
     sync_leave_obligations,
     sync_workflow,
 )
+from core.services.archived_employee import is_stale_request_of_archived_employee
 from core.services.workflow_engine import cached_workflow_definitions
 from core.tasks import send_error_report_email
 from employees.contract_expiry import hr_action_due
@@ -283,6 +284,8 @@ def _collect_pending_request_items(request, *, limit: int | None) -> list[dict]:
     for workflow in workflows:
         content_object = workflow.content_object
         if content_object is None or not _is_dashboard_object_in_active_scope(content_object, active_company):
+            continue
+        if is_stale_request_of_archived_employee(content_object):
             continue
         if isinstance(content_object, ContractDecision) and not hr_action_due(content_object, today):
             continue

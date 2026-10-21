@@ -17,6 +17,7 @@ from dataclasses import dataclass
 
 from core.models import WorkflowAction
 from core.responses import error
+from core.services.archived_employee import archived_cancel_note, is_profile_archived
 from core.services.stage_coverage import MANAGER_OWN_SOURCES, is_in_group, manager_covers_hr, record_covered_stage
 from core.services.workflow_engine import begin_recorded_transition, record_workflow_transition
 from django.db import transaction
@@ -47,6 +48,9 @@ CANCELLABLE_STATUSES = frozenset(
     }
 )
 
+#: Everything not yet paid out: archiving cancels these, and HR may cancel them for an archived employee.
+ARCHIVED_OPEN_STATUSES = CANCELLABLE_STATUSES | {Status.PENDING_DISBURSEMENT}
+
 SELF_APPROVAL_MESSAGE = "Self approval is not allowed."
 COMMENT_REQUIRED_MESSAGE = "comment is required."
 NOT_PENDING_MANAGER_MESSAGE = "Request is not pending manager approval."
@@ -55,6 +59,9 @@ NOT_PENDING_CFO_MESSAGE = "Request is not pending CFO approval."
 NOT_PENDING_CEO_MESSAGE = "Request is not pending CEO approval."
 NOT_PENDING_DISBURSEMENT_MESSAGE = "Request is not pending disbursement."
 NOT_CANCELLABLE_MESSAGE = "Only pending requests can be cancelled."
+ARCHIVED_EMPLOYEE_MESSAGE = (
+    "This employee is archived, so the loan request cannot be approved or advanced. Reject or cancel it instead."
+)
 MANAGER_CANNOT_DECIDE_MESSAGES = {
     Recommendation.APPROVE: "You cannot approve this loan request.",
     Recommendation.REJECT: "You cannot reject this loan request.",
@@ -121,6 +128,13 @@ def resolve_open_loan_target_period() -> tuple[int, int]:
 
 def _lock(instance: LoanRequest) -> LoanRequest:
     return LoanRequest.objects.select_for_update().get(pk=instance.pk)
+
+
+def _ensure_employee_not_archived(locked: LoanRequest) -> None:
+    """Refuse to move a request forward for an archived employee (rejecting or cancelling stays allowed)."""
+
+    if is_profile_archived(locked.employee_profile_id):
+        raise LoanTransitionError(ARCHIVED_EMPLOYEE_MESSAGE)
 
 
 def _ensure_not_self_approval(instance: LoanRequest, actor) -> None:
@@ -200,6 +214,7 @@ def apply_manager_recommendation(
         locked = _lock(instance)
         if locked.status != Status.PENDING_MANAGER:
             raise LoanTransitionError(NOT_PENDING_MANAGER_MESSAGE)
+        _ensure_employee_not_archived(locked)
 
         start = begin_recorded_transition(locked, actor=actor)
         locked.manager_decision_by = actor
@@ -267,6 +282,7 @@ def apply_hr_recommendation(instance: LoanRequest, *, actor, recommendation: str
         locked = _lock(instance)
         if locked.status not in LEGACY_PENDING_HR_STATUSES:
             raise LoanTransitionError(NOT_PENDING_HR_MESSAGE)
+        _ensure_employee_not_archived(locked)
 
         start = begin_recorded_transition(locked, actor=actor)
         locked.status = Status.PENDING_CFO
@@ -339,6 +355,7 @@ def apply_cfo_approval(instance: LoanRequest, *, actor, note: str = "") -> LoanR
         locked = _lock(instance)
         if locked.status != Status.PENDING_CFO:
             raise LoanTransitionError(NOT_PENDING_CFO_MESSAGE)
+        _ensure_employee_not_archived(locked)
 
         start = begin_recorded_transition(locked, actor=actor)
         update_fields = _approve_amount(locked)
@@ -363,6 +380,8 @@ def _apply_cfo_final_or_referral(
         locked = _lock(instance)
         if locked.status != Status.PENDING_CFO:
             raise LoanTransitionError(NOT_PENDING_CFO_MESSAGE)
+        if target_status != Status.REJECTED:
+            _ensure_employee_not_archived(locked)
 
         start = begin_recorded_transition(locked, actor=actor)
         locked.status = target_status
@@ -398,6 +417,7 @@ def apply_ceo_approval(instance: LoanRequest, *, actor, note: str = "") -> LoanR
         locked = _lock(instance)
         if locked.status != Status.PENDING_CEO:
             raise LoanTransitionError(NOT_PENDING_CEO_MESSAGE)
+        _ensure_employee_not_archived(locked)
 
         start = begin_recorded_transition(locked, actor=actor)
         update_fields = _approve_amount(locked)
@@ -439,6 +459,7 @@ def apply_disbursement(instance: LoanRequest, *, actor, note: str = "") -> LoanR
         locked = _lock(instance)
         if locked.status != Status.PENDING_DISBURSEMENT:
             raise LoanTransitionError(NOT_PENDING_DISBURSEMENT_MESSAGE)
+        _ensure_employee_not_archived(locked)
 
         start = begin_recorded_transition(locked, actor=actor)
         locked.status = Status.APPROVED
@@ -628,7 +649,11 @@ def apply_hr_cancellation(instance: LoanRequest, *, actor, note: str = "") -> Lo
 
     with transaction.atomic():
         locked = _lock(instance)
-        if locked.status != Status.PENDING_DISBURSEMENT:
+        # A stale request of an archived employee can be closed by HR from any open stage.
+        cancellable = (
+            ARCHIVED_OPEN_STATUSES if is_profile_archived(locked.employee_profile_id) else {Status.PENDING_DISBURSEMENT}
+        )
+        if locked.status not in cancellable:
             raise LoanTransitionError(NOT_HR_CANCELLABLE_MESSAGE)
 
         start = begin_recorded_transition(locked, actor=actor)
@@ -688,3 +713,26 @@ def restore_payroll_deduction(loan: LoanRequest, *, run, actor, reason) -> LoanR
         metadata={"payroll_run_id": run.pk, "payroll_deduction_restored": True},
     )
     return loan
+
+
+def cancel_open_requests_for_archived_employee(profile, *, actor, reason: str = "") -> list[int]:
+    """Cancel every loan request of a freshly archived employee that has not been paid out.
+
+    Approved (disbursed) loans are left alone: the money is out and payroll still owns
+    the deduction. Nobody is notified, the requester's account is disabled by the archive.
+    Returns the ids that were cancelled.
+    """
+
+    note = archived_cancel_note("loan request", reason)
+    cancelled: list[int] = []
+    for loan in LoanRequest.objects.filter(employee_profile_id=profile.pk, status__in=ARCHIVED_OPEN_STATUSES):
+        with transaction.atomic():
+            locked = _lock(loan)
+            if locked.status not in ARCHIVED_OPEN_STATUSES:
+                continue
+            start = begin_recorded_transition(locked, actor=actor)
+            locked.status = Status.CANCELLED
+            locked.save(update_fields=["status", "updated_at"])
+            record_workflow_transition(locked, start, action=Action.CANCEL, actor=actor, note=note, approver_role="hr")
+        cancelled.append(locked.pk)
+    return cancelled

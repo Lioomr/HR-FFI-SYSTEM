@@ -104,6 +104,25 @@ describe("ManagerLeaveRequestDetailsPage", () => {
     ).toBeInTheDocument();
   });
 
+  it("warns and blocks approval when the employee is archived", async () => {
+    mockedFetch.mockResolvedValue({
+      status: "success",
+      data: { ...BASE, employee_archived: true },
+    });
+
+    renderPage();
+
+    expect(
+      await screen.findByText(/This employee is archived/),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Approve: Sara Idris" }),
+    ).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: "Reject: Sara Idris" }),
+    ).toBeEnabled();
+  });
+
   it("hides the decision controls once the request has moved on", async () => {
     mockedFetch.mockResolvedValue({
       status: "success",

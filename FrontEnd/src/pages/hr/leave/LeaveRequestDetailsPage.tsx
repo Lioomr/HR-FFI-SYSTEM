@@ -470,6 +470,11 @@ export default function LeaveRequestDetailsPage({
     !isCEO &&
     ["submitted", "pending_hr"].includes(request.status?.toLowerCase() ?? "");
   const canSendToCEO = !isCEO && canAction;
+  const employeeArchivedOpen =
+    Boolean(request.employee_archived) &&
+    !["approved", "rejected", "cancelled"].includes(
+      request.status?.toLowerCase() ?? "",
+    );
   const canCeoDecide = isCEO && request.status?.toLowerCase() === "pending_ceo";
   const canHrComplete =
     !isCEO && request.status?.toLowerCase() === "pending_hr_completion";
@@ -593,6 +598,15 @@ export default function LeaveRequestDetailsPage({
           </div>
         }
       />
+      {employeeArchivedOpen && (
+        <Alert
+          type="warning"
+          showIcon
+          style={{ marginBottom: 18 }}
+          title={t("leave.employeeArchivedNotice")}
+        />
+      )}
+
 
       <Row gutter={[18, 18]} align="top">
         <Col xs={24} xl={10}>
@@ -701,6 +715,7 @@ export default function LeaveRequestDetailsPage({
             size="large"
             subjectLabel={employeeName}
             approveLoading={processing && ceoApproveOpen}
+            approveDisabled={employeeArchivedOpen}
             disabled={processing}
             onApprove={() => setCeoApproveOpen(true)}
             onReject={() => setCeoRejectOpen(true)}
@@ -725,7 +740,7 @@ export default function LeaveRequestDetailsPage({
               <Button
                 icon={<ExportOutlined />}
                 onClick={handleSendToCEO}
-                disabled={processing}
+                disabled={processing || employeeArchivedOpen}
               >
                 {t("leave.sendToCeoBtn")}
               </Button>
@@ -754,6 +769,7 @@ export default function LeaveRequestDetailsPage({
                   type="primary"
                   icon={<CheckCircleOutlined />}
                   onClick={handleApprove}
+                  disabled={employeeArchivedOpen}
                   loading={processing}
                 >
                   {t("leave.approve")}
