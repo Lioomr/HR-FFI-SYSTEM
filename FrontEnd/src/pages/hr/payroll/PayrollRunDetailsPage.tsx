@@ -43,6 +43,7 @@ import { isApiError } from "../../../services/api/apiTypes";
 import { isForbidden } from "../../../services/api/httpErrors";
 import AmountWithSAR from "../../../components/ui/AmountWithSAR";
 import { useI18n } from "../../../i18n/useI18n";
+import { formatPayrollWindowSummary } from "../../../components/payroll/payrollFormat";
 
 const { useBreakpoint } = Grid;
 
@@ -50,7 +51,7 @@ export default function PayrollRunDetailsPage() {
   const { run_id } = useParams<{ run_id: string }>();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { t } = useI18n();
+  const { t, language } = useI18n();
   const screens = useBreakpoint();
   const isMobile = !screens.lg;
   const summaryColumnSpan = isMobile ? 24 : screens.xl ? 8 : 12;
@@ -292,12 +293,26 @@ export default function PayrollRunDetailsPage() {
     );
 
   const isFinalized = run.status === "COMPLETED" || run.status === "PAID";
+  const windowSummary = formatPayrollWindowSummary(
+    run.period_start,
+    run.period_end,
+    run.calendar_days,
+    language,
+    t,
+    run.year,
+    run.month,
+  );
 
   return (
     <div>
       <PageHeader
-        title={`${t("payroll.history.colRun")} ${run.month}/${run.year}`}
-        subtitle={t("payroll.runDetails.subtitle")}
+        title={`${t("payroll.history.colRun")} ${windowSummary}`}
+        subtitle={
+          <Space wrap>
+            <span>{t("payroll.runDetails.subtitle")}</span>
+            <Typography.Text type="secondary">{windowSummary}</Typography.Text>
+          </Space>
+        }
         actions={
           <Space
             direction={isMobile ? "vertical" : "horizontal"}
@@ -358,7 +373,7 @@ export default function PayrollRunDetailsPage() {
                         size={isMobile ? "small" : "default"}
                       >
                         <Descriptions.Item label={t("payslips.list.colPeriod")}>
-                          {run.month}/{run.year}
+                          {windowSummary}
                         </Descriptions.Item>
                         <Descriptions.Item
                           label={t("payroll.runDetails.totalEmployees")}

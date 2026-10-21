@@ -49,7 +49,10 @@ import AccommodationReport from "../../../../components/payroll/AccommodationRep
 import AccommodationNoneAction from "../../../../components/payroll/AccommodationNoneAction";
 import { validationPresentation } from "../../../../components/payroll/validationGroups";
 import { PayrollStatusTag } from "../../../../components/payroll/payrollDisplay";
-import { formatPayrollPeriod } from "../../../../components/payroll/payrollFormat";
+import {
+  payrollPeriodDateBounds,
+  formatPayrollWindowSummary,
+} from "../../../../components/payroll/payrollFormat";
 import { useI18n } from "../../../../i18n/useI18n";
 import { formatDateTime } from "../../../../utils/dateTime";
 import { isForbidden, isNotFound } from "../../../../services/api/httpErrors";
@@ -247,7 +250,7 @@ export default function PayrollRunPage() {
       setAction(null);
       setStaleMessage(null);
       setBlockingErrors([]);
-      message.success(result.message);
+      message.success(result.message || t("common.success"));
       await refreshEverything();
     } catch (err) {
       const parsed = parsePayrollError(err);
@@ -373,7 +376,16 @@ export default function PayrollRunPage() {
   const finalizeBlockedReason = !report
     ? t("payroll.ui.validationUnavailable")
     : t("payroll.ui.cannotFinalizeHelp", { count: report.counts.errors });
-  const period = formatPayrollPeriod(run.year, run.month, language);
+  const windowSummary = formatPayrollWindowSummary(
+    run.period_start,
+    run.period_end,
+    run.calendar_days,
+    language,
+    t,
+    run.year,
+    run.month,
+  );
+  const period = windowSummary;
   const validationView = report
     ? validationPresentation(report, recordIndex)
     : null;
@@ -385,8 +397,12 @@ export default function PayrollRunPage() {
     <AccommodationNoneAction
       employeeProfileId={employee.employee_profile_id}
       name={employee.employee_name}
-      year={run.year}
-      month={run.month}
+      {...payrollPeriodDateBounds(
+        run.period_start,
+        run.period_end,
+        run.year,
+        run.month,
+      )}
       onSaved={async () => {
         if (employee.item_id !== null)
           await Promise.allSettled([getRunItem(run.id, employee.item_id)]);
@@ -419,6 +435,7 @@ export default function PayrollRunPage() {
         subtitle={
           <Space wrap size={12}>
             <span>{run.company_name}</span>
+            <Text type="secondary">{windowSummary}</Text>
             {run.calculated_at && (
               <Text type="secondary" style={{ fontSize: 12 }}>
                 {t("payroll.ui.calculatedAt", { date: "" })}

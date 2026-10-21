@@ -97,7 +97,7 @@ function pickMoneyLine<T extends AdditionLineType | DeductionLineType>(
 
 const notNull = <T>(value: T | null): value is T => value !== null;
 
-/** Whitelists an employee payslip list entry `{id,year,month,net_salary,payment_mode,status}`. */
+/** Whitelists an employee payslip list entry with its exact payroll window. */
 export function toEmployeePayslipListEntry(
   value: unknown,
 ): EmployeePayslipListEntry {
@@ -106,6 +106,8 @@ export function toEmployeePayslipListEntry(
     id: int(raw.id),
     year: int(raw.year),
     month: int(raw.month),
+    period_start: nullableStr(raw.period_start),
+    period_end: nullableStr(raw.period_end),
     net_salary: str(raw.net_salary),
     payment_mode: str(raw.payment_mode),
     status: str(raw.status),

@@ -811,13 +811,14 @@ export const settings = {
       },
       {
         key: "payroll.assumption.overtime_calendar_month",
-        message: "Normal overtime limit is per calendar month (assumption).",
+        message:
+          "Normal overtime limit applies once per payroll window (assumption).",
       },
     ],
     updated_at: "2026-10-11T09:00:00Z",
     no_medical_insurance: false,
     require_manual_absence_confirmation: false,
-    normal_overtime_limit_period: "CALENDAR_MONTH",
+    normal_overtime_limit_period: "PAYROLL_WINDOW",
   },
 };
 
@@ -825,8 +826,10 @@ export const run = {
   status: "success",
   data: {
     id: 7,
+    period_basis: "DATE_RANGE",
     year: 2026,
     month: 9,
+    calendar_days: 30,
     status: "DRAFT",
     total_net: "102670.00",
     total_employees: 10,
@@ -878,7 +881,7 @@ export const run = {
       payroll_timezone: "Asia/Riyadh",
       no_medical_insurance: false,
       require_manual_absence_confirmation: false,
-      normal_overtime_limit_period: "CALENDAR_MONTH",
+      normal_overtime_limit_period: "PAYROLL_WINDOW",
     },
     calculator_version: "1",
     legacy_calculation: false,
@@ -994,7 +997,7 @@ export const item = {
       payable_normal_hours: "0.00",
       over_allowed_hours: "0.00",
       unpaid_normal_hours: "0.00",
-      limit_period: "CALENDAR_MONTH",
+      limit_period: "PAYROLL_WINDOW",
     },
     deduct_gosi_from_employee: false,
     zero_salary_reason: null,
@@ -1254,6 +1257,8 @@ export const employeePayslip = {
     id: 201,
     year: 2026,
     month: 9,
+    period_start: "2026-09-01",
+    period_end: "2026-09-30",
     basic_salary: "6000.00",
     transportation_allowance: "1500.00",
     accommodation_allowance: "3000.00",
@@ -1438,6 +1443,13 @@ export const accommodationReportPage = {
         rent_name: "Example Residence",
         year: 2026,
         month: 9,
+        period_start: "2026-09-01",
+        period_end: "2026-09-30",
+        period_rent: {
+          numerator: "12000.00",
+          denominator: 12,
+          decimal: "1000.00",
+        },
         monthly_rent: {
           numerator: "12000.00",
           denominator: 12,
@@ -1540,8 +1552,10 @@ export const accommodationReportPage = {
 export const legacyRunPresentation = {
   run: {
     id: 8,
+    period_basis: "LEGACY_FULL_MONTH",
     year: 2026,
     month: 8,
+    calendar_days: null,
     status: "COMPLETED",
     total_net: "57239.00",
     total_employees: 52,
@@ -1756,8 +1770,8 @@ export const employeeConfigPatched = {
 };
 
 export const createRunRequest = {
-  year: 2026,
-  month: 9,
+  period_start: "2026-09-01",
+  period_end: "2026-09-30",
 };
 
 export const recalculateRequest = {
@@ -1901,6 +1915,8 @@ export const employeePayslipList = {
         id: 201,
         year: 2026,
         month: 9,
+        period_start: "2026-09-01",
+        period_end: "2026-09-30",
         net_salary: "10267.00",
         payment_mode: "Bank Transfer",
         status: "COMPLETED",

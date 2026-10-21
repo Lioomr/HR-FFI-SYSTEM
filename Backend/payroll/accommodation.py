@@ -2,10 +2,11 @@
 
 from time import sleep
 
-from audit.utils import audit
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, OperationalError, connection, transaction
 from django.shortcuts import get_object_or_404
+
+from audit.utils import audit
 from employees.models import EmployeeProfile
 from organization.services import filter_queryset_by_company_scope
 from rents.models import Rent
@@ -25,6 +26,70 @@ def _values(assignment):
     }
 
 
+def _save_assignment_once(
+    request, *, employee_profile_id, status, start_date, end_date, reason, rent_id, assignment_id
+):
+    """One transactional attempt; the caller owns retry and integrity-error translation."""
+    with transaction.atomic():
+        company = payroll_company(request)
+        profile = get_object_or_404(
+            filter_queryset_by_company_scope(EmployeeProfile.objects.select_for_update(), request),
+            pk=employee_profile_id,
+        )
+        if connection.vendor == "sqlite":
+            # Acquire the SQLite writer reservation before the overlap read.
+            EmployeeProfile.objects.filter(pk=profile.pk).update(
+                payroll_config_revision=profile.payroll_config_revision
+            )
+        rent = None
+        if rent_id is not None:
+            rent = get_object_or_404(filter_queryset_by_company_scope(Rent.objects.all(), request), pk=rent_id)
+        old = None
+        obj = AccommodationAssignment(company=company, employee_profile=profile, created_by=request.user)
+        if assignment_id is not None:
+            obj = get_object_or_404(
+                filter_queryset_by_company_scope(AccommodationAssignment.objects.select_for_update(), request),
+                pk=assignment_id,
+            )
+            if obj.employee_profile_id != profile.pk:
+                raise PayrollDomainError("field_not_editable", field="employee_profile_id")
+            old = _values(obj)
+        obj.status, obj.rent, obj.start_date, obj.end_date = status, rent, start_date, end_date
+        obj.updated_by = request.user
+        if end_date < start_date:
+            raise PayrollDomainError("invalid_date_range")
+        if (status == "assigned") != bool(rent):
+            raise PayrollDomainError("invalid_choice", field="rent_id")
+        _reject_overlap(request, obj, profile, start_date, end_date)
+        obj.full_clean()
+        if old == _values(obj):
+            return obj
+        obj.save()
+        audit(
+            request,
+            "payroll_accommodation_assignment_updated" if old else "payroll_accommodation_assignment_created",
+            entity="AccommodationAssignment",
+            entity_id=obj.pk,
+            metadata={
+                "company_id": company.pk,
+                "original_value": old,
+                "new_value": _values(obj),
+                "reason": reason,
+            },
+        )
+        return obj
+
+
+def _reject_overlap(request, obj, profile, start_date, end_date):
+    overlaps = filter_queryset_by_company_scope(AccommodationAssignment.objects.all(), request).filter(
+        employee_profile=profile, is_active=True, start_date__lte=end_date, end_date__gte=start_date
+    )
+    if obj.pk:
+        overlaps = overlaps.exclude(pk=obj.pk)
+    if obj.is_active and overlaps.exists():
+        raise PayrollDomainError("assignment_overlap", status_code=409)
+
+
 def save_assignment(
     request, *, employee_profile_id, status, start_date, end_date, reason, rent_id=None, assignment_id=None
 ):
@@ -32,60 +97,16 @@ def save_assignment(
         raise PayrollDomainError("reason_required")
     for attempt in range(3):
         try:
-            with transaction.atomic():
-                company = payroll_company(request)
-                profile = get_object_or_404(
-                    filter_queryset_by_company_scope(EmployeeProfile.objects.select_for_update(), request),
-                    pk=employee_profile_id,
-                )
-                if connection.vendor == "sqlite":
-                    # Acquire the SQLite writer reservation before the overlap read.
-                    EmployeeProfile.objects.filter(pk=profile.pk).update(
-                        payroll_config_revision=profile.payroll_config_revision
-                    )
-                rent = None
-                if rent_id is not None:
-                    rent = get_object_or_404(filter_queryset_by_company_scope(Rent.objects.all(), request), pk=rent_id)
-                old = None
-                obj = AccommodationAssignment(company=company, employee_profile=profile, created_by=request.user)
-                if assignment_id is not None:
-                    obj = get_object_or_404(
-                        filter_queryset_by_company_scope(AccommodationAssignment.objects.select_for_update(), request),
-                        pk=assignment_id,
-                    )
-                    if obj.employee_profile_id != profile.pk:
-                        raise PayrollDomainError("field_not_editable", field="employee_profile_id")
-                    old = _values(obj)
-                obj.status, obj.rent, obj.start_date, obj.end_date = status, rent, start_date, end_date
-                obj.updated_by = request.user
-                if end_date < start_date:
-                    raise PayrollDomainError("invalid_date_range")
-                if (status == "assigned") != bool(rent):
-                    raise PayrollDomainError("invalid_choice", field="rent_id")
-                overlaps = filter_queryset_by_company_scope(AccommodationAssignment.objects.all(), request).filter(
-                    employee_profile=profile, is_active=True, start_date__lte=end_date, end_date__gte=start_date
-                )
-                if obj.pk:
-                    overlaps = overlaps.exclude(pk=obj.pk)
-                if obj.is_active and overlaps.exists():
-                    raise PayrollDomainError("assignment_overlap", status_code=409)
-                obj.full_clean()
-                if old == _values(obj):
-                    return obj
-                obj.save()
-                audit(
-                    request,
-                    "payroll_accommodation_assignment_updated" if old else "payroll_accommodation_assignment_created",
-                    entity="AccommodationAssignment",
-                    entity_id=obj.pk,
-                    metadata={
-                        "company_id": company.pk,
-                        "original_value": old,
-                        "new_value": _values(obj),
-                        "reason": reason,
-                    },
-                )
-                return obj
+            return _save_assignment_once(
+                request,
+                employee_profile_id=employee_profile_id,
+                status=status,
+                start_date=start_date,
+                end_date=end_date,
+                reason=reason,
+                rent_id=rent_id,
+                assignment_id=assignment_id,
+            )
         except OperationalError as exc:
             if connection.vendor != "sqlite" or "locked" not in str(exc).lower() or attempt == 2:
                 raise

@@ -328,6 +328,11 @@ describe("PayrollEmployeePage", () => {
     expect(
       within(heading.closest(".page-header")!).getAllByText("First"),
     ).toHaveLength(1);
+    expect(
+      within(heading.closest(".page-header")!).getByText(
+        "Sep 1, 2026 – Sep 30, 2026 · 30 calendar days",
+      ),
+    ).toBeInTheDocument();
   }, 45000);
   it("points Fix actions to editable fields or the existing company setup screen", async () => {
     const employee = {

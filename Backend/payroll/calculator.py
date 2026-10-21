@@ -59,7 +59,7 @@ def default_settings():
         "rounding": "ROUND_HALF_UP",
         "provision_proration": "FULL_MONTH",
         "require_manual_absence_confirmation": False,
-        "normal_overtime_limit_period": "CALENDAR_MONTH",
+        "normal_overtime_limit_period": "PAYROLL_WINDOW",
         **{
             name + "_base": {"type": base, "fixed_amount": None}
             for name, base in (
@@ -96,6 +96,8 @@ class CarryInput:
     type: str
     amount: Decimal
     source_id: int | None = None
+    source_year: int | None = None
+    source_month: int | None = None
 
 
 @dataclass(frozen=True)
@@ -104,6 +106,10 @@ class EmployeeInput:
     year: int
     month: int
     salary: dict
+    calendar_days: int | None = None
+    period_start: date | None = None
+    period_end: date | None = None
+    period_basis: str | None = None
     hire_date: date | None = None
     archive_date: date | None = None
     is_archived: bool = False
@@ -147,10 +153,38 @@ class EmployeeInput:
     accommodation_assignment_present: bool = False
 
 
-def period_dates(year, month):
+def period_dates(
+    year,
+    month,
+    calendar_days=None,
+    *,
+    period_start=None,
+    period_end=None,
+    period_basis=None,
+):
+    if period_start is not None or period_end is not None:
+        if not isinstance(period_start, date) or not isinstance(period_end, date):
+            raise PayrollInputError("invalid_date_range", "period_end")
+        days = (period_end - period_start).days + 1
+        if (
+            not 1900 <= period_start.year <= 2100
+            or not 1900 <= period_end.year <= 2100
+            or (year, month) != (period_end.year, period_end.month)
+            or days < 1
+            or (days > 30 and period_basis != "LEGACY_FULL_MONTH")
+        ):
+            raise PayrollInputError("invalid_date_range", "period_end", max_days=30)
+        return period_start, period_end
     if not 1900 <= year <= 2100 or not 1 <= month <= 12:
         raise PayrollInputError("invalid_period")
-    first, last = date(year, month, 1), date(year, month, calendar.monthrange(year, month)[1])
+    month_days = calendar.monthrange(year, month)[1]
+    if calendar_days is None:
+        return date(year, month, 1), date(year, month, month_days)
+    if isinstance(calendar_days, bool) or not isinstance(calendar_days, int):
+        raise PayrollInputError("invalid_calendar_days", "calendar_days")
+    if not 1 <= calendar_days <= min(30, month_days):
+        raise PayrollInputError("invalid_calendar_days", "calendar_days")
+    first, last = date(year, month, 1), date(year, month, calendar_days)
     return first, last
 
 
@@ -169,22 +203,8 @@ def calculate_employee(employee: EmployeeInput, settings_snapshot: dict):
         return _calculate_employee(employee, settings_snapshot)
 
 
-def _calculate_employee(e, settings_snapshot):
-    settings = {**default_settings(), **settings_snapshot}
-    issues = []
-
-    def issue(code, severity="warning", **params):
-        issues.append(
-            {
-                "code": code,
-                "severity": severity,
-                "employee_profile_id": e.employee_profile_id,
-                "message_key": "payroll.validation." + code,
-                "params": params,
-            }
-        )
-
-    first, last = period_dates(e.year, e.month)
+def _is_included(e, first, last, issue):
+    """Decide payroll membership for the period, reporting data conflicts through ``issue``."""
     included = True
     if e.hire_date and e.hire_date > last:
         included = False
@@ -202,21 +222,10 @@ def _calculate_employee(e, settings_snapshot):
         issue("terminated_without_end_date", "error")
     elif e.employment_status not in ("ACTIVE", "SUSPENDED", "TERMINATED", "PREHIRE"):
         raise PayrollInputError("invalid_choice", "employment_status")
-    if not included:
-        return {"included": False, "employee_profile_id": e.employee_profile_id, "issues": issues}
-    if not e.hire_date:
-        issue("missing_hire_date", "error")
-    if e.employment_status == "SUSPENDED" and e.suspended_pay_decision not in ("FULL_PAY", "ZERO_PAY"):
-        issue("suspended_pay_decision_required", "error")
-    employed_first = max(first, e.hire_date or first)
-    employed_last = min(last, e.archive_date or last)
-    employed = date_set(employed_first, employed_last)
-    salary_days = 30 if employed_first == first and employed_last == last else min(30, len(employed))
-    salary = {key: decimal(e.salary.get(key, ZERO), key, places=2) for key in SALARY_COMPONENTS}
-    monthly_gross = sum(salary.values(), ZERO)
-    if e.profile_total_salary is not None and decimal(e.profile_total_salary) != monthly_gross:
-        issue("salary_total_mismatch")
+    return included
 
+
+def _make_base_resolver(settings, salary, monthly_gross):
     def base(name):
         selector = settings[name + "_base"]
         kind = selector["type"]
@@ -237,20 +246,262 @@ def _calculate_employee(e, settings_snapshot):
             "GROSS": monthly_gross,
         }[kind]
 
+    return base
+
+
+def _overtime_hours(e, issue):
+    """Return (normal_hours, payable_hours, excess) and report overtime policy issues."""
+    normal_hours = decimal(e.overtime_normal_hours, "overtime_normal_hours", places=2)
+    limit = e.allowed_overtime
+    if limit is not None and (isinstance(limit, bool) or not isinstance(limit, int) or limit < 0):
+        raise PayrollInputError("invalid_quantity", "allowed_overtime")
+    excess = ZERO if e.executive_exempt or limit is None else max(ZERO, normal_hours - limit)
+    valid_override = e.override_overtime_eligibility and bool(e.overtime_override_reason.strip())
+    if e.override_overtime_eligibility and not valid_override:
+        issue("reason_required", "error", field="overtime_override_reason")
+    payable_hours = (
+        normal_hours if e.executive_exempt or valid_override or limit is None else min(normal_hours, Decimal(limit))
+    )
+    if excess:
+        issue(
+            "overtime_over_allowed",
+            allowed_hours=limit,
+            entered_hours=str(normal_hours),
+            over_allowed_hours=str(excess),
+            unpaid_hours=str(normal_hours - payable_hours),
+            overridden=bool(valid_override),
+        )
+    elif not e.executive_exempt and limit is None and normal_hours:
+        issue("overtime_limit_not_set")
+    return normal_hours, payable_hours, excess
+
+
+def _accommodation_cost(e, issue):
+    """Return (status, raw monthly cost or None) and report unknown accommodation."""
+    if e.accommodation_status not in ("assigned", "none", "unknown"):
+        raise PayrollInputError("invalid_choice", "accommodation_status")
+    accommodation_status = e.accommodation_status
+    if e.executive_exempt and not e.accommodation_assignment_present and accommodation_status == "unknown":
+        accommodation_status = "none"
+    accommodation = None
+    if accommodation_status == "none":
+        accommodation = ZERO
+    elif accommodation_status == "assigned":
+        if not isinstance(e.accommodation_raw, Fraction) or e.accommodation_raw < 0:
+            raise PayrollInputError("rent_reconciliation_failed", "accommodation_raw")
+        accommodation = Decimal(e.accommodation_raw.numerator) / Decimal(e.accommodation_raw.denominator)
+    else:
+        issue("accommodation_unknown")
+    return accommodation_status, accommodation
+
+
+def _medical_monthly_cost(e, settings, issue):
+    invoice = settings["annual_medical_invoice"]
+    medical = ZERO if settings["no_medical_insurance"] else None
+    if not settings["no_medical_insurance"] and invoice is not None:
+        if e.included_employee_count < 1:
+            raise PayrollInputError("payroll_reconciliation_failed", "included_employee_count")
+        medical = decimal(invoice, places=2) / 12 / e.included_employee_count
+    elif medical is None:
+        issue("medical_invoice_missing", scope="run")
+    return medical
+
+
+def _report_attendance_gaps(e, settings, manual_confirmed, issue):
+    if not e.executive_exempt and not e.attendance_source_available:
+        issue("attendance_source_unavailable", uncovered_dates=sorted(d.isoformat() for d in e.uncovered_dates))
+        if settings["require_manual_absence_confirmation"] and not manual_confirmed:
+            issue("attendance_source_unavailable", "error", manual_confirmation_required=True)
+    if e.due_work_dates is None:
+        issue("attendance_calendar_missing", "error")
+
+
+def _is_high_tier(e):
+    return bool(e.hire_date) and (e.year, e.month) > (
+        fifth_anniversary(e.hire_date).year,
+        fifth_anniversary(e.hire_date).month,
+    )
+
+
+def _assumptions(e, settings):
+    assumptions = ["payroll.assumption.overtime_calendar_month"]
+    if settings["overtime_default_is_assumption"]:
+        assumptions.append("payroll.assumption.overtime_basic")
+    if not e.hire_date:
+        assumptions.append("payroll.assumption.missing_hire_date")
+    return assumptions
+
+
+def _line_source_kind(category, kind):
+    source_kind = {
+        "SALARY": "employee_salary",
+        "ADDITION": "manual_adjustment",
+        "PROVISION": "company_settings",
+    }.get(category, "company_settings")
+    return {
+        "ABSENCE": "attendance_absence",
+        "LOAN": "loan",
+        "OTHER_DEDUCTION": "manual_adjustment",
+        "ACCOMMODATION_COST": "rent_allocation",
+    }.get(kind, source_kind)
+
+
+def _provision_terms(e, settings, salary_days):
+    """Return (proration mode, provision factor, GOSI rate) after validating settings."""
+    mode = settings["provision_proration"]
+    if mode not in ("FULL_MONTH", "PRORATED_BY_DAYS"):
+        raise PayrollInputError("invalid_choice", "provision_proration")
+    provision_factor = Decimal(salary_days) / 30 if mode == "PRORATED_BY_DAYS" else Decimal(1)
+    rate = decimal(settings["saudi_gosi_rate" if e.is_saudi else "foreign_gosi_rate"], places=6)
+    if rate > 1:
+        raise PayrollInputError("invalid_decimal", "gosi_rate")
+    return mode, provision_factor, rate
+
+
+def _carried_totals(e):
+    carry = list(e.carries)
+    if any(c.type not in ("ABSENCE", "GOSI_EMPLOYEE") for c in carry):
+        raise PayrollInputError("invalid_choice", "carry.type")
+    carried_absence = sum((money(decimal(c.amount, places=2)) for c in carry if c.type == "ABSENCE"), ZERO)
+    carried_gosi = sum((money(decimal(c.amount, places=2)) for c in carry if c.type == "GOSI_EMPLOYEE"), ZERO)
+    return carry, carried_absence, carried_gosi
+
+
+def _raw_provisions(e, settings, base, medical, high_tier, rate):
+    return {
+        "MEDICAL": medical,
+        "ID_COST": ZERO if e.is_saudi else decimal(settings["monthly_foreign_id_cost"], places=2),
+        "AIR_TICKET": decimal(settings["annual_air_ticket"], places=2) / 12,
+        "LEAVE_PROVISION": base("leave") / 30 * (Decimal("2.50") if high_tier else Decimal("1.75")),
+        "EOS_PROVISION": base("eos") / (12 if high_tier else 24),
+        "GOSI_COMPANY": ZERO if e.deduct_gosi_from_employee else base("gosi") * rate,
+    }
+
+
+def _select_penalty_claims(e, cap, prior_budget, issue):
+    """Split penalty claims into affordable ``selected`` and ``pending`` (claim, posted) pairs."""
+    selected = []
+    pending = []
+    fine_used = Fraction(0)
+    seen_keys = set()
+    for claim in e.penalties:
+        if e.executive_exempt and claim.source_kind == "attendance_penalty":
+            continue
+        if claim.source_key in seen_keys:
+            raise PayrollInputError("payroll_reconciliation_failed", "penalty.source_key")
+        seen_keys.add(claim.source_key)
+        fine, wage = decimal(claim.fine, places=2), decimal(claim.wage, places=2)
+        posted = money(fine) + money(wage)
+        if wage and (not claim.wage_dates or not e.wage_evidence_complete):
+            issue("penalty_wage_evidence_missing", "error", source_id=claim.source_id)
+            pending.append((claim, posted))
+            continue
+        if Fraction(fine) + fine_used > cap:
+            issue("penalty_pending_fine_cap", source_id=claim.source_id, amount=str(posted))
+            pending.append((claim, posted))
+            continue
+        proposed = selected + [claim]
+        cost = sum((money(decimal(c.fine)) + money(decimal(c.wage)) for c in proposed), ZERO)
+        if cost > prior_budget(proposed):
+            issue("claim_unaffordable", source_kind=claim.source_kind, source_id=claim.source_id, amount=str(posted))
+            pending.append((claim, posted))
+            continue
+        selected.append(claim)
+        fine_used += Fraction(fine)
+    return selected, pending
+
+
+def _collect_penalty_claims(selected, pending, cap, collect, collection):
+    for claim in selected:
+        fine_type = "ATTENDANCE_PENALTY" if claim.source_kind == "attendance_penalty" else "PENALTY_FINE"
+        metadata = {
+            "source_kind": claim.source_kind,
+            "source_id": claim.source_id,
+            "exact_fine_amount": str(claim.fine),
+            "exact_amount": str(decimal(claim.fine) + decimal(claim.wage)),
+            "rounded_amount": str(money(decimal(claim.fine)) + money(decimal(claim.wage))),
+            "fine_cap": exact_share(cap),
+            "rounding_delta": str(money(decimal(claim.fine)) - decimal(claim.fine)),
+        }
+        collect(fine_type, claim.fine, claim.source_key + ":fine", whole=True, **metadata)
+        if claim.wage:
+            collect(
+                "PENALTY_WAGE_WITHHOLDING",
+                claim.wage,
+                claim.source_key + ":wage",
+                whole=True,
+                source_kind=claim.source_kind,
+                source_id=claim.source_id,
+            )
+    for claim, posted in pending:
+        # Pending whole claims are collection evidence, not zero-valued applied claims.
+        collection.append(
+            {
+                "type": "ATTENDANCE_PENALTY" if claim.source_kind == "attendance_penalty" else "PENALTY_FINE",
+                "source_key": claim.source_key,
+                "requested": posted,
+                "collected": ZERO,
+                "uncollected": posted,
+                "carried_in": False,
+                "manual_reentry_required": False,
+                "source_kind": claim.source_kind,
+                "source_id": claim.source_id,
+            }
+        )
+
+
+def _calculate_employee(e, settings_snapshot):
+    settings = {**default_settings(), **settings_snapshot}
+    issues = []
+
+    def issue(code, severity="warning", **params):
+        issues.append(
+            {
+                "code": code,
+                "severity": severity,
+                "employee_profile_id": e.employee_profile_id,
+                "message_key": "payroll.validation." + code,
+                "params": params,
+            }
+        )
+
+    first, last = period_dates(
+        e.year,
+        e.month,
+        e.calendar_days,
+        period_start=e.period_start,
+        period_end=e.period_end,
+        period_basis=e.period_basis,
+    )
+    if not _is_included(e, first, last, issue):
+        return {"included": False, "employee_profile_id": e.employee_profile_id, "issues": issues}
+    if not e.hire_date:
+        issue("missing_hire_date", "error")
+    if e.employment_status == "SUSPENDED" and e.suspended_pay_decision not in ("FULL_PAY", "ZERO_PAY"):
+        issue("suspended_pay_decision_required", "error")
+    employed_first = max(first, e.hire_date or first)
+    employed_last = min(last, e.archive_date or last)
+    employed = date_set(employed_first, employed_last)
+    salary_days = (
+        30
+        if (
+            e.period_basis == "LEGACY_FULL_MONTH"
+            or (e.period_basis is None and e.period_start is None and e.calendar_days is None)
+        )
+        and employed_first == first
+        and employed_last == last
+        else min(30, len(employed))
+    )
+    salary = {key: decimal(e.salary.get(key, ZERO), key, places=2) for key in SALARY_COMPONENTS}
+    monthly_gross = sum(salary.values(), ZERO)
+    if e.profile_total_salary is not None and decimal(e.profile_total_salary) != monthly_gross:
+        issue("salary_total_mismatch")
+
+    base = _make_base_resolver(settings, salary, monthly_gross)
     lines = []
 
     def line(category, kind, raw, source_key=None, **metadata):
-        source_kind = {
-            "SALARY": "employee_salary",
-            "ADDITION": "manual_adjustment",
-            "PROVISION": "company_settings",
-        }.get(category, "company_settings")
-        source_kind = {
-            "ABSENCE": "attendance_absence",
-            "LOAN": "loan",
-            "OTHER_DEDUCTION": "manual_adjustment",
-            "ACCOMMODATION_COST": "rent_allocation",
-        }.get(kind, source_kind)
+        source_kind = _line_source_kind(category, kind)
         entry = {
             "category": category,
             "type": kind,
@@ -274,28 +525,7 @@ def _calculate_employee(e, settings_snapshot):
     )
     if zero_suspended and e.zero_salary_reason != "suspended":
         issue("zero_salary_reason_required", "error")
-    normal_hours = decimal(e.overtime_normal_hours, "overtime_normal_hours", places=2)
-    limit = e.allowed_overtime
-    if limit is not None and (isinstance(limit, bool) or not isinstance(limit, int) or limit < 0):
-        raise PayrollInputError("invalid_quantity", "allowed_overtime")
-    excess = ZERO if e.executive_exempt or limit is None else max(ZERO, normal_hours - limit)
-    valid_override = e.override_overtime_eligibility and bool(e.overtime_override_reason.strip())
-    if e.override_overtime_eligibility and not valid_override:
-        issue("reason_required", "error", field="overtime_override_reason")
-    payable_hours = (
-        normal_hours if e.executive_exempt or valid_override or limit is None else min(normal_hours, Decimal(limit))
-    )
-    if excess:
-        issue(
-            "overtime_over_allowed",
-            allowed_hours=limit,
-            entered_hours=str(normal_hours),
-            over_allowed_hours=str(excess),
-            unpaid_hours=str(normal_hours - payable_hours),
-            overridden=bool(valid_override),
-        )
-    elif not e.executive_exempt and limit is None and normal_hours:
-        issue("overtime_limit_not_set")
+    normal_hours, payable_hours, excess = _overtime_hours(e, issue)
     overtime_base = base("overtime")
     line("ADDITION", "OVERTIME_NORMAL", overtime_base / 30 / 8 * Decimal("1.5") * payable_hours, quantity=payable_hours)
     line(
@@ -320,12 +550,7 @@ def _calculate_employee(e, settings_snapshot):
     manual_days = decimal(e.absence_days_override, places=2) if e.absence_days_override is not None else None
     if e.absence_days_override is not None and not manual_confirmed:
         issue("reason_required", "error", field="absence_override_reason")
-    if not e.executive_exempt and not e.attendance_source_available:
-        issue("attendance_source_unavailable", uncovered_dates=sorted(d.isoformat() for d in e.uncovered_dates))
-        if settings["require_manual_absence_confirmation"] and not manual_confirmed:
-            issue("attendance_source_unavailable", "error", manual_confirmation_required=True)
-    if e.due_work_dates is None:
-        issue("attendance_calendar_missing", "error")
+    _report_attendance_gaps(e, settings, manual_confirmed, issue)
     due = (e.due_work_dates or frozenset()) & employed
     full_absence = bool(due) and due <= absent_before_overlap and not (due & paid)
     # Uncovered dates or a count alone cannot establish the full-month shortcut.
@@ -356,19 +581,9 @@ def _calculate_employee(e, settings_snapshot):
         raw = absence_base / 30 * days
         return min(raw, absence_cap), days
 
-    mode = settings["provision_proration"]
-    if mode not in ("FULL_MONTH", "PRORATED_BY_DAYS"):
-        raise PayrollInputError("invalid_choice", "provision_proration")
-    provision_factor = Decimal(salary_days) / 30 if mode == "PRORATED_BY_DAYS" else Decimal(1)
-    rate = decimal(settings["saudi_gosi_rate" if e.is_saudi else "foreign_gosi_rate"], places=6)
-    if rate > 1:
-        raise PayrollInputError("invalid_decimal", "gosi_rate")
+    mode, provision_factor, rate = _provision_terms(e, settings, salary_days)
     gosi = money(base("gosi") * rate * provision_factor)
-    carry = list(e.carries)
-    if any(c.type not in ("ABSENCE", "GOSI_EMPLOYEE") for c in carry):
-        raise PayrollInputError("invalid_choice", "carry.type")
-    carried_absence = sum((money(decimal(c.amount, places=2)) for c in carry if c.type == "ABSENCE"), ZERO)
-    carried_gosi = sum((money(decimal(c.amount, places=2)) for c in carry if c.type == "GOSI_EMPLOYEE"), ZERO)
+    carry, carried_absence, carried_gosi = _carried_totals(e)
 
     def prior_budget(selected):
         raw, _ = absence_raw(selected)
@@ -379,35 +594,8 @@ def _calculate_employee(e, settings_snapshot):
         )
         return gross + additions - absence_collected - gosi_collected
 
-    selected = []
-    pending = []
-    fine_used = Fraction(0)
     cap = Fraction(gross) * 5 / 30
-    seen_keys = set()
-    for claim in e.penalties:
-        if e.executive_exempt and claim.source_kind == "attendance_penalty":
-            continue
-        if claim.source_key in seen_keys:
-            raise PayrollInputError("payroll_reconciliation_failed", "penalty.source_key")
-        seen_keys.add(claim.source_key)
-        fine, wage = decimal(claim.fine, places=2), decimal(claim.wage, places=2)
-        posted = money(fine) + money(wage)
-        if wage and (not claim.wage_dates or not e.wage_evidence_complete):
-            issue("penalty_wage_evidence_missing", "error", source_id=claim.source_id)
-            pending.append((claim, posted))
-            continue
-        if Fraction(fine) + fine_used > cap:
-            issue("penalty_pending_fine_cap", source_id=claim.source_id, amount=str(posted))
-            pending.append((claim, posted))
-            continue
-        proposed = selected + [claim]
-        cost = sum((money(decimal(c.fine)) + money(decimal(c.wage)) for c in proposed), ZERO)
-        if cost > prior_budget(proposed):
-            issue("claim_unaffordable", source_kind=claim.source_kind, source_id=claim.source_id, amount=str(posted))
-            pending.append((claim, posted))
-            continue
-        selected.append(claim)
-        fine_used += Fraction(fine)
+    selected, pending = _select_penalty_claims(e, cap, prior_budget, issue)
     absence_value, absent_days = absence_raw(selected)
     if absence_base / 30 * absent_days > absence_cap:
         issue("absence_capped", amount=str(money(absence_base / 30 * absent_days - absence_cap)))
@@ -463,45 +651,17 @@ def _calculate_employee(e, settings_snapshot):
         for c in carry:
             if c.type == kind:
                 collect(
-                    kind, c.amount, c.source_key, carried_in=True, source_kind="carry_forward", source_id=c.source_id
+                    kind,
+                    c.amount,
+                    c.source_key,
+                    carried_in=True,
+                    source_kind="carry_forward",
+                    source_id=c.source_id,
+                    source_year=c.source_year,
+                    source_month=c.source_month,
                 )
         collect(kind, current, quantity=absent_days if kind == "ABSENCE" else None)
-    for claim in selected:
-        fine_type = "ATTENDANCE_PENALTY" if claim.source_kind == "attendance_penalty" else "PENALTY_FINE"
-        metadata = {
-            "source_kind": claim.source_kind,
-            "source_id": claim.source_id,
-            "exact_fine_amount": str(claim.fine),
-            "exact_amount": str(decimal(claim.fine) + decimal(claim.wage)),
-            "rounded_amount": str(money(decimal(claim.fine)) + money(decimal(claim.wage))),
-            "fine_cap": exact_share(cap),
-            "rounding_delta": str(money(decimal(claim.fine)) - decimal(claim.fine)),
-        }
-        collect(fine_type, claim.fine, claim.source_key + ":fine", whole=True, **metadata)
-        if claim.wage:
-            collect(
-                "PENALTY_WAGE_WITHHOLDING",
-                claim.wage,
-                claim.source_key + ":wage",
-                whole=True,
-                source_kind=claim.source_kind,
-                source_id=claim.source_id,
-            )
-    for claim, posted in pending:
-        # Pending whole claims are collection evidence, not zero-valued applied claims.
-        collection.append(
-            {
-                "type": "ATTENDANCE_PENALTY" if claim.source_kind == "attendance_penalty" else "PENALTY_FINE",
-                "source_key": claim.source_key,
-                "requested": posted,
-                "collected": ZERO,
-                "uncollected": posted,
-                "carried_in": False,
-                "manual_reentry_required": False,
-                "source_kind": claim.source_kind,
-                "source_id": claim.source_id,
-            }
-        )
+    _collect_penalty_claims(selected, pending, cap, collect, collection)
     loan = collect("LOAN", e.loan_amount, whole=True, source_id=e.loan_id, source_kind="loan")
     if loan["uncollected_amount"]:
         issue("claim_unaffordable", source_kind="loan", source_id=e.loan_id, amount=str(loan["uncollected_amount"]))
@@ -515,42 +675,12 @@ def _calculate_employee(e, settings_snapshot):
         issue("zero_salary_reason_required", "error")
     if e.zero_salary_reason == "other" and not e.zero_salary_reason_detail.strip():
         issue("zero_salary_detail_required", "error")
-    high_tier = bool(e.hire_date) and (e.year, e.month) > (
-        fifth_anniversary(e.hire_date).year,
-        fifth_anniversary(e.hire_date).month,
-    )
-    invoice = settings["annual_medical_invoice"]
-    medical = ZERO if settings["no_medical_insurance"] else None
-    if not settings["no_medical_insurance"] and invoice is not None:
-        if e.included_employee_count < 1:
-            raise PayrollInputError("payroll_reconciliation_failed", "included_employee_count")
-        medical = decimal(invoice, places=2) / 12 / e.included_employee_count
-    elif medical is None:
-        issue("medical_invoice_missing", scope="run")
-    raw_provisions = {
-        "MEDICAL": medical,
-        "ID_COST": ZERO if e.is_saudi else decimal(settings["monthly_foreign_id_cost"], places=2),
-        "AIR_TICKET": decimal(settings["annual_air_ticket"], places=2) / 12,
-        "LEAVE_PROVISION": base("leave") / 30 * (Decimal("2.50") if high_tier else Decimal("1.75")),
-        "EOS_PROVISION": base("eos") / (12 if high_tier else 24),
-        "GOSI_COMPANY": ZERO if e.deduct_gosi_from_employee else base("gosi") * rate,
-    }
+    high_tier = _is_high_tier(e)
+    medical = _medical_monthly_cost(e, settings, issue)
+    raw_provisions = _raw_provisions(e, settings, base, medical, high_tier, rate)
     for kind, raw in raw_provisions.items():
         line("PROVISION", kind, None if raw is None else raw * provision_factor)
-    if e.accommodation_status not in ("assigned", "none", "unknown"):
-        raise PayrollInputError("invalid_choice", "accommodation_status")
-    accommodation_status = e.accommodation_status
-    if e.executive_exempt and not e.accommodation_assignment_present and accommodation_status == "unknown":
-        accommodation_status = "none"
-    accommodation = None
-    if accommodation_status == "none":
-        accommodation = ZERO
-    elif accommodation_status == "assigned":
-        if not isinstance(e.accommodation_raw, Fraction) or e.accommodation_raw < 0:
-            raise PayrollInputError("rent_reconciliation_failed", "accommodation_raw")
-        accommodation = Decimal(e.accommodation_raw.numerator) / Decimal(e.accommodation_raw.denominator)
-    else:
-        issue("accommodation_unknown")
+    accommodation_status, accommodation = _accommodation_cost(e, issue)
     accommodation_line = line("PROVISION", "ACCOMMODATION_COST", accommodation)
     if accommodation_status == "assigned":
         accommodation_line["amount"] = money(round_share(e.accommodation_raw))
@@ -559,11 +689,7 @@ def _calculate_employee(e, settings_snapshot):
         (entry["amount"] for entry in lines if entry["category"] == "PROVISION" and entry["amount"] is not None), ZERO
     )
     company_cost = money(net + provisions)
-    assumptions = ["payroll.assumption.overtime_calendar_month"]
-    if settings["overtime_default_is_assumption"]:
-        assumptions.append("payroll.assumption.overtime_basic")
-    if not e.hire_date:
-        assumptions.append("payroll.assumption.missing_hire_date")
+    assumptions = _assumptions(e, settings)
     return {
         "included": True,
         "employee_profile_id": e.employee_profile_id,
@@ -596,7 +722,7 @@ def _calculate_employee(e, settings_snapshot):
             "payable_normal_hours": payable_hours,
             "over_allowed_hours": excess,
             "unpaid_normal_hours": normal_hours - payable_hours,
-            "limit_period": "CALENDAR_MONTH",
+            "limit_period": "PAYROLL_WINDOW",
         },
         "five_year_anniversary": fifth_anniversary(e.hire_date) if e.hire_date else None,
     }
@@ -626,8 +752,29 @@ class RentAssignmentInput:
     end_date: date
 
 
-def allocate_rent(year, month, annual_rent, assignments, payroll_profile_ids):
-    first, last = period_dates(year, month)
+def allocate_rent(
+    year,
+    month,
+    annual_rent,
+    assignments,
+    payroll_profile_ids,
+    calendar_days=None,
+    *,
+    period_start=None,
+    period_end=None,
+    period_basis=None,
+):
+    first, last = period_dates(
+        year,
+        month,
+        calendar_days,
+        period_start=period_start,
+        period_end=period_end,
+        period_basis=period_basis,
+    )
+    legacy_full_month = period_basis == "LEGACY_FULL_MONTH" or (
+        period_basis is None and period_start is None and calendar_days is None
+    )
     monthly = Fraction(decimal(annual_rent, places=2)) / 12
     residents = {}
     vacant = Fraction(0)
@@ -635,8 +782,9 @@ def allocate_rent(year, month, annual_rent, assignments, payroll_profile_ids):
     for assignment in assignments:
         if assignment.end_date < assignment.start_date:
             raise PayrollInputError("invalid_date_range")
-    for slot in range(1, 31):
-        day = date(year, month, min(slot, last.day))
+    slot_count = 30 if legacy_full_month else (last - first).days + 1
+    for slot in range(1, slot_count + 1):
+        day = date(year, month, min(slot, last.day)) if legacy_full_month else first + timedelta(days=slot - 1)
         ids = sorted(a.employee_profile_id for a in assignments if a.start_date <= day <= a.end_date)
         if len(set(ids)) != len(ids):
             raise PayrollInputError("assignment_overlap")
@@ -654,7 +802,8 @@ def allocate_rent(year, month, annual_rent, assignments, payroll_profile_ids):
             }
         )
     raw = sum(residents.values(), Fraction(0))
-    if raw + vacant != monthly:
+    period_rent = monthly if legacy_full_month else monthly * slot_count / 30
+    if raw + vacant != period_rent:
         raise PayrollInputError("rent_reconciliation_failed")
     rounded = {profile_id: round_share(share) for profile_id, share in residents.items()}
     return {

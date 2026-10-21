@@ -1,5 +1,5 @@
 from dataclasses import replace
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 from fractions import Fraction
 
@@ -114,6 +114,68 @@ def test_join_and_archive_proration(hired, archive, month, days, gross):
     assert r["salary_days"] == days and r["gross_salary"] == gross
 
 
+def test_explicit_calendar_window_uses_selected_days_with_fixed_thirty_day_divisor():
+    first, last = period_dates(2026, 6, 10)
+    assert (first, last) == (date(2026, 6, 1), date(2026, 6, 10))
+    result = calculate(employee(calendar_days=10, due_work_dates=date_set(first, last)))
+    assert result["salary_days"] == 10
+    assert result["employed_calendar_days"] == 10
+    assert result["gross_salary"] == 3667
+
+
+def test_explicit_calendar_window_rejects_days_beyond_real_month():
+    with pytest.raises(PayrollInputError) as exc:
+        period_dates(2026, 2, 29)
+    assert (exc.value.code, exc.value.field) == ("invalid_calendar_days", "calendar_days")
+
+
+def test_explicit_february_window_uses_actual_days_over_thirty():
+    first, last = period_dates(2026, 2, 28)
+    result = calculate(employee(month=2, calendar_days=28, due_work_dates=date_set(first, last)))
+    assert result["salary_days"] == 28
+    assert result["gross_salary"] == 10267
+
+
+def test_cross_month_date_range_uses_inclusive_days_and_window_overtime_cap():
+    first, last = date(2026, 1, 20), date(2026, 2, 18)
+    result = calculate(
+        employee(
+            year=2026,
+            month=2,
+            calendar_days=30,
+            period_start=first,
+            period_end=last,
+            period_basis="DATE_RANGE",
+            due_work_dates=date_set(first, last),
+        )
+    )
+    assert result["salary_days"] == 30 and result["gross_salary"] == 11000
+    assert result["overtime"]["limit_period"] == "PAYROLL_WINDOW"
+
+
+def test_cross_month_date_range_rejects_more_than_thirty_inclusive_days():
+    with pytest.raises(PayrollInputError) as exc:
+        period_dates(
+            2026,
+            2,
+            30,
+            period_start=date(2026, 1, 20),
+            period_end=date(2026, 2, 19),
+        )
+    assert exc.value.code == "invalid_date_range"
+
+
+def test_legacy_full_month_canonical_dates_still_allow_thirty_one_days():
+    assert period_dates(
+        2026,
+        8,
+        None,
+        period_start=date(2026, 8, 1),
+        period_end=date(2026, 8, 31),
+        period_basis="LEGACY_FULL_MONTH",
+    ) == (date(2026, 8, 1), date(2026, 8, 31))
+
+
 def test_mid_month_absence_base_and_cap():
     e = employee(
         hire_date=date(2026, 6, 16), absent_dates=frozenset({date(2026, 6, 16), date(2026, 6, 17), date(2026, 6, 1)})
@@ -182,6 +244,55 @@ def test_half_up(value, expected):
 def test_lines_are_rounded_before_totals():
     r = calculate(employee(salary={"basic_salary": D("433.50"), "other_allowance": D("433.50")}))
     assert r["gross_salary"] == 868
+
+
+def test_explicit_calendar_window_limits_rent_slots_and_keeps_thirty_day_rate():
+    report = allocate_rent(
+        2026,
+        6,
+        D("12000.00"),
+        [RentAssignmentInput(101, date(2026, 6, 1), date(2026, 6, 30))],
+        {101},
+        10,
+    )
+    assert len(report["slots"]) == 10
+    assert report["slots"][-1]["calendar_date"] == "2026-06-10"
+    assert report["residents"][0]["rounded_share"] == 333
+    assert Fraction(report["residents"][0]["raw_share"]["numerator"]) / report["residents"][0][
+        "raw_share"
+    ]["denominator"] == Fraction(1000, 3)
+
+
+def test_cross_month_rent_uses_real_unique_dates_and_thirty_day_rate():
+    first, last = date(2026, 1, 28), date(2026, 2, 6)
+    report = allocate_rent(
+        2026,
+        2,
+        D("12000.00"),
+        [RentAssignmentInput(101, first, last)],
+        {101},
+        10,
+        period_start=first,
+        period_end=last,
+        period_basis="DATE_RANGE",
+    )
+    assert [slot["calendar_date"] for slot in report["slots"]] == [
+        (first + timedelta(days=index)).isoformat() for index in range(10)
+    ]
+    assert raw(report["residents"][0]["raw_share"]) == Fraction(1000, 3)
+
+
+def test_legacy_full_month_rent_keeps_thirty_slots_in_february():
+    report = allocate_rent(
+        2026,
+        2,
+        D("12000.00"),
+        [RentAssignmentInput(101, date(2026, 2, 1), date(2026, 2, 28))],
+        {101},
+    )
+    assert len(report["slots"]) == 30
+    assert report["slots"][-1]["calendar_date"] == "2026-02-28"
+    assert report["residents"][0]["rounded_share"] == 1000
 
 
 @pytest.mark.parametrize(

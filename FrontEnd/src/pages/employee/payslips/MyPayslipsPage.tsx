@@ -11,7 +11,7 @@ import PayrollTheme from "../../../components/payroll/PayrollTheme";
 import MoneyText from "../../../components/payroll/MoneyText";
 import { PayrollStatusTag } from "../../../components/payroll/payrollDisplay";
 import {
-  formatPayrollPeriod,
+  formatEmployeePayslipPeriod,
   paymentModeLabel,
 } from "../../../components/payroll/payrollFormat";
 import { useI18n } from "../../../i18n/useI18n";
@@ -74,7 +74,7 @@ export default function MyPayslipsPage() {
       const blob = await downloadMyPayslip(row.id);
       triggerBlobDownload(
         blob,
-        `payslip_${row.year}_${String(row.month).padStart(2, "0")}.pdf`,
+        `payslip_${row.id}_${row.period_start ?? row.year}_${row.period_end ?? String(row.month).padStart(2, "0")}.pdf`,
       );
     } catch (err) {
       message.error(
@@ -99,7 +99,13 @@ export default function MyPayslipsPage() {
           style={{ padding: 0 }}
           onClick={() => navigate(`/employee/payslips/${row.id}`)}
         >
-          {formatPayrollPeriod(row.year, row.month, language)}
+          {formatEmployeePayslipPeriod(
+            row.year,
+            row.month,
+            row.period_start,
+            row.period_end,
+            language,
+          )}
         </Button>
       ),
     },

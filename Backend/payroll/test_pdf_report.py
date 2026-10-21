@@ -5,15 +5,16 @@ from pathlib import Path
 
 import pypdfium2 as pdfium
 import pytest
-from audit.models import AuditLog
-from core.pdf import build_signature_stamp_block, font_pair
 from django.contrib.auth.models import Group
 from django.utils import translation
-from employees.models import EmployeeProfile
 from pypdf import PdfReader
 from pypdf.generic import ContentStream
-from rents.models import Rent, RentType
 from reportlab.pdfbase import pdfmetrics
+
+from audit.models import AuditLog
+from core.pdf import build_signature_stamp_block, font_pair
+from employees.models import EmployeeProfile
+from rents.models import Rent, RentType
 
 from . import dto
 from .i18n import AR, EN, ENUMS, translated

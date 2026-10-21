@@ -110,7 +110,7 @@ describe("PayrollSettingsPage", () => {
     // Other API assumptions are rendered as sent.
     expect(
       screen.getByText(
-        "Normal overtime limit is per calendar month (assumption).",
+        "Normal overtime limit applies once per payroll window (assumption).",
       ),
     ).toBeInTheDocument();
   });

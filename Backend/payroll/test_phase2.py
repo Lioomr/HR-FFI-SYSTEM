@@ -1,6 +1,6 @@
 import json
 import re
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from io import BytesIO
 from pathlib import Path
@@ -9,30 +9,32 @@ from unittest.mock import patch
 
 import openpyxl
 import pytest
-from attendance.models import AttendanceRecord, BioTimeEmployeeMap
-from audit.models import AuditLog
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.core.cache import cache
 from django.test import RequestFactory
 from django.urls import resolve
 from django.utils import timezone
+from pypdf import PdfReader
+from rest_framework.test import APIClient
+
+from attendance.models import AttendanceRecord, BioTimeEmployeeMap
+from audit.models import AuditLog
 from employees.models import EmployeeProfile
 from employees.services.archiving import retire_biotime_mapping_and_archive_profile
 from leaves.models import LeaveRequest, LeaveType
 from loans.models import LoanRequest
 from organization.models import OrganizationNode, UserOrganizationAccess
 from penalties.models import PenaltyCatalog, PenaltyDeduction, PenaltyRecord
-from pypdf import PdfReader
 from rents.models import Rent, RentType
-from rest_framework.test import APIClient
 
-from . import dto, engine
+from . import dto, engine, exporting
 from .i18n import enum_directory
 from .models import (
     AccommodationAssignment,
     PayrollAdjustment,
     PayrollCarryForward,
+    PayrollCarryForwardCollection,
     PayrollRun,
     PayrollSettings,
     Payslip,
@@ -95,8 +97,15 @@ def ctx():
     )
 
 
-def create(ctx, month=9):
-    response = ctx.client.post("/payroll-runs/", {"year": 2026, "month": month}, format="json", **ctx.headers)
+def create(ctx, month=9, calendar_days=30, period_start=None, period_end=None):
+    period_start = period_start or date(2026, month, 1)
+    period_end = period_end or period_start + timedelta(days=calendar_days - 1)
+    response = ctx.client.post(
+        "/payroll-runs/",
+        {"period_start": period_start.isoformat(), "period_end": period_end.isoformat()},
+        format="json",
+        **ctx.headers,
+    )
     assert response.status_code == 201, response.data
     return PayrollRun.objects.get(pk=response.data["data"]["id"])
 
@@ -139,6 +148,115 @@ def test_create_accountless_totals_draft_visibility_and_noop_sync(ctx):
     assert dto.reconciliation(run)["matches"]
     ctx.client.force_authenticate(ctx.employee)
     assert ctx.client.get("/employee/payslips/", **ctx.headers).data["data"]["items"] == []
+
+
+def test_create_requires_valid_date_range_and_exposes_cross_month_window(ctx):
+    missing = ctx.client.post("/payroll-runs/", {}, format="json", **ctx.headers)
+    assert missing.status_code == 422
+    assert missing.data["errors"][0]["code"] == "invalid_date_range"
+    too_many = ctx.client.post(
+        "/payroll-runs/",
+        {"period_start": "2026-01-01", "period_end": "2026-01-31"},
+        format="json",
+        **ctx.headers,
+    )
+    assert too_many.status_code == 422
+    assert too_many.data["errors"][0]["code"] == "invalid_date_range"
+    out_of_range_year = ctx.client.post(
+        "/payroll-runs/",
+        {"period_start": "1800-01-01", "period_end": "1800-01-30"},
+        format="json",
+        **ctx.headers,
+    )
+    assert out_of_range_year.status_code == 422
+    assert out_of_range_year.data["errors"][0]["code"] == "invalid_date_range"
+    mixed = ctx.client.post(
+        "/payroll-runs/",
+        {"period_start": "2026-01-20", "period_end": "2026-02-18", "year": 2026},
+        format="json",
+        **ctx.headers,
+    )
+    assert mixed.status_code == 422 and mixed.data["errors"][0]["code"] == "field_not_editable"
+    response = ctx.client.post(
+        "/payroll-runs/",
+        {"period_start": "2026-01-20", "period_end": "2026-02-18"},
+        format="json",
+        **ctx.headers,
+    )
+    assert response.status_code == 201, response.data
+    value = response.data["data"]
+    assert (value["calendar_days"], value["period_start"], value["period_end"]) == (
+        30,
+        "2026-01-20",
+        "2026-02-18",
+    )
+    assert (value["year"], value["month"], value["period_basis"]) == (2026, 2, "DATE_RANGE")
+    item = PayrollRun.objects.get(pk=value["id"]).items.get()
+    assert dto.item_dto(item)["salary_days"] == "30.00"
+    overlap = ctx.client.post(
+        "/payroll-runs/",
+        {"period_start": "2026-02-01", "period_end": "2026-02-10"},
+        format="json",
+        **ctx.headers,
+    )
+    assert overlap.status_code == 409 and overlap.data["errors"][0]["code"] == "duplicate_period"
+
+
+def test_calendar_window_clips_attendance_leave_and_penalty_evidence(ctx):
+    AttendanceRecord.objects.create(employee_profile=ctx.profile, date=date(2026, 1, 30), status="ABSENT")
+    AttendanceRecord.objects.create(employee_profile=ctx.profile, date=date(2026, 2, 20), status="ABSENT")
+    unpaid = LeaveType.objects.create(company=ctx.company, name="Window unpaid", code="WINDOW_UP", is_paid=False)
+    LeaveRequest.objects.create(
+        company=ctx.company,
+        employee_profile=ctx.profile,
+        leave_type=unpaid,
+        start_date=date(2026, 1, 31),
+        end_date=date(2026, 2, 10),
+        status="approved",
+    )
+    outside_penalty = penalty(ctx, fine="100.00", occurred_on=date(2026, 2, 20))
+    run = create(ctx, period_start=date(2026, 1, 28), period_end=date(2026, 2, 6))
+    source = run.items.get().input_snapshot["source"]
+    assert source["absent_dates"] == ["2026-01-30"]
+    assert source["unpaid_leave_dates"] == [
+        "2026-01-31",
+        "2026-02-01",
+        "2026-02-02",
+        "2026-02-03",
+        "2026-02-04",
+        "2026-02-05",
+        "2026-02-06",
+    ]
+    outside_penalty.refresh_from_db()
+    assert outside_penalty.status == "approved" and outside_penalty.payroll_run_id is None
+    assert run.items.get().lines.filter(source_kind="penalty").count() == 0
+
+
+def test_calendar_window_keeps_future_wage_evidence_claim_pending_without_loss(ctx):
+    deduction = penalty(
+        ctx,
+        wage="200.00",
+        occurred_on=date(2026, 9, 5),
+        evidence={"wage_absence_dates": ["2026-09-05", "2026-09-20"]},
+    )
+    run = create(ctx, calendar_days=10)
+    assert not run.items.get().lines.filter(source_kind="penalty").exists()
+    assert "penalty_wage_evidence_missing" in {issue["code"] for issue in dto.validation(run)["errors"]}
+    deduction.refresh_from_db()
+    assert deduction.status == "approved" and deduction.payroll_run_id is None
+
+    response = ctx.client.post(
+        f"/payroll-runs/{run.pk}/cancel/",
+        {"expected_revision": run.revision, "reason": "Use the complete evidence window"},
+        format="json",
+        **ctx.headers,
+    )
+    assert response.status_code == 200, response.data
+    replacement = create(ctx, calendar_days=30)
+    wage_line = replacement.items.get().lines.get(type="PENALTY_WAGE_WITHHOLDING")
+    assert wage_line.amount == Decimal("200.00")
+    deduction.refresh_from_db()
+    assert deduction.status == "claimed" and deduction.payroll_run_id == replacement.pk
 
 
 @pytest.mark.parametrize(
@@ -261,6 +379,51 @@ def loan(ctx, amount):
     )
 
 
+def test_cross_month_run_uses_period_end_month_for_loan_and_carry_eligibility(ctx):
+    origin = PayrollRun.objects.create(
+        company=ctx.company,
+        year=2026,
+        month=2,
+        calendar_days=10,
+        period_start=date(2026, 2, 19),
+        period_end=date(2026, 2, 28),
+        period_basis=PayrollRun.PeriodBasis.DATE_RANGE,
+        status=PayrollRun.Status.COMPLETED,
+    )
+    balance = PayrollCarryForward.objects.create(
+        company=ctx.company,
+        employee_profile=ctx.profile,
+        origin_run=origin,
+        source_key="cross-month-period-end",
+        type="ABSENCE",
+        original_authorized_amount="100.00",
+        remaining_amount="100.00",
+        source_year=2026,
+        source_month=2,
+    )
+    due_loan = LoanRequest.objects.create(
+        company=ctx.company,
+        employee=ctx.employee,
+        employee_profile=ctx.profile,
+        requested_amount="500.00",
+        approved_amount="500.00",
+        status="approved",
+        target_deduction_year=2026,
+        target_deduction_month=2,
+    )
+
+    run = create(ctx, period_start=date(2026, 1, 20), period_end=date(2026, 2, 18))
+
+    assert (run.year, run.month) == (2026, 2)
+    due_loan.refresh_from_db()
+    assert due_loan.status == "deducted" and due_loan.deduction_payroll_run_id == run.pk
+    reservation = PayrollCarryForwardCollection.objects.get(carry=balance, run=run)
+    assert reservation.state == "CLAIMED" and reservation.amount == Decimal("100.00")
+    lines = run.items.get(employee_profile=ctx.profile).lines
+    assert lines.get(source_kind="loan", source_id=str(due_loan.pk)).amount == Decimal("500.00")
+    assert lines.get(source_kind="carry_forward", source_id=str(balance.pk)).amount == Decimal("100.00")
+
+
 def test_loan_pending_priority_cancel_restores_and_replacement(ctx):
     row = loan(ctx, "11000.00")
     AttendanceRecord.objects.create(employee_profile=ctx.profile, date=date(2026, 9, 1), status="ABSENT")
@@ -302,7 +465,13 @@ def test_loan_pending_priority_cancel_restores_and_replacement(ctx):
     replacement = create(ctx)
     assert replacement.pk != run.pk and PayrollRun.objects.filter(company=ctx.company, month=9).count() == 2
     assert (
-        ctx.client.post("/payroll-runs/", {"year": 2026, "month": 9}, format="json", **ctx.headers).status_code == 409
+        ctx.client.post(
+            "/payroll-runs/",
+            {"period_start": "2026-09-01", "period_end": "2026-09-30"},
+            format="json",
+            **ctx.headers,
+        ).status_code
+        == 409
     )
 
 
@@ -415,7 +584,12 @@ def test_strict_write_validation_rolls_back(ctx, changes):
 def test_audit_failure_rolls_back_creation_and_loan_deduction(ctx):
     row = loan(ctx, "500.00")
     with patch("payroll.engine.audit", side_effect=RuntimeError("audit unavailable")):
-        response = ctx.client.post("/payroll-runs/", {"year": 2026, "month": 9}, format="json", **ctx.headers)
+        response = ctx.client.post(
+            "/payroll-runs/",
+            {"period_start": "2026-09-01", "period_end": "2026-09-30"},
+            format="json",
+            **ctx.headers,
+        )
     assert response.status_code == 500
     assert not PayrollRun.objects.filter(company=ctx.company).exists()
     row.refresh_from_db()
@@ -529,8 +703,8 @@ def test_rent_non_payroll_resident_rounding_report_frozen_and_exports(ctx):
 
 def test_approved_contract_dto_fields_and_nested_shapes(ctx):
     examples = json.loads(Path(__file__).with_name("contract_examples.json").read_text(encoding="utf-8"))
-    assert sum(len(values) for values in enum_directory().values()) == 124
-    assert len(enum_directory()["validation_codes"]) == 44
+    assert sum(len(values) for values in enum_directory().values()) == 125
+    assert len(enum_directory()["validation_codes"]) == 45
     run = create(ctx)
     edit(ctx, run, {"absence_days_override": "2.00", "bonus": "50.00"})
     run.refresh_from_db()
@@ -666,7 +840,19 @@ def test_export_formula_prefixes_and_no_money_float(ctx):
     assert not any(cell.data_type == "f" for sheet in wb for row in sheet for cell in row)
 
 
-def penalty(ctx, fine="0.00", wage="0.00", evidence=None):
+def test_legacy_export_uses_effective_full_month_calendar_day_count(ctx):
+    run = create(ctx, month=8, calendar_days=30)
+    PayrollRun.objects.filter(pk=run.pk).update(
+        calendar_days=None,
+        period_end=date(2026, 8, 31),
+        period_basis="LEGACY_FULL_MONTH",
+    )
+    run.refresh_from_db()
+    rows = exporting.payroll_rows(run, run.items.filter(is_active=True))
+    assert rows[1][rows[0].index("calendar_days")] == 31
+
+
+def penalty(ctx, fine="0.00", wage="0.00", evidence=None, occurred_on=date(2026, 9, 1)):
     catalog = PenaltyCatalog.objects.create(
         code="P2",
         category="p2",
@@ -681,7 +867,7 @@ def penalty(ctx, fine="0.00", wage="0.00", evidence=None):
         company=ctx.company,
         employee_profile=ctx.profile,
         catalog=catalog,
-        occurred_on=date(2026, 9, 1),
+        occurred_on=occurred_on,
         occurrence_number=1,
         action="deduction",
         amount=fine,
@@ -1049,5 +1235,5 @@ def test_arabic_enums_and_private_headers(ctx):
     response = ctx.client.get("/payroll-settings/enums/", HTTP_ACCEPT_LANGUAGE="ar", **ctx.headers)
     assert response.status_code == 200
     codes = response.data["data"]["validation_codes"]
-    assert len(codes) == 44 and any("أ" in r["label"] or "ا" in r["label"] for r in codes)
+    assert len(codes) == 45 and any("أ" in r["label"] or "ا" in r["label"] for r in codes)
     assert response["Cache-Control"] == "private, no-store"

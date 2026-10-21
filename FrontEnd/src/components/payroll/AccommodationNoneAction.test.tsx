@@ -29,8 +29,8 @@ function mount() {
     <AccommodationNoneAction
       employeeProfileId={101}
       name="Recorded employee"
-      year={2026}
-      month={2}
+      periodStart="2026-02-10"
+      periodEnd="2026-02-20"
       onSaved={refresh}
     />,
   );
@@ -38,7 +38,7 @@ function mount() {
 }
 async function confirm() {
   fireEvent.click(
-    screen.getByRole("button", { name: "Set 'none' for this month" }),
+    screen.getByRole("button", { name: "Set 'none' for this payroll window" }),
   );
   const dialog = await screen.findByRole("dialog");
   expect(within(dialog).getByText(/Recorded employee/)).toBeInTheDocument();
@@ -66,8 +66,8 @@ describe("single employee accommodation none action", () => {
       employee_profile_id: 101,
       status: "none",
       rent_id: null,
-      start_date: "2026-02-01",
-      end_date: "2026-02-28",
+      start_date: "2026-02-10",
+      end_date: "2026-02-20",
       reason: "Employee uses private accommodation",
     });
   });

@@ -38,6 +38,9 @@ const run = (status: string): PayrollRun =>
     id: 5,
     year: 2026,
     month: 9,
+    calendar_days: 15,
+    period_start: "2026-09-01",
+    period_end: "2026-09-15",
     status,
     total_net: "1000.00",
     total_employees: 1,
@@ -82,6 +85,35 @@ afterEach(() => {
 });
 
 describe("payroll finalization", () => {
+  it("shows the selected inclusive calendar window in the legacy review", async () => {
+    render(<PayrollRunDetailsPage />);
+    expect(
+      await screen.findAllByText(
+        "Sep 1, 2026 – Sep 15, 2026 · 15 calendar days",
+      ),
+    ).toHaveLength(2);
+  });
+
+  it("falls back to the compatibility year and month for an old run without server dates", async () => {
+    vi.mocked(getPayrollRunDetails)
+      .mockReset()
+      .mockResolvedValue({
+        status: "success",
+        data: {
+          ...run("COMPLETED"),
+          calendar_days: null,
+          period_start: null,
+          period_end: null,
+        },
+      });
+    render(<PayrollRunDetailsPage />);
+    expect(
+      await screen.findAllByText(
+        "Sep 1, 2026 – Sep 30, 2026 · 30 calendar days",
+      ),
+    ).toHaveLength(2);
+  });
+
   it("warns that attendance penalties are included, then refetches the run", async () => {
     render(<PayrollRunDetailsPage />);
 

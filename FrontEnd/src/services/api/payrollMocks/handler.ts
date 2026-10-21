@@ -430,23 +430,56 @@ function bumpRun(run: PayrollRunDto) {
 }
 
 function createRun(body: Json) {
-  const year = Number(body.year);
-  const month = Number(body.month);
+  const parseIsoDate = (value: unknown) => {
+    if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+      return null;
+    }
+    const parsed = new Date(`${value}T00:00:00.000Z`);
+    return !Number.isNaN(parsed.getTime()) &&
+      parsed.toISOString().slice(0, 10) === value
+      ? parsed
+      : null;
+  };
+  const periodStart = parseIsoDate(body.period_start);
+  const periodEnd = parseIsoDate(body.period_end);
+  const calendarDays =
+    periodStart && periodEnd
+      ? Math.floor((periodEnd.getTime() - periodStart.getTime()) / 86_400_000) +
+        1
+      : 0;
+  const yearsInRange =
+    periodStart &&
+    periodEnd &&
+    periodStart.getUTCFullYear() >= 1900 &&
+    periodStart.getUTCFullYear() <= 2100 &&
+    periodEnd.getUTCFullYear() >= 1900 &&
+    periodEnd.getUTCFullYear() <= 2100;
   if (
-    !Number.isInteger(year) ||
-    !Number.isInteger(month) ||
-    year < 1900 ||
-    year > 2100 ||
-    month < 1 ||
-    month > 12
+    !periodStart ||
+    !periodEnd ||
+    !yearsInRange ||
+    calendarDays < 1 ||
+    calendarDays > 30
   ) {
-    fail(422, "Select a valid payroll year and month.", [
-      issue("invalid_period", "Select a valid payroll year and month."),
+    fail(422, "Select an inclusive date range of 30 days or fewer.", [
+      issue(
+        "invalid_date_range",
+        "Select an inclusive date range of 30 days or fewer.",
+        "period_end",
+      ),
     ]);
   }
+  const year = periodEnd.getUTCFullYear();
+  const month = periodEnd.getUTCMonth() + 1;
+  const periodStartIso = body.period_start as string;
+  const periodEndIso = body.period_end as string;
   const duplicate = state.runs.find(
     (run) =>
-      run.year === year && run.month === month && run.status !== "CANCELLED",
+      run.status !== "CANCELLED" &&
+      !!run.period_start &&
+      !!run.period_end &&
+      run.period_start <= periodEndIso &&
+      run.period_end >= periodStartIso,
   );
   if (duplicate) {
     // Legacy string-array form, retained by the contract.
@@ -455,15 +488,16 @@ function createRun(body: Json) {
     ]);
   }
   const template = clone(examples.run.data) as unknown as PayrollRunDto;
-  const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate();
   const run: PayrollRunDto = {
     ...template,
     id: state.nextId++,
+    period_basis: "DATE_RANGE",
     year,
     month,
+    calendar_days: calendarDays,
     revision: 1,
-    period_start: `${year}-${String(month).padStart(2, "0")}-01`,
-    period_end: `${year}-${String(month).padStart(2, "0")}-${lastDay}`,
+    period_start: periodStartIso,
+    period_end: periodEndIso,
     calculated_at: now(),
   };
   state.runs.unshift(run);

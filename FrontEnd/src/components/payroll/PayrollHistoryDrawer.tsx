@@ -13,6 +13,7 @@ import {
 import EmptyState from "../ui/EmptyState";
 import LoadingState from "../ui/LoadingState";
 import { useI18n } from "../../i18n/useI18n";
+import { humanizeCode } from "../../utils/humanizeCode";
 import { formatDateTime } from "../../utils/dateTime";
 import { usePayrollEnums } from "../../hooks/usePayrollEnums";
 import {
@@ -152,7 +153,7 @@ export default function PayrollHistoryDrawer({
             t(
               `payroll.field.${row.field}`,
               undefined,
-              row.field.replaceAll("_", " "),
+              humanizeCode(row.field),
             ),
         },
         {

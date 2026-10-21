@@ -2,6 +2,7 @@
 
 import json
 import re
+from datetime import date
 from decimal import Decimal
 from io import BytesIO
 
@@ -56,9 +57,21 @@ def payroll_rows(run, items):
     headers = (
         LEGACY_HEADERS
         + EXTRA_FIELDS
-        + ["carry_forward", "settings_revision", "validation_errors", "validation_warnings"]
+        + [
+            "period_start",
+            "period_end",
+            "calendar_days",
+            "carry_forward",
+            "settings_revision",
+            "validation_errors",
+            "validation_warnings",
+        ]
     )
     counts = dto.validation(run)["counts"]
+    run_value = dto.run_dto(run)
+    effective_calendar_days = run_value["calendar_days"] or (
+        date.fromisoformat(run_value["period_end"]) - date.fromisoformat(run_value["period_start"])
+    ).days + 1
     rows = [headers]
     for item in items:
         value = dto.item_dto(item)
@@ -78,6 +91,9 @@ def payroll_rows(run, items):
                 for v in legacy
                 + [value[k] for k in EXTRA_FIELDS]
                 + [
+                    run_value["period_start"],
+                    run_value["period_end"],
+                    effective_calendar_days,
                     value["carry_forward"],
                     run.settings_snapshot.get("settings_revision", 0),
                     counts["errors"],
@@ -208,7 +224,13 @@ def workbook(run, items):
                     ]
                 ]
             )
-        for kind in ("monthly_rent", "vacant_unallocated_raw", "not_in_payroll_raw", "rounding_difference"):
+        for kind in (
+            "monthly_rent",
+            "period_rent",
+            "vacant_unallocated_raw",
+            "not_in_payroll_raw",
+            "rounding_difference",
+        ):
             raw = value[kind]
             sheet.append(
                 [

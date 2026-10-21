@@ -2,10 +2,12 @@
 
 from copy import deepcopy
 
-from audit.models import AuditLog
-from audit.utils import audit
 from django.db import transaction
 from django.shortcuts import get_object_or_404
+from rest_framework.exceptions import APIException, PermissionDenied
+
+from audit.models import AuditLog
+from audit.utils import audit
 from employees.models import EmployeeProfile
 from organization.models import OrganizationNode
 from organization.services import (
@@ -13,7 +15,6 @@ from organization.services import (
     filter_queryset_by_company_scope,
     get_active_company_for_request,
 )
-from rest_framework.exceptions import APIException, PermissionDenied
 
 from .models import PayrollAdjustment, PayrollRun, PayrollSettings
 from .permissions import IsPayrollManager

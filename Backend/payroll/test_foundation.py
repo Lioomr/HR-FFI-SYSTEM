@@ -9,9 +9,6 @@ from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 import pytest
-from attendance.models import BioTimeEmployeeMap
-from attendance.schedule import get_work_schedule, is_rest_day_for_everyone, is_working_day
-from audit.models import AuditLog
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.core.exceptions import ValidationError
@@ -19,10 +16,14 @@ from django.core.management import call_command
 from django.db import IntegrityError, connection, transaction
 from django.http import Http404
 from django.test import RequestFactory
+from rest_framework.exceptions import PermissionDenied
+
+from attendance.models import BioTimeEmployeeMap
+from attendance.schedule import get_work_schedule, is_rest_day_for_everyone, is_working_day
+from audit.models import AuditLog
 from employees.models import EmployeeProfile
 from organization.models import OrganizationNode, UserOrganizationAccess
 from rents.models import Rent, RentType
-from rest_framework.exceptions import PermissionDenied
 
 from .accommodation import end_assignments_for_archive, save_assignment
 from .calculator import EmployeeInput, calculate_employee, date_set, default_settings, period_dates
@@ -70,7 +71,7 @@ def test_settings_defaults_configuration_and_audit(context):
     assert history.type == "SETTINGS_CHANGE" and history.reason == "Policy selected"
     rendered = PayrollSettingsSerializer(setting).data
     assert rendered["foreign_gosi_rate"] == "0.020000" and rendered["monthly_foreign_id_cost"] == "862.50"
-    assert rendered["normal_overtime_limit_period"] == "CALENDAR_MONTH"
+    assert rendered["normal_overtime_limit_period"] == "PAYROLL_WINDOW"
     assert {row["key"] for row in rendered["assumptions"]} == {
         "payroll.assumption.overtime_basic",
         "payroll.assumption.overtime_calendar_month",
@@ -332,8 +333,8 @@ def test_employee_serializer_has_no_company_cost_provision_keys(context):
     }
 
 
-def test_catalog_parity_and_all_44_validation_keys():
-    assert set(EN) == set(AR) and len(EN) == 249
+def test_catalog_parity_and_all_45_validation_keys():
+    assert set(EN) == set(AR) and len(EN) == 251
     removed = "payroll.assumption.provision_proration_pending"
     assert removed not in EN
     for language, messages in (("en", EN), ("ar", AR)):
@@ -343,7 +344,7 @@ def test_catalog_parity_and_all_44_validation_keys():
             catalog = GNUTranslations(stream)
         assert {key: value for key, value in catalog._catalog.items() if key} == messages
     directory = enum_directory("ar")
-    assert len(directory["validation_codes"]) == 44
+    assert len(directory["validation_codes"]) == 45
     assert all(c["label"] == AR[c["label_key"]] for entries in directory.values() for c in entries)
     assert "payroll.validation.overtime_eligibility_unknown" not in EN
 

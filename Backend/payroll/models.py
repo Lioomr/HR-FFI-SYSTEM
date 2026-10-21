@@ -1,3 +1,5 @@
+import calendar
+from datetime import date, timedelta
 from decimal import Decimal
 
 from django.conf import settings
@@ -5,6 +7,7 @@ from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.utils.translation import gettext_lazy as _
+
 from organization.models import OrganizationNode
 
 from .i18n import ENUMS
@@ -17,8 +20,20 @@ class PayrollRun(models.Model):
         PAID = "PAID", _("Paid")
         CANCELLED = "CANCELLED", _("Cancelled")
 
+    class PeriodBasis(models.TextChoices):
+        DATE_RANGE = "DATE_RANGE", _("Date range")
+        LEGACY_FULL_MONTH = "LEGACY_FULL_MONTH", _("Legacy full month")
+
     year = models.PositiveIntegerField()
     month = models.PositiveIntegerField()
+    calendar_days = models.PositiveSmallIntegerField(
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(1), MaxValueValidator(30)]
+    )
+    period_start = models.DateField(null=True, blank=True)
+    period_end = models.DateField(null=True, blank=True)
+    period_basis = models.CharField(max_length=24, choices=PeriodBasis.choices, default=PeriodBasis.DATE_RANGE)
     company = models.ForeignKey(
         OrganizationNode,
         on_delete=models.PROTECT,
@@ -54,17 +69,64 @@ class PayrollRun(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        ordering = ["-year", "-month", "-id"]
+        ordering = ["-period_end", "-period_start", "-id"]
         constraints = [
             models.UniqueConstraint(
-                fields=["company", "year", "month"],
+                fields=["company", "period_start", "period_end"],
                 condition=~models.Q(status="CANCELLED"),
-                name="unique_payroll_run_period",
-            )
+                name="unique_payroll_run_date_range",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(calendar_days__isnull=True)
+                    | (models.Q(calendar_days__gte=1) & models.Q(calendar_days__lte=30))
+                ),
+                name="payroll_run_calendar_days_range",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(period_basis="LEGACY_FULL_MONTH")
+                    | (
+                        models.Q(period_end__gte=models.F("period_start"))
+                        & models.Q(period_end__lte=models.F("period_start") + timedelta(days=29))
+                    )
+                ),
+                name="payroll_run_date_range_length",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(period_start__isnull=True, period_end__isnull=True)
+                    | models.Q(period_start__isnull=False, period_end__isnull=False)
+                ),
+                name="payroll_run_date_range_pair",
+            ),
         ]
 
     def __str__(self):
+        if self.period_start and self.period_end:
+            return f"{self.period_start:%Y-%m-%d} - {self.period_end:%Y-%m-%d}"
         return f"{self.year}-{self.month:02d}"
+
+    def save(self, *args, **kwargs):
+        if not self.period_start and not self.period_end and self.year and self.month:
+            self.period_start = date(self.year, self.month, 1)
+            if self.calendar_days is None:
+                self.period_end = date(self.year, self.month, calendar.monthrange(self.year, self.month)[1])
+                self.period_basis = self.PeriodBasis.LEGACY_FULL_MONTH
+            else:
+                self.period_end = date(self.year, self.month, self.calendar_days)
+        return super().save(*args, **kwargs)
+
+    def clean(self):
+        super().clean()
+        if (self.period_start is None) != (self.period_end is None):
+            raise ValidationError({"period_end": "invalid_date_range"})
+        if self.period_start and self.period_end:
+            days = (self.period_end - self.period_start).days + 1
+            if self.period_end < self.period_start or (self.period_basis == self.PeriodBasis.DATE_RANGE and days > 30):
+                raise ValidationError({"period_end": "invalid_date_range"})
+            if (self.year, self.month) != (self.period_end.year, self.period_end.month):
+                raise ValidationError({"period_end": "invalid_period"})
 
 
 class PayrollRunItem(models.Model):

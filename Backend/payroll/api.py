@@ -6,14 +6,20 @@ from copy import deepcopy
 from datetime import date
 from decimal import Decimal
 
-from audit.models import AuditLog
-from core.pagination import StandardPagination
-from core.responses import error, success
 from django.db import IntegrityError, transaction
 from django.db.models import Q
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
+from rest_framework import serializers, viewsets
+from rest_framework.decorators import action
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+from rest_framework.views import APIView
+
+from audit.models import AuditLog
+from core.pagination import StandardPagination
+from core.responses import error, success
 from employees.models import EmployeeProfile
 from organization.services import (
     ensure_company_write_allowed,
@@ -21,11 +27,6 @@ from organization.services import (
     filter_queryset_by_company_scope,
     get_active_company_for_request,
 )
-from rest_framework import serializers, viewsets
-from rest_framework.decorators import action
-from rest_framework.permissions import IsAuthenticated
-from rest_framework.response import Response
-from rest_framework.views import APIView
 
 from . import dto, engine
 from .accommodation import save_assignment
@@ -55,9 +56,14 @@ def integer(value, field, minimum=1, maximum=None):
             raise ValueError()
         return parsed
     except (ValueError, TypeError):
-        raise PayrollDomainError(
-            "invalid_period" if field in ("year", "month") else "invalid_choice", field=field
-        ) from None
+        code = (
+            "invalid_period"
+            if field in ("year", "month")
+            else "invalid_calendar_days"
+            if field == "calendar_days"
+            else "invalid_choice"
+        )
+        raise PayrollDomainError(code, field=field) from None
 
 
 def boolean(value, field):
@@ -236,19 +242,44 @@ class PayrollRunViewSet(PayrollApiMixin, viewsets.GenericViewSet):
             if request.query_params["status"] not in PayrollRun.Status.values:
                 raise PayrollDomainError("invalid_choice", field="status")
             qs = qs.filter(status=request.query_params["status"])
-        return self.page(qs.order_by("-year", "-month", "-id"), request, dto.run_dto)
+        return self.page(qs.order_by("-period_end", "-period_start", "-id"), request, dto.run_dto)
 
     def create(self, request):
-        body(request.data, ("year", "month"))
+        body(request.data, ("period_start", "period_end"))
         ensure_company_write_allowed(request)
         company = get_active_company_for_request(request)
-        year, month = (
-            integer(request.data.get("year"), "year", 1900, 2100),
-            integer(request.data.get("month"), "month", 1, 12),
-        )
+        period_start = iso_date(request.data.get("period_start"), "period_start")
+        period_end = iso_date(request.data.get("period_end"), "period_end")
+        calendar_days = (period_end - period_start).days + 1
+        if (
+            not 1900 <= period_start.year <= 2100
+            or not 1900 <= period_end.year <= 2100
+            or not 1 <= calendar_days <= 30
+        ):
+            raise PayrollDomainError("invalid_date_range", field="period_end", max_days=30)
+        year, month = period_end.year, period_end.month
         try:
             with transaction.atomic():
-                run = PayrollRun.objects.create(company=company, year=year, month=month)
+                company.__class__.objects.select_for_update().get(pk=company.pk)
+                if (
+                    PayrollRun.objects.filter(
+                        company=company,
+                        period_start__lte=period_end,
+                        period_end__gte=period_start,
+                    )
+                    .exclude(status="CANCELLED")
+                    .exists()
+                ):
+                    raise PayrollDomainError("duplicate_period", status_code=409)
+                run = PayrollRun.objects.create(
+                    company=company,
+                    year=year,
+                    month=month,
+                    calendar_days=calendar_days,
+                    period_start=period_start,
+                    period_end=period_end,
+                    period_basis=PayrollRun.PeriodBasis.DATE_RANGE,
+                )
                 run = engine.recalculate(run, request=request, reason="Payroll draft created")["run"]
                 engine.event(
                     request,
@@ -261,10 +292,16 @@ class PayrollRunViewSet(PayrollApiMixin, viewsets.GenericViewSet):
                     company_id=company.pk,
                 )
         except IntegrityError:
-            if PayrollRun.objects.filter(company=company, year=year, month=month).exclude(status="CANCELLED").exists():
-                return error(
-                    "Payroll run already exists.", errors=["Payroll run already exists for this period."], status=409
+            if (
+                PayrollRun.objects.filter(
+                    company=company,
+                    period_start=period_start,
+                    period_end=period_end,
                 )
+                .exclude(status="CANCELLED")
+                .exists()
+            ):
+                raise PayrollDomainError("duplicate_period", status_code=409) from None
             raise
         return success(dto.run_dto(run), status=201)
 
@@ -534,7 +571,10 @@ def notify_payslips(run_id):
                 recipient=slip.employee,
                 company=run.company,
                 event_key="payroll.payslip_available",
-                **notification_text("payroll.payslip_available", period=f"{run.year}-{run.month:02d}"),
+                **notification_text(
+                    "payroll.payslip_available",
+                    period=f"{run.period_start.isoformat()} - {run.period_end.isoformat()}",
+                ),
                 category=Notification.Category.PAYROLL,
                 action_url=f"/employee/payslips/{slip.pk}",
                 related_object=slip,
@@ -544,70 +584,69 @@ def notify_payslips(run_id):
             logger.exception("payroll_payslip_notification_failed", extra={"entity_id": slip.pk})
 
 
-@transaction.atomic
-def edit_item(run, item, request):
-    body(request.data, ("expected_revision", "changes", "reason"))
-    reason = reason_value(request.data)
-    run = engine.lock_run(run)
-    engine.guard(run, integer(request.data.get("expected_revision"), "expected_revision"))
-    item = get_object_or_404(run.items.filter(is_active=True), pk=item.pk)
-    changes = request.data.get("changes")
-    allowed = {
+_EDITABLE_ITEM_FIELDS = {
+    "absence_days_override",
+    "overtime_normal_hours",
+    "weekly_rest_work_days",
+    "official_holiday_work_days",
+    "bonus",
+    "incentive",
+    "other_addition",
+    "other_deduction",
+    "salary_components",
+    "zero_salary_reason",
+    "zero_salary_reason_detail",
+    "suspended_pay_decision",
+    "override_overtime_eligibility",
+}
+
+_ADJUSTMENT_KINDS = {
+    "absence_days_override": "ABSENCE_OVERRIDE",
+    "salary_components": "SALARY_ADJUSTMENT",
+    "zero_salary_reason": "ZERO_SALARY_REASON",
+    "other_deduction": "OTHER_DEDUCTION_ENTRY",
+    "override_overtime_eligibility": "OVERTIME_ELIGIBILITY_OVERRIDE",
+}
+
+
+def _clean_item_change(key, value, item):
+    """Validate one requested item change and return its normalized stored value."""
+    if key == "salary_components":
+        body(value, engine.SALARY_COMPONENTS)
+        return {name: str(MoneyInput().run_validation(v)) for name, v in value.items()}
+    if key == "override_overtime_eligibility":
+        if not isinstance(value, bool):
+            raise PayrollDomainError("invalid_choice", field=key)
+        return value
+    if key in ("zero_salary_reason", "suspended_pay_decision"):
+        choices = [
+            r["value"] for r in ENUMS["zero_salary_reason" if key == "zero_salary_reason" else "suspended_pay_decision"]
+        ]
+        if value is not None and value not in choices:
+            raise PayrollDomainError("invalid_choice", field=key)
+        if key == "suspended_pay_decision" and item.employee_profile.employment_status != "SUSPENDED":
+            raise PayrollDomainError("field_not_editable", field=key)
+        return value
+    if key == "zero_salary_reason_detail":
+        if value is not None and (not isinstance(value, str) or len(value) > 2000):
+            raise PayrollDomainError("invalid_choice", field=key)
+        return value or ""
+    if key == "absence_days_override" and value is None:
+        return None
+    field = MoneyInput()
+    if key in (
         "absence_days_override",
         "overtime_normal_hours",
         "weekly_rest_work_days",
         "official_holiday_work_days",
-        "bonus",
-        "incentive",
-        "other_addition",
-        "other_deduction",
-        "salary_components",
-        "zero_salary_reason",
-        "zero_salary_reason_detail",
-        "suspended_pay_decision",
-        "override_overtime_eligibility",
-    }
-    body(changes, allowed)
-    if not changes:
-        raise PayrollDomainError("field_not_editable", field="changes")
-    cleaned = {}
-    for key, value in changes.items():
-        if key == "salary_components":
-            body(value, engine.SALARY_COMPONENTS)
-            cleaned[key] = {name: str(MoneyInput().run_validation(v)) for name, v in value.items()}
-        elif key == "override_overtime_eligibility":
-            if not isinstance(value, bool):
-                raise PayrollDomainError("invalid_choice", field=key)
-            cleaned[key] = value
-        elif key in ("zero_salary_reason", "suspended_pay_decision"):
-            choices = [
-                r["value"]
-                for r in ENUMS["zero_salary_reason" if key == "zero_salary_reason" else "suspended_pay_decision"]
-            ]
-            if value is not None and value not in choices:
-                raise PayrollDomainError("invalid_choice", field=key)
-            if key == "suspended_pay_decision" and item.employee_profile.employment_status != "SUSPENDED":
-                raise PayrollDomainError("field_not_editable", field=key)
-            cleaned[key] = value
-        elif key == "zero_salary_reason_detail":
-            if value is not None and (not isinstance(value, str) or len(value) > 2000):
-                raise PayrollDomainError("invalid_choice", field=key)
-            cleaned[key] = value or ""
-        elif key == "absence_days_override" and value is None:
-            cleaned[key] = None
-        else:
-            field = MoneyInput()
-            if key in (
-                "absence_days_override",
-                "overtime_normal_hours",
-                "weekly_rest_work_days",
-                "official_holiday_work_days",
-            ):
-                field = serializers.DecimalField(max_digits=8, decimal_places=2, min_value=0)
-                if not isinstance(value, str) or not re.fullmatch(r"\d+(?:\.\d{1,2})?", value):
-                    raise PayrollDomainError("invalid_quantity", field=key)
-            cleaned[key] = str(field.run_validation(value))
-    original = dto.item_dto(item)
+    ):
+        field = serializers.DecimalField(max_digits=8, decimal_places=2, min_value=0)
+        if not isinstance(value, str) or not re.fullmatch(r"\d+(?:\.\d{1,2})?", value):
+            raise PayrollDomainError("invalid_quantity", field=key)
+    return str(field.run_validation(value))
+
+
+def _drop_unchanged_salary_components(cleaned, original):
     if "salary_components" in cleaned and original["monthly_salary_components"] is not None:
         cleaned["salary_components"] = {
             name: value
@@ -616,7 +655,9 @@ def edit_item(run, item, request):
         }
         if not cleaned["salary_components"]:
             del cleaned["salary_components"]
-    old = deepcopy(item.input_snapshot)
+
+
+def _apply_item_overrides(item, cleaned, reason):
     overrides = item.input_snapshot.setdefault("overrides", {})
     if all(
         (key in overrides and overrides[key] == value)
@@ -634,26 +675,12 @@ def edit_item(run, item, request):
         item.input_snapshot["absence_override_reason"] = reason
     if "override_overtime_eligibility" in cleaned:
         item.input_snapshot["overtime_override_reason"] = reason
-    result = engine.recalculate(
-        run,
-        request=request,
-        reason=reason,
-        advance_revision=True,
-        audit_source_changes=False,
-        input_snapshots={item.pk: item.input_snapshot},
-    )
-    item.refresh_from_db()
-    item.payroll_run = result["run"]
-    new = dto.item_dto(item)
-    kinds = {
-        "absence_days_override": "ABSENCE_OVERRIDE",
-        "salary_components": "SALARY_ADJUSTMENT",
-        "zero_salary_reason": "ZERO_SALARY_REASON",
-        "other_deduction": "OTHER_DEDUCTION_ENTRY",
-        "override_overtime_eligibility": "OVERTIME_ELIGIBILITY_OVERRIDE",
-    }
+
+
+def _record_item_adjustments(run, item, request, reason, cleaned, old, original, new, input_revision):
     for kind in {
-        kinds.get(key, "MANUAL_ADJUSTMENT" if key == "suspended_pay_decision" else "ADDITION_ENTRY") for key in cleaned
+        _ADJUSTMENT_KINDS.get(key, "MANUAL_ADJUSTMENT" if key == "suspended_pay_decision" else "ADDITION_ENTRY")
+        for key in cleaned
     }:
         log = engine.event(
             request,
@@ -677,8 +704,38 @@ def edit_item(run, item, request):
             new_value=engine.frozen({"overrides": item.input_snapshot["overrides"], "effective": new}),
             reason=reason,
             actor=request.user,
-            input_revision=result["run"].revision,
+            input_revision=input_revision,
         )
+
+
+@transaction.atomic
+def edit_item(run, item, request):
+    body(request.data, ("expected_revision", "changes", "reason"))
+    reason = reason_value(request.data)
+    run = engine.lock_run(run)
+    engine.guard(run, integer(request.data.get("expected_revision"), "expected_revision"))
+    item = get_object_or_404(run.items.filter(is_active=True), pk=item.pk)
+    changes = request.data.get("changes")
+    body(changes, _EDITABLE_ITEM_FIELDS)
+    if not changes:
+        raise PayrollDomainError("field_not_editable", field="changes")
+    cleaned = {key: _clean_item_change(key, value, item) for key, value in changes.items()}
+    original = dto.item_dto(item)
+    _drop_unchanged_salary_components(cleaned, original)
+    old = deepcopy(item.input_snapshot)
+    _apply_item_overrides(item, cleaned, reason)
+    result = engine.recalculate(
+        run,
+        request=request,
+        reason=reason,
+        advance_revision=True,
+        audit_source_changes=False,
+        input_snapshots={item.pk: item.input_snapshot},
+    )
+    item.refresh_from_db()
+    item.payroll_run = result["run"]
+    new = dto.item_dto(item)
+    _record_item_adjustments(run, item, request, reason, cleaned, old, original, new, result["run"].revision)
     if cleaned.get("override_overtime_eligibility"):
         engine.event(
             request,

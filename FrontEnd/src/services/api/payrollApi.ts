@@ -47,8 +47,8 @@ export type PayrollRunListResponse = PaginatedResponse<PayrollRun>;
 export type PayrollRunItemListResponse = PaginatedResponse<PayrollRunItem>;
 
 export interface CreatePayrollRunRequest {
-  year: number;
-  month: number;
+  period_start: string;
+  period_end: string;
 }
 
 const runPath = (runId: number | string) => `/payroll-runs/${runId}/`;

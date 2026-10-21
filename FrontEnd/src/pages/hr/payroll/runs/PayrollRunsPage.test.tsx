@@ -55,6 +55,9 @@ describe("PayrollRunsPage", () => {
     expect(
       await screen.findByText("September 2026", {}, FIND),
     ).toBeInTheDocument();
+    expect(
+      screen.getByText("Sep 1, 2026 – Sep 30, 2026 · 30 calendar days"),
+    ).toBeInTheDocument();
     expect(screen.getAllByText("102,670").length).toBeGreaterThan(0);
     expect(screen.getAllByText("122,350").length).toBeGreaterThan(0);
   });

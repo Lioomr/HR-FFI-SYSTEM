@@ -11,14 +11,8 @@ import { Link } from "react-router-dom";
 import {
   Alert,
   Button,
-  Checkbox,
-  Dropdown,
-  Input,
-  Select,
   Space,
-  Switch,
   Table,
-  Tag,
   Typography,
   Tooltip,
   type InputRef,
@@ -32,6 +26,8 @@ import {
   type PayrollListState,
 } from "./payrollNavigation";
 import MoneyText from "./MoneyText";
+import PayrollGridToolbar from "./PayrollGridToolbar";
+import { useMoneyColumnGroups, type MoneyColumn } from "./payrollGridColumns";
 import AbsenceQuickEdit from "./AbsenceQuickEdit";
 import {
   readPayrollIndex,
@@ -52,23 +48,11 @@ import type {
   Money,
   PayrollRunItemDto,
   PayrollRunSummaryDto,
-  ProvisionLineType,
   ValidationReport,
   PayrollStatus,
 } from "../../services/api/payrollTypes";
 const { Text } = Typography;
 type Item = PayrollRunItemDto;
-type ItemMoneyKey = {
-  [K in keyof Item]: Item[K] extends Money | null ? K : never;
-}[keyof Item];
-interface MoneyColumn {
-  key: ItemMoneyKey;
-  titleKey: string;
-  total: (summary: PayrollRunSummaryDto) => ReactNode;
-  strong?: boolean;
-}
-const unknownCount = (summary: PayrollRunSummaryDto, type: ProvisionLineType) =>
-  summary.unknown_provision_counts?.[type] ?? 0;
 
 export default function PayrollItemsGrid({
   runId,
@@ -363,197 +347,7 @@ export default function PayrollItemsGrid({
       setSaving(null);
     }
   };
-  const groups = useMemo(() => {
-    const salary: MoneyColumn[] = [
-      {
-        key: "basic_salary",
-        titleKey: "payroll.line.basic_salary",
-        total: (s) => s.salary_components.basic_salary,
-      },
-      {
-        key: "accommodation_allowance",
-        titleKey: "payroll.line.accommodation_allowance",
-        total: (s) => s.salary_components.accommodation_allowance,
-      },
-      {
-        key: "transportation_allowance",
-        titleKey: "payroll.line.transportation_allowance",
-        total: (s) => s.salary_components.transportation_allowance,
-      },
-      {
-        key: "telephone_allowance",
-        titleKey: "payroll.line.telephone_allowance",
-        total: (s) => s.salary_components.telephone_allowance,
-      },
-      {
-        key: "petrol_allowance",
-        titleKey: "payroll.line.petrol_allowance",
-        total: (s) => s.salary_components.petrol_allowance,
-      },
-      {
-        key: "other_allowance",
-        titleKey: "payroll.line.other_allowance",
-        total: (s) => s.salary_components.other_allowance,
-      },
-      {
-        key: "gross_salary",
-        titleKey: "payroll.field.gross_salary",
-        total: (s) => s.total_gross_salary,
-        strong: true,
-      },
-    ];
-    const additions: MoneyColumn[] = [
-      {
-        key: "overtime_normal",
-        titleKey: "payroll.line.overtime_normal",
-        total: (s) => s.additions.overtime_normal,
-      },
-      {
-        key: "weekly_rest_work",
-        titleKey: "payroll.line.weekly_rest_work",
-        total: (s) => s.additions.weekly_rest_work,
-      },
-      {
-        key: "official_holiday_work",
-        titleKey: "payroll.line.official_holiday_work",
-        total: (s) => s.additions.official_holiday_work,
-      },
-      {
-        key: "bonus",
-        titleKey: "payroll.line.bonus",
-        total: (s) => s.additions.bonus,
-      },
-      {
-        key: "incentive",
-        titleKey: "payroll.line.incentive",
-        total: (s) => s.additions.incentive,
-      },
-      {
-        key: "other_addition",
-        titleKey: "payroll.line.other_addition",
-        total: (s) => s.additions.other_addition,
-      },
-    ];
-    const deductions: MoneyColumn[] = [
-      {
-        key: "absence_deduction",
-        titleKey: "payroll.line.absence",
-        total: (s) => s.deductions.absence,
-      },
-      {
-        key: "gosi_employee_deduction",
-        titleKey: "payroll.line.gosi_employee",
-        total: (s) => s.deductions.gosi_employee,
-      },
-      {
-        key: "loan_deduction",
-        titleKey: "payroll.line.loan",
-        total: (s) => s.deductions.loan,
-      },
-      {
-        key: "penalty_deduction",
-        titleKey: "payroll.ui.penalties",
-        // The summary splits penalties by source and has no combined total
-        // (open contract question); show the three API values as sent.
-        total: (s) => (
-          <Space orientation="vertical" size={0} style={{ fontSize: 12 }}>
-            {(
-              [
-                [
-                  "payroll.line.attendance_penalty",
-                  s.deductions.attendance_penalty,
-                ],
-                ["payroll.line.penalty_fine", s.deductions.penalty_fine],
-                [
-                  "payroll.line.penalty_wage_withholding",
-                  s.deductions.penalty_wage_withholding,
-                ],
-              ] as const
-            ).map(([key, amount]) => (
-              <span key={key}>
-                {t(key)}: <MoneyText amount={amount} size={11} />
-              </span>
-            ))}
-          </Space>
-        ),
-      },
-      {
-        key: "other_deduction",
-        titleKey: "payroll.line.other_deduction",
-        total: (s) => s.deductions.other_deduction,
-      },
-      {
-        key: "total_deductions",
-        titleKey: "payroll.field.total_deductions",
-        total: (s) => s.total_deductions,
-        strong: true,
-      },
-    ];
-    const provision = (
-      key: ItemMoneyKey,
-      titleKey: string,
-      summaryKey: keyof PayrollRunSummaryDto["provisions"],
-      type: ProvisionLineType,
-    ): MoneyColumn => ({
-      key,
-      titleKey,
-      total: (s) => (
-        <Space orientation="vertical" size={0}>
-          <MoneyText amount={s.provisions[summaryKey]} strong />
-          {unknownCount(s, type) > 0 && (
-            <Tag color="gold" style={{ marginInlineEnd: 0 }}>
-              {t("payroll.ui.unknownCount", { count: unknownCount(s, type) })}
-            </Tag>
-          )}
-        </Space>
-      ),
-    });
-    const provisions: MoneyColumn[] = [
-      provision(
-        "medical_provision",
-        "payroll.line.medical",
-        "medical",
-        "MEDICAL",
-      ),
-      provision(
-        "id_cost_provision",
-        "payroll.line.id_cost",
-        "id_cost",
-        "ID_COST",
-      ),
-      provision(
-        "air_ticket_provision",
-        "payroll.line.air_ticket",
-        "air_ticket",
-        "AIR_TICKET",
-      ),
-      provision(
-        "leave_provision",
-        "payroll.line.leave_provision",
-        "leave",
-        "LEAVE_PROVISION",
-      ),
-      provision(
-        "eos_provision",
-        "payroll.line.eos_provision",
-        "eos",
-        "EOS_PROVISION",
-      ),
-      provision(
-        "accommodation_cost",
-        "payroll.line.accommodation_cost",
-        "accommodation_cost",
-        "ACCOMMODATION_COST",
-      ),
-      provision(
-        "gosi_company_provision",
-        "payroll.line.gosi_company",
-        "gosi_company",
-        "GOSI_COMPANY",
-      ),
-    ];
-    return { salary, additions, deductions, provisions };
-  }, [t]);
+  const groups = useMoneyColumnGroups();
 
   const moneyLeaf = (column: MoneyColumn): ColumnType<Item> => ({
     title: t(column.titleKey),
@@ -778,88 +572,32 @@ export default function PayrollItemsGrid({
     (!currentReport && (attention || status !== "all"));
   return (
     <Space orientation="vertical" size={12} style={{ width: "100%" }}>
-      <div className="payroll-grid-toolbar">
-        <Input.Search
-          allowClear
-          placeholder={t("payroll.ui.searchEmployees")}
-          aria-label={t("payroll.ui.searchEmployees")}
-          style={{ width: 230 }}
-          onSearch={(value) => {
-            setSearch(value.trim());
-            setPage(1);
-          }}
-        />
-        <Checkbox
-          disabled={limited || !currentReport || loading}
-          checked={!limited && attention}
-          onChange={(event) => {
-            setAttention(event.target.checked);
-            setPage(1);
-          }}
-        >
-          {t("payroll.ux.needsAttention")}
-        </Checkbox>
-        <Select
-          aria-label={t("payroll.ux.statusFilter")}
-          disabled={limited || !currentReport || loading}
-          style={{ minWidth: 155 }}
-          value={limited ? "all" : status}
-          onChange={(value) => {
-            setStatus(value);
-            setPage(1);
-          }}
-          options={["all", "blocking", "warning", "clear", "confirmation"].map(
-            (value) => ({ value, label: t(`payroll.ux.status.${value}`) }),
-          )}
-        />
-        <Select
-          aria-label={t("payroll.ui.warningsFilter")}
-          style={{ minWidth: 150 }}
-          value={hasWarnings === undefined ? "all" : String(hasWarnings)}
-          onChange={(value) => {
-            setHasWarnings(value === "all" ? undefined : value === "true");
-            setPage(1);
-          }}
-          options={[
-            { value: "all", label: t("payroll.ui.allEmployees") },
-            { value: "true", label: t("payroll.ui.withWarnings") },
-            { value: "false", label: t("payroll.ui.withoutWarnings") },
-          ]}
-        />
-        <Dropdown
-          trigger={["click"]}
-          menu={{
-            items: (
-              [
-                "salary",
-                "additions",
-                "deductions",
-                "provisions",
-                "details",
-              ] as const
-            ).map((key) => ({
-              key,
-              label: (
-                <Checkbox
-                  checked={columnsState[key]}
-                  onChange={(event) => setColumn(key, event.target.checked)}
-                >
-                  {t(`payroll.ux.columns.${key}`)}
-                </Checkbox>
-              ),
-            })),
-          }}
-        >
-          <Button>{t("payroll.ux.columns")}</Button>
-        </Dropdown>
-        <Switch
-          size="small"
-          checked={columnsState.provisions}
-          onChange={(value) => setColumn("provisions", value)}
-          aria-label={t("payroll.ui.showProvisions")}
-        />
-        <Text style={{ fontSize: 12 }}>{t("payroll.ui.showProvisions")}</Text>
-      </div>
+      <PayrollGridToolbar
+        limited={limited}
+        loading={loading}
+        hasReport={!!currentReport}
+        attention={attention}
+        status={status}
+        hasWarnings={hasWarnings}
+        columnsState={columnsState}
+        onSearch={(value) => {
+          setSearch(value.trim());
+          setPage(1);
+        }}
+        onAttentionChange={(checked) => {
+          setAttention(checked);
+          setPage(1);
+        }}
+        onStatusChange={(value) => {
+          setStatus(value);
+          setPage(1);
+        }}
+        onHasWarningsChange={(value) => {
+          setHasWarnings(value);
+          setPage(1);
+        }}
+        onColumnChange={setColumn}
+      />
       {limited && <Alert type="info" message={t("payroll.ux.indexLimited")} />}
       {!currentReport && (
         <Text type="secondary">{t("payroll.ui.validationUnavailable")}</Text>

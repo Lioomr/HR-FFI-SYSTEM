@@ -140,7 +140,7 @@ describe("employee payslip pages", () => {
       </MemoryRouter>,
     );
     expect(
-      await screen.findByText("September 2026", {}, FIND),
+      await screen.findByText("Sep 1, 2026 – Sep 30, 2026", {}, FIND),
     ).toBeInTheDocument();
     expect(screen.getAllByText("10,267").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Completed").length).toBeGreaterThan(0);

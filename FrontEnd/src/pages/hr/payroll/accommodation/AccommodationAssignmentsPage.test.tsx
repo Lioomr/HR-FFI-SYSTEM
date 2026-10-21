@@ -201,6 +201,30 @@ describe("AccommodationAssignmentsPage", () => {
 });
 
 describe("AccommodationReport", () => {
+  it("shows the selected-window rent separately from the full monthly reference", async () => {
+    signIn("HRManager");
+    payrollMockState().accommodationReport[0].period_rent = {
+      numerator: "12000.00",
+      denominator: 24,
+      decimal: "500.00",
+    };
+    render(
+      <MemoryRouter>
+        <AccommodationReport runId={7} refreshKey={0} />
+      </MemoryRouter>,
+    );
+
+    await screen.findByText("Example Residence", {}, FIND);
+    expect(
+      screen.getAllByText(en("payroll.ui.periodRent")).length,
+    ).toBeGreaterThan(0);
+    expect(
+      screen.getAllByText(en("payroll.ui.monthlyRentReference")).length,
+    ).toBeGreaterThan(0);
+    expect(screen.getByText("500")).toBeInTheDocument();
+    expect(screen.getByText("1,000")).toBeInTheDocument();
+  });
+
   it("shows raw shares as approximations, rounded shares, not-in-payroll and the rounding difference", async () => {
     signIn("HRManager");
     render(

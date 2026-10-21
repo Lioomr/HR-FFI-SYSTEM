@@ -5,7 +5,7 @@ from fractions import Fraction
 
 from django.db.models import Sum
 
-from .calculator import SALARY_COMPONENTS, period_dates
+from .calculator import SALARY_COMPONENTS, exact_share, period_dates
 from .i18n import ENUMS, translated
 from .models import PayrollLine, Payslip
 
@@ -235,7 +235,22 @@ def run_totals(run, items=None):
 
 
 def run_dto(run):
-    first, last = period_dates(run.year, run.month)
+    stored_start = getattr(run, "period_start", None)
+    stored_end = getattr(run, "period_end", None)
+    calendar_days = getattr(run, "calendar_days", None)
+    period_basis = getattr(
+        run,
+        "period_basis",
+        "LEGACY_FULL_MONTH" if calendar_days is None else "DATE_RANGE",
+    )
+    first, last = period_dates(
+        run.year,
+        run.month,
+        calendar_days,
+        period_start=stored_start,
+        period_end=stored_end,
+        period_basis=period_basis,
+    )
     data = {
         k: getattr(run, k)
         for k in (
@@ -249,6 +264,7 @@ def run_dto(run):
             "legacy_calculation",
         )
     }
+    data.update(calendar_days=calendar_days, period_basis=period_basis)
     data.update(run_totals(run))
     data.update(
         company_id=run.company_id,
@@ -421,7 +437,7 @@ def item_dto(item):
         official_holiday_days=amount(source.get("official_holiday_work_days", 0)),
         allowed_overtime=source.get("allowed_overtime"),
         override_overtime_eligibility=overrides.get("override_overtime_eligibility", False),
-        limit_period="CALENDAR_MONTH",
+        limit_period="PAYROLL_WINDOW",
     )
     data["carry_forward"] = carry_dto(result.get("collection", []))
     data["warnings"] = [
@@ -453,6 +469,8 @@ def _base(salary, selector):
 
 def employee_dto(slip):
     data = {k: getattr(slip, k) for k in ("id", "year", "month", "payment_mode", "status")}
+    data["period_start"] = slip.payroll_run.period_start.isoformat() if slip.payroll_run.period_start else None
+    data["period_end"] = slip.payroll_run.period_end.isoformat() if slip.payroll_run.period_end else None
     data.update(
         {
             k: amount(getattr(slip, k))
@@ -545,6 +563,22 @@ def exact_share_dto(value):
 
 
 def rent_dto(allocation):
+    monthly_rent = Fraction(allocation.monthly_rent["numerator"]) / int(allocation.monthly_rent["denominator"])
+    period_start, period_end = period_dates(
+        allocation.run.year,
+        allocation.run.month,
+        getattr(allocation.run, "calendar_days", None),
+        period_start=getattr(allocation.run, "period_start", None),
+        period_end=getattr(allocation.run, "period_end", None),
+        period_basis=getattr(allocation.run, "period_basis", None),
+    )
+    period_basis = getattr(allocation.run, "period_basis", "LEGACY_FULL_MONTH")
+    period_days = (period_end - period_start).days + 1
+    period_rent = (
+        monthly_rent
+        if period_basis == "LEGACY_FULL_MONTH"
+        else monthly_rent * period_days / 30
+    )
     residents = []
     for row in allocation.resident_allocations:
         residents.append(
@@ -567,8 +601,11 @@ def rent_dto(allocation):
         "rent_name": allocation.slot_inputs[0].get("rent_name", "") if allocation.slot_inputs else "",
         "year": allocation.run.year,
         "month": allocation.run.month,
+        "period_start": period_start.isoformat(),
+        "period_end": period_end.isoformat(),
         "residents": residents,
         "monthly_rent": exact_share_dto(allocation.monthly_rent),
+        "period_rent": exact_share_dto(exact_share(period_rent)),
         "vacant_unallocated_raw": exact_share_dto(allocation.vacant_unallocated_raw),
         "not_in_payroll_raw": exact_share_dto(allocation.not_in_payroll_raw),
         "rounding_difference": exact_share_dto(allocation.rounding_difference),
@@ -596,9 +633,26 @@ def rent_reconciles(allocation):
     def raw(value):
         return Fraction(value["numerator"]) / int(value["denominator"])
 
-    return sum((raw(r["raw_share"]) for r in allocation.resident_allocations), Fraction(0)) + raw(
-        allocation.vacant_unallocated_raw
-    ) == raw(allocation.monthly_rent)
+    period_start, period_end = period_dates(
+        allocation.run.year,
+        allocation.run.month,
+        getattr(allocation.run, "calendar_days", None),
+        period_start=getattr(allocation.run, "period_start", None),
+        period_end=getattr(allocation.run, "period_end", None),
+        period_basis=getattr(allocation.run, "period_basis", None),
+    )
+    expected = (
+        raw(allocation.monthly_rent)
+        if getattr(allocation.run, "period_basis", "LEGACY_FULL_MONTH") == "LEGACY_FULL_MONTH"
+        else raw(allocation.monthly_rent)
+        * ((period_end - period_start).days + 1)
+        / 30
+    )
+    return (
+        sum((raw(r["raw_share"]) for r in allocation.resident_allocations), Fraction(0))
+        + raw(allocation.vacant_unallocated_raw)
+        == expected
+    )
 
 
 def summary(run):

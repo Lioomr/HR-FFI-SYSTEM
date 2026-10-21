@@ -4,20 +4,29 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('payroll', '0005_attendancepayrolldeduction'),
+        ("payroll", "0005_attendancepayrolldeduction"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='attendancepayrolldeduction',
-            name='claimed_amount',
+            model_name="attendancepayrolldeduction",
+            name="claimed_amount",
             field=models.DecimalField(decimal_places=2, default=0, max_digits=12),
         ),
         migrations.AlterField(
-            model_name='attendancepayrolldeduction',
-            name='status',
-            field=models.CharField(choices=[('pending', 'Pending'), ('claimed', 'Claimed by draft payroll'), ('applied', 'Applied'), ('manual_review', 'Manual review'), ('void', 'Void')], default='pending', max_length=24),
+            model_name="attendancepayrolldeduction",
+            name="status",
+            field=models.CharField(
+                choices=[
+                    ("pending", "Pending"),
+                    ("claimed", "Claimed by draft payroll"),
+                    ("applied", "Applied"),
+                    ("manual_review", "Manual review"),
+                    ("void", "Void"),
+                ],
+                default="pending",
+                max_length=24,
+            ),
         ),
     ]

@@ -95,6 +95,14 @@ afterEach(() => {
 });
 
 describe("PayrollRunPage", () => {
+  it("shows the selected inclusive calendar window in the review header", async () => {
+    renderRun();
+    await ready();
+    expect(
+      screen.getByText("Sep 1, 2026 – Sep 30, 2026 · 30 calendar days"),
+    ).toBeInTheDocument();
+  });
+
   it.each(["COMPLETED", "PAID"] as const)(
     "renders the production-shaped legacy %s run without finalization gates",
     async (status) => {
@@ -119,6 +127,9 @@ describe("PayrollRunPage", () => {
       ).toBeGreaterThan(0);
       expect(
         screen.getByText(en("payroll.ui.legacyRunHelp")),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByText("Aug 1, 2026 – Aug 31, 2026 · 31 calendar days"),
       ).toBeInTheDocument();
       expect(screen.getByText("Finalized")).toBeInTheDocument();
       expect(screen.queryByText(en("payroll.ui.cannotFinalize"))).toBeNull();

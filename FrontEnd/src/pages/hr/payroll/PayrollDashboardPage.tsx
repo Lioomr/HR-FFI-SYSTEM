@@ -28,13 +28,17 @@ import { isForbidden } from "../../../services/api/httpErrors";
 import AmountWithSAR from "../../../components/ui/AmountWithSAR";
 import { useAuthStore } from "../../../auth/authStore";
 import { isHeadOfficeOrganization } from "../../../utils/organizationContext";
+import {
+  formatPayrollPeriod,
+  formatPayrollWindowSummary,
+} from "../../../components/payroll/payrollFormat";
 
 const { Option } = Select;
 const { useBreakpoint } = Grid;
 
 export default function PayrollDashboardPage() {
   const navigate = useNavigate();
-  const { t } = useI18n();
+  const { t, language } = useI18n();
   const user = useAuthStore((state) => state.user);
   const screens = useBreakpoint();
   const isMobile = !screens.md;
@@ -64,8 +68,25 @@ export default function PayrollDashboardPage() {
     {
       title: t("payroll.period"),
       key: "period",
-      render: (_, record) => `${record.month}/${record.year}`,
-      width: 120,
+      render: (_, record) => (
+        <Space direction="vertical" size={0}>
+          <span>
+            {formatPayrollPeriod(record.year, record.month, language)}
+          </span>
+          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+            {formatPayrollWindowSummary(
+              record.period_start,
+              record.period_end,
+              record.calendar_days,
+              language,
+              t,
+              record.year,
+              record.month,
+            )}
+          </Typography.Text>
+        </Space>
+      ),
+      width: 260,
     },
     {
       title: t("common.status"),

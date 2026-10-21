@@ -13,14 +13,14 @@ import {
 export default function AccommodationNoneAction({
   employeeProfileId,
   name,
-  year,
-  month,
+  periodStart,
+  periodEnd,
   onSaved,
 }: {
   employeeProfileId: number;
   name: string;
-  year: number;
-  month: number;
+  periodStart: string;
+  periodEnd: string;
   onSaved: () => Promise<void>;
 }) {
   const { t } = useI18n();
@@ -34,14 +34,13 @@ export default function AccommodationNoneAction({
     lock.current = true;
     setBusy(true);
     setError(undefined);
-    const start = dayjs(`${year}-${String(month).padStart(2, "0")}-01`);
     try {
       await createAssignment({
         employee_profile_id: employeeProfileId,
         status: "none",
         rent_id: null,
-        start_date: start.format("YYYY-MM-DD"),
-        end_date: start.endOf("month").format("YYYY-MM-DD"),
+        start_date: periodStart,
+        end_date: periodEnd,
         reason,
       });
       setOpen(false);
@@ -87,7 +86,8 @@ export default function AccommodationNoneAction({
           <>
             {t("payroll.ux3.confirmNone", { name })}{" "}
             <bdi dir="ltr">
-              {year}-{String(month).padStart(2, "0")}
+              {dayjs(periodStart).format("YYYY-MM-DD")} –{" "}
+              {dayjs(periodEnd).format("YYYY-MM-DD")}
             </bdi>
           </>
         }

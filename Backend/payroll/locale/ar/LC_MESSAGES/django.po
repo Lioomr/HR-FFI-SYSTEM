@@ -47,7 +47,7 @@ msgid "payroll.assumption.overtime_basic"
 msgstr "يعتمد العمل الإضافي افتراضيًا على الراتب الأساسي؛ يمكن للموارد البشرية ضبط الأساس."
 
 msgid "payroll.assumption.overtime_calendar_month"
-msgstr "حد العمل الإضافي العادي لكل شهر تقويمي (افتراض)."
+msgstr "يطبق حد العمل الإضافي العادي مرة واحدة لكل فترة رواتب (افتراض)."
 
 msgid "payroll.carry_status.pending"
 msgstr "معلق"
@@ -291,6 +291,9 @@ msgstr "يُحتسب الأجر على أساس شهر من 30 يومًا، وي
 
 msgid "payroll.pdf.blocked"
 msgstr "غير جاهز للاعتماد"
+
+msgid "payroll.pdf.calendar_days"
+msgstr "أيام تقويمية"
 
 msgid "payroll.pdf.company_cost"
 msgstr "تكلفة الشركة"
@@ -627,6 +630,9 @@ msgstr "يوجد مسير رواتب لهذه الفترة بالفعل."
 
 msgid "payroll.validation.field_not_editable"
 msgstr "لا يمكن تعديل هذا الحقل هنا."
+
+msgid "payroll.validation.invalid_calendar_days"
+msgstr "أدخل من 1 إلى 30 يومًا تقويميًا دون تجاوز عدد أيام الشهر المحدد."
 
 msgid "payroll.validation.invalid_choice"
 msgstr "اختر قيمة مدعومة."

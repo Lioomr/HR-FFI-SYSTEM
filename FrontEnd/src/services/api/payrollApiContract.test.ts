@@ -137,7 +137,10 @@ describe("employee GOSI config", () => {
 
 describe("runs", () => {
   it("answers a duplicate period with the legacy string-array 409", async () => {
-    const error = await createRun({ year: 2026, month: 9 }).catch((err) => err);
+    const error = await createRun({
+      period_start: "2026-09-01",
+      period_end: "2026-09-30",
+    }).catch((err) => err);
     const parsed = parsePayrollError(error);
     expect(parsed.httpStatus).toBe(409);
     expect(parsed.formMessages).toEqual([
@@ -148,13 +151,57 @@ describe("runs", () => {
   it("allows re-creating a cancelled period", async () => {
     await cancelRun(7, { expected_revision: 1, reason: "Wrong month" });
     expect((await getRun(7)).status).toBe("CANCELLED");
-    const created = await createRun({ year: 2026, month: 9 });
+    const created = await createRun({
+      period_start: "2026-09-01",
+      period_end: "2026-09-30",
+    });
     expect(created.status).toBe("DRAFT");
     const page = await listPayrollRuns({ year: 2026, month: 9 });
     expect(page.items.map((run) => run.status).sort()).toEqual([
       "CANCELLED",
       "DRAFT",
     ]);
+  });
+
+  it("accepts a cross-month inclusive period and rejects more than 30 days", async () => {
+    const created = await createRun({
+      period_start: "2026-10-15",
+      period_end: "2026-11-13",
+    });
+    expect(created).toMatchObject({
+      year: 2026,
+      month: 11,
+      calendar_days: 30,
+      period_start: "2026-10-15",
+      period_end: "2026-11-13",
+    });
+
+    const error = await createRun({
+      period_start: "2026-10-15",
+      period_end: "2026-11-14",
+    }).catch((err) => err);
+    expect(parsePayrollError(error)).toMatchObject({
+      httpStatus: 422,
+      codes: ["invalid_date_range"],
+    });
+
+    const reverseError = await createRun({
+      period_start: "2026-11-13",
+      period_end: "2026-10-15",
+    }).catch((err) => err);
+    expect(parsePayrollError(reverseError)).toMatchObject({
+      httpStatus: 422,
+      codes: ["invalid_date_range"],
+    });
+
+    const yearError = await createRun({
+      period_start: "1899-12-20",
+      period_end: "1900-01-01",
+    }).catch((err) => err);
+    expect(parsePayrollError(yearError)).toMatchObject({
+      httpStatus: 422,
+      codes: ["invalid_date_range"],
+    });
   });
 });
 

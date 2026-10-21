@@ -16,7 +16,6 @@ from xml.sax.saxutils import escape
 from arabic_reshaper import ArabicReshaper
 from arabic_reshaper.ligatures import LIGATURES
 from bidi.algorithm import get_display
-from core.pdf import PALETTE, build_signature_stamp_block, font_pair, get_logo_path
 from django.db.models import prefetch_related_objects
 from django.utils import timezone
 from django.utils.translation import get_language
@@ -39,6 +38,8 @@ from reportlab.platypus import (
     Table,
     TableStyle,
 )
+
+from core.pdf import PALETTE, build_signature_stamp_block, font_pair, get_logo_path
 
 from . import dto
 from .i18n import translated as t
@@ -272,7 +273,12 @@ def build_payroll_report_pdf(run, items):
     writer = Writer()
     data = _Collected(run, items)
     status_label = t("payroll.status." + data.status.lower())
-    period = f"{t(f'payroll.month.{run.month}')} {run.year}"
+    run_period = dto.run_dto(run)
+    period_day_count = run_period["calendar_days"] or int(run_period["period_end"][-2:])
+    period = (
+        f"{run_period['period_start']} – {run_period['period_end']} "
+        f"({period_day_count} {t('payroll.pdf.calendar_days')})"
+    )
     generated = timezone.localtime(timezone.now()).strftime("%Y-%m-%d %H:%M")
     title = t("payroll.pdf.run_report_title")
 
@@ -655,7 +661,9 @@ def _accommodation(w, data):
     widths = [69 * mm, 30 * mm, 38 * mm, 30 * mm, 30 * mm, 30 * mm, WIDTH - 227 * mm]
     labels = [
         t("payroll.pdf.property"),
-        t("payroll.pdf.monthly_rent"),
+        t("payroll.pdf.monthly_rent")
+        if data.run.period_basis == "LEGACY_FULL_MONTH"
+        else f"{t('payroll.pdf.monthly_rent')} × {data.run.calendar_days}/30",
         t("payroll.pdf.allocated_payroll"),
         t("payroll.rent.vacant_unallocated"),
         t("payroll.rent.not_in_payroll"),
@@ -667,7 +675,7 @@ def _accommodation(w, data):
         rows.append(
             [
                 w.para(rent["rent_name"] or "-", widths[0]),
-                share(rent["monthly_rent"]),
+                share(rent["period_rent"]),
                 money(rent["in_payroll_rounded"]),
                 share(rent["vacant_unallocated_raw"]),
                 share(rent["not_in_payroll_raw"]),

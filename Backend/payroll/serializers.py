@@ -9,7 +9,21 @@ class PayrollRunSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = PayrollRun
-        fields = ["id", "year", "month", "status", "total_net", "total_employees", "company_id", "company_name"]
+        fields = [
+            "id",
+            "year",
+            "month",
+            "calendar_days",
+            "period_start",
+            "period_end",
+            "period_basis",
+            "status",
+            "total_net",
+            "total_employees",
+            "company_id",
+            "company_name",
+        ]
+        read_only_fields = ["year", "month", "calendar_days", "period_basis"]
 
     def validate_month(self, value):
         if value < 1 or value > 12:
@@ -24,7 +38,21 @@ class PayrollRunSerializer(serializers.ModelSerializer):
 
 class PayrollRunCreateSerializer(PayrollRunSerializer):
     class Meta(PayrollRunSerializer.Meta):
-        fields = ["year", "month"]
+        fields = ["period_start", "period_end"]
+        read_only_fields = []
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        start, end = attrs.get("period_start"), attrs.get("period_end")
+        if (
+            start is None
+            or end is None
+            or not 1900 <= start.year <= 2100
+            or not 1900 <= end.year <= 2100
+            or not 1 <= (end - start).days + 1 <= 30
+        ):
+            raise serializers.ValidationError({"period_end": "invalid_date_range"})
+        return attrs
 
 
 class PayrollRunItemSerializer(serializers.ModelSerializer):
@@ -44,9 +72,12 @@ class PayrollRunItemSerializer(serializers.ModelSerializer):
 
 
 class PayslipListSerializer(serializers.ModelSerializer):
+    period_start = serializers.DateField(source="payroll_run.period_start", read_only=True)
+    period_end = serializers.DateField(source="payroll_run.period_end", read_only=True)
+
     class Meta:
         model = Payslip
-        fields = ["id", "year", "month", "net_salary", "payment_mode", "status"]
+        fields = ["id", "year", "month", "period_start", "period_end", "net_salary", "payment_mode", "status"]
 
 
 class PayslipDetailSerializer(serializers.Serializer):

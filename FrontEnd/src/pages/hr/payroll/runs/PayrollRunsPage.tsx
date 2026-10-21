@@ -18,7 +18,10 @@ import PayrollTheme from "../../../../components/payroll/PayrollTheme";
 import { readPayrollIndex } from "../../../../components/payroll/payrollIndex";
 import { validationPresentation } from "../../../../components/payroll/validationGroups";
 import { PayrollStatusTag } from "../../../../components/payroll/payrollDisplay";
-import { formatPayrollPeriod } from "../../../../components/payroll/payrollFormat";
+import {
+  formatPayrollPeriod,
+  formatPayrollWindowSummary,
+} from "../../../../components/payroll/payrollFormat";
 import { useI18n } from "../../../../i18n/useI18n";
 import { formatDateTime } from "../../../../utils/dateTime";
 import { isForbidden } from "../../../../services/api/httpErrors";
@@ -134,13 +137,26 @@ export default function PayrollRunsPage() {
       title: t("payroll.ui.period"),
       key: "period",
       render: (_, run) => (
-        <Button
-          type="link"
-          style={{ padding: 0 }}
-          onClick={() => navigate(`/hr/payroll/${run.id}`)}
-        >
-          {formatPayrollPeriod(run.year, run.month, language)}
-        </Button>
+        <Space orientation="vertical" size={0}>
+          <Button
+            type="link"
+            style={{ padding: 0 }}
+            onClick={() => navigate(`/hr/payroll/${run.id}`)}
+          >
+            {formatPayrollPeriod(run.year, run.month, language)}
+          </Button>
+          <Text type="secondary" style={{ fontSize: 12 }}>
+            {formatPayrollWindowSummary(
+              run.period_start,
+              run.period_end,
+              run.calendar_days,
+              language,
+              t,
+              run.year,
+              run.month,
+            )}
+          </Text>
+        </Space>
       ),
     },
     {
@@ -209,15 +225,13 @@ export default function PayrollRunsPage() {
                 count: run.validation_counts.errors,
               })}
             </Tag>
-            <Tooltip title={t("payroll.ux3.apiCounts", run.validation_counts)}>
-              <Text>
-                {actionable[run.id] === undefined
-                  ? t("payroll.ux.unavailable")
-                  : t("payroll.ux3.actionableWarnings") +
-                    ": " +
-                    actionable[run.id]}
-              </Text>
-            </Tooltip>
+            <Text>
+              {actionable[run.id] === undefined
+                ? t("payroll.ux.unavailable")
+                : t("payroll.ux3.actionableWarnings") +
+                  ": " +
+                  actionable[run.id]}
+            </Text>
           </Space>
         ) : (
           <Text type="secondary">{t("payroll.ux.unavailable")}</Text>

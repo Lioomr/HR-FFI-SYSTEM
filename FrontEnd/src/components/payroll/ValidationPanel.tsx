@@ -7,7 +7,6 @@ import {
   Space,
   Table,
   Tag,
-  Tooltip,
   Typography,
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
@@ -293,14 +292,6 @@ export default function ValidationPanel({
               : "payroll.ui.notReconciled",
           )}
         </Tag>
-        <Tooltip title={t("payroll.ux3.apiCounts", report.counts)}>
-          <Button
-            type="link"
-            aria-label={t("payroll.ux3.apiCounts", report.counts)}
-          >
-            {t("payroll.ux3.showApiCounts")}
-          </Button>
-        </Tooltip>
       </div>
       {!legacy && !finalized && (
         <div className="payroll-confirmation-progress">

@@ -5,15 +5,16 @@ from datetime import date
 from decimal import Decimal
 from fractions import Fraction
 
+from django.db import transaction
+from django.db.models import Q
+from django.utils import timezone
+
 from attendance.biotime_policy import attendance_enforced_from
 from attendance.models import AttendanceLateViolation, AttendanceRecord
 from attendance.schedule import get_work_schedule, is_rest_day_for_everyone, is_working_day
 from audit.models import AuditLog
 from audit.utils import audit
 from core.executives import is_executive_profile
-from django.db import transaction
-from django.db.models import Q
-from django.utils import timezone
 from employees.models import EmployeeProfile
 from leaves.models import LeaveRequest
 from loans.models import LoanRequest
@@ -105,6 +106,17 @@ def due(year, month, prefix="intended_"):
     return Q(**{prefix + "year__lt": year}) | Q(**{prefix + "year": year, prefix + "month__lte": month})
 
 
+def run_period(run):
+    return period_dates(
+        run.year,
+        run.month,
+        run.calendar_days,
+        period_start=run.period_start,
+        period_end=run.period_end,
+        period_basis=run.period_basis,
+    )
+
+
 def wage_dates(record):
     evidence = record.evidence or {}
     values = evidence.get("wage_absence_dates", evidence.get("absence_dates"))
@@ -117,7 +129,7 @@ def wage_dates(record):
 
 
 def inputs(profile, run, old_item, penalties, loan, carries, accommodation, snapshot, *, executive_exempt=False):
-    first, last = period_dates(run.year, run.month)
+    first, last = run_period(run)
     archive = timezone.localtime(profile.archived_at).date() if profile.archived_at else None
     employed = date_set(max(first, profile.hire_date or first), min(last, archive or last))
     mapped, starts = attendance_enforced_from(profile)
@@ -166,7 +178,7 @@ def inputs(profile, run, old_item, penalties, loan, carries, accommodation, snap
         .exclude(payroll_run=run)
     ):
         dates = wage_dates(claim.penalty)
-        if not dates and (claim.penalty.occurred_on.year, claim.penalty.occurred_on.month) == (run.year, run.month):
+        if not dates and first <= claim.penalty.occurred_on <= last:
             wage_evidence_complete = False
         overlap = dates & employed
         if overlap:
@@ -204,6 +216,10 @@ def inputs(profile, run, old_item, penalties, loan, carries, accommodation, snap
         run.year,
         run.month,
         salary,
+        calendar_days=run.calendar_days,
+        period_start=first,
+        period_end=last,
+        period_basis=run.period_basis,
         hire_date=profile.hire_date,
         archive_date=archive,
         is_archived=profile.is_archived,
@@ -325,39 +341,34 @@ def restore_loan(loan, run, request, reason):
     )
 
 
-@transaction.atomic
-def recalculate(
-    run,
-    *,
-    request=None,
-    reason="Payroll source synchronization",
-    expected_revision=None,
-    refresh_settings=False,
-    advance_revision=False,
-    audit_source_changes=True,
-    input_snapshots=None,
-):
-    run = lock_run(run)
-    guard(run, expected_revision)
-    original_run = {"revision": run.revision, "total_net": run.total_net, "settings_snapshot": run.settings_snapshot}
-    if not run.settings_snapshot or refresh_settings:
-        config = PayrollSettings.objects.select_for_update().filter(company_id=run.company_id).first()
-        run.settings_snapshot = (config or PayrollSettings(company_id=run.company_id)).snapshot()
-        if config is None:
-            run.settings_snapshot["settings_revision"] = 0
-    profiles = list(
-        EmployeeProfile.objects.select_for_update(of=("self",))
-        .select_related("user", "position_ref")
-        .filter(company_id=run.company_id)
-        .order_by("pk")
-    )
-    executive_flags = {profile.pk: is_executive_profile(profile) for profile in profiles}
+def _resolve_settings_snapshot(run, refresh_settings):
+    if run.settings_snapshot and not refresh_settings:
+        return
+    config = PayrollSettings.objects.select_for_update().filter(company_id=run.company_id).first()
+    run.settings_snapshot = (config or PayrollSettings(company_id=run.company_id)).snapshot()
+    if config is None:
+        run.settings_snapshot["settings_revision"] = 0
+
+
+def _lock_penalty_rows(run):
+    """Lock source rows in a fixed order and return (attendance_rows, penalty_rows)."""
     held = Q(payroll_run=run)
+    period_end = run_period(run)[1]
     attendance_query = AttendancePayrollDeduction.objects.filter(company_id=run.company_id).filter(
-        held | (Q(status="pending", payroll_run__isnull=True) & due(run.year, run.month))
+        held
+        | (
+            Q(status="pending", payroll_run__isnull=True)
+            & due(run.year, run.month)
+            & Q(violation__date__lte=period_end)
+        )
     )
     penalty_query = PenaltyDeduction.objects.filter(company_id=run.company_id).filter(
-        held | (Q(status="approved", payroll_run__isnull=True) & due(run.year, run.month))
+        held
+        | (
+            Q(status="approved", payroll_run__isnull=True)
+            & due(run.year, run.month)
+            & Q(penalty__occurred_on__lte=period_end)
+        )
     )
     list(
         AttendanceLateViolation.objects.select_for_update()
@@ -367,7 +378,12 @@ def recalculate(
     list(PenaltyRecord.objects.select_for_update().filter(pk__in=penalty_query.values("penalty_id")).order_by("pk"))
     arows = list(attendance_query.select_for_update(of=("self",)).select_related("violation").order_by("pk"))
     prows = list(penalty_query.select_for_update(of=("self",)).select_related("penalty").order_by("pk"))
+    return arows, prows
+
+
+def _penalty_candidates(run, arows, prows, executive_flags):
     candidates = []
+    _, period_end = run_period(run)
     for row in arows:
         if executive_flags.get(row.employee_profile_id, False):
             continue
@@ -392,6 +408,15 @@ def recalculate(
             )
             or (row.status == "applied" and row.payroll_run_id == run.pk)
         ):
+            all_wage_dates = wage_dates(row.penalty)
+            # A PenaltyDeduction is an indivisible claim. If its wage evidence
+            # extends past this run's cutoff, keep the whole claim pending so a
+            # later replacement/full window can collect it without losing the
+            # excluded remainder. Empty dates make the calculator report the
+            # existing wage-evidence blocker without snapshotting future dates.
+            window_wage_dates = (
+                frozenset() if any(day > period_end for day in all_wage_dates) else all_wage_dates
+            )
             candidates.append(
                 (
                     row,
@@ -399,7 +424,7 @@ def recalculate(
                         f"penalty:{row.pk}",
                         row.penalty.amount,
                         row.penalty.extra_wage_amount,
-                        wage_dates(row.penalty),
+                        window_wage_dates,
                         "penalty",
                         row.pk,
                     ),
@@ -408,7 +433,11 @@ def recalculate(
     candidates.sort(
         key=lambda pair: (pair[0].payroll_run_id != run.pk, pair[0].created_at, pair[1].source_kind, pair[0].pk)
     )
-    loans = list(
+    return candidates
+
+
+def _lock_loans(run):
+    return list(
         LoanRequest.objects.select_for_update()
         .filter(company_id=run.company_id, is_active=True)
         .filter(
@@ -423,6 +452,10 @@ def recalculate(
         )
         .order_by("target_deduction_year", "target_deduction_month", "created_at", "pk")
     )
+
+
+def _lock_carry_state(run):
+    """Lock pending carry-forward balances and other runs' open reservations."""
     balances = list(
         PayrollCarryForward.objects.select_for_update()
         .filter(
@@ -440,20 +473,27 @@ def recalculate(
         .filter(company_id=run.company_id, state="CLAIMED")
         .exclude(run=run)
     )
-    assignments = list(
+    return balances, reservations
+
+
+def _lock_assignments(run):
+    first, last = run_period(run)
+    return list(
         AccommodationAssignment.objects.select_for_update()
         .select_related("employee_profile")
         .filter(
             company_id=run.company_id,
             is_active=True,
-            start_date__lte=period_dates(run.year, run.month)[1],
-            end_date__gte=period_dates(run.year, run.month)[0],
+            start_date__lte=last,
+            end_date__gte=first,
         )
         .order_by("pk")
     )
-    by_rent, accommodation = {}, {}
+
+
+def _included_profile_ids(run, profiles):
     # Eligibility determines only payroll allocation membership, never the rent denominator.
-    included_ids = {
+    return {
         p.pk
         for p in profiles
         if calculate_employee(
@@ -462,6 +502,10 @@ def recalculate(
                 run.year,
                 run.month,
                 {},
+                calendar_days=run.calendar_days,
+                period_start=run.period_start,
+                period_end=run.period_end,
+                period_basis=run.period_basis,
                 hire_date=p.hire_date,
                 is_archived=p.is_archived,
                 archive_date=timezone.localtime(p.archived_at).date() if p.archived_at else None,
@@ -470,7 +514,11 @@ def recalculate(
             run.settings_snapshot,
         )["included"]
     }
-    reports, extra_issues = {}, []
+
+
+def _allocate_rents(run, assignments, included_ids):
+    """Return (reports by rent id, raw rent share by profile id, validation issues)."""
+    by_rent, reports, extra_issues = {}, {}, []
     for rent in Rent.objects.select_for_update().filter(company_id=run.company_id).order_by("pk"):
         resident_assignments = [a for a in assignments if a.rent_id == rent.pk]
         if rent.annual_rent_value is None:
@@ -492,7 +540,17 @@ def recalculate(
                 end = min(end, timezone.localtime(a.employee_profile.archived_at).date())
             if end >= a.start_date:
                 rent_inputs.append(RentAssignmentInput(a.employee_profile_id, a.start_date, end))
-        report = allocate_rent(run.year, run.month, rent.annual_rent_value, rent_inputs, included_ids)
+        report = allocate_rent(
+            run.year,
+            run.month,
+            rent.annual_rent_value,
+            rent_inputs,
+            included_ids,
+            run.calendar_days,
+            period_start=run.period_start,
+            period_end=run.period_end,
+            period_basis=run.period_basis,
+        )
         reports[rent.pk] = report
         for resident in report["residents"]:
             raw = resident["raw_share"]
@@ -500,7 +558,12 @@ def recalculate(
                 by_rent.get(resident["employee_profile_id"], Fraction(0))
                 + Fraction(raw["numerator"]) / raw["denominator"]
             )
-    first, last = period_dates(run.year, run.month)
+    return reports, by_rent, extra_issues
+
+
+def _accommodation_by_profile(run, profiles, assignments, reports, by_rent):
+    accommodation = {}
+    first, last = run_period(run)
     for profile in profiles:
         days = date_set(
             max(first, profile.hire_date or first),
@@ -524,6 +587,11 @@ def recalculate(
             if complete and relevant
             else ("unknown", None)
         ) + (bool(relevant),)
+    return accommodation
+
+
+def _load_existing_items(run, profiles, input_snapshots):
+    """Lock current items, link legacy ones to profiles and attach supplied input snapshots."""
     existing = list(PayrollRunItem.objects.select_for_update().filter(payroll_run=run).order_by("pk"))
     old_items = {item.employee_profile_id: item for item in existing if item.employee_profile_id}
     for item in existing:
@@ -538,6 +606,12 @@ def recalculate(
     for item in existing:
         if input_snapshots and item.pk in input_snapshots:
             item.input_snapshot = input_snapshots[item.pk]
+    return existing, old_items
+
+
+def _build_employee_inputs(
+    run, profiles, loans, balances, reservations, candidates, accommodation, executive_flags, old_items
+):
     employee_inputs, chosen_loans = [], {}
     for profile in profiles:
         loan = next(
@@ -559,7 +633,16 @@ def recalculate(
                     (r.amount for r in reservations if r.carry_id == balance.pk), ZERO
                 )
                 if available > 0:
-                    carries.append(CarryInput(f"carry:{balance.pk}", balance.type, available, balance.pk))
+                    carries.append(
+                        CarryInput(
+                            f"carry:{balance.pk}",
+                            balance.type,
+                            available,
+                            balance.pk,
+                            balance.source_year,
+                            balance.source_month,
+                        )
+                    )
         employee_inputs.append(
             inputs(
                 profile,
@@ -573,11 +656,153 @@ def recalculate(
                 executive_exempt=executive_flags[profile.pk],
             )
         )
-    try:
-        result = calculate_run(employee_inputs, run.settings_snapshot)
-    except PayrollInputError as exc:
-        raise PayrollDomainError(exc.code, field=exc.field or None, **exc.params) from exc
-    result["issues"].extend(extra_issues)
+    return employee_inputs, chosen_loans
+
+
+def _source_change_type(previous_source, source):
+    if any(previous_source.get(k) != source[k] for k in ("paid_leave_dates", "unpaid_leave_dates")):
+        return "LEAVE_INPUT_CHANGE"
+    if any(
+        previous_source.get(k) != source[k]
+        for k in ("hire_date", "archive_date", "is_archived", "employment_status", "executive_exempt")
+    ):
+        return "EMPLOYMENT_INPUT_CHANGE"
+    return "MANUAL_ADJUSTMENT"
+
+
+def _write_item(run, item, profile, value, employee_input, snapshot):
+    item.is_active, item.employee_name, item.employee_id = True, profile.full_name, profile.employee_id
+    item.department, item.position = profile.department or "", profile.job_title or ""
+    item.company_id, item.input_snapshot = run.company_id, snapshot
+    for name in (
+        "gross_salary",
+        "total_additions",
+        "total_deductions",
+        "net_salary",
+        "total_provisions",
+        "total_company_cost",
+        "cost_incomplete",
+    ):
+        setattr(item, name, value[name])
+    amounts = {line["type"]: line["amount"] for line in value["lines"] if line["category"] == "SALARY"}
+    item.basic_salary = amounts["BASIC_SALARY"]
+    item.total_allowances = value["gross_salary"] - item.basic_salary
+    item.zero_salary_reason = employee_input.zero_salary_reason
+    item.zero_salary_reason_detail = employee_input.zero_salary_reason_detail or None
+    item.suspended_pay_decision = employee_input.suspended_pay_decision
+    item.accommodation_status = value.get("accommodation_status", employee_input.accommodation_status)
+    item.save()
+    return amounts
+
+
+def _audit_source_change(run, item, snapshot, source, previous_snapshot, original, request, reason, advance_revision):
+    log = event(
+        request,
+        "payroll_input_refreshed",
+        "PayrollRunItem",
+        item.pk,
+        original,
+        {"input": snapshot, "net_salary": item.net_salary},
+        reason,
+        company_id=run.company_id,
+        run_id=run.pk,
+    )
+    PayrollAdjustment.objects.create(
+        company_id=run.company_id,
+        audit_log=log,
+        run=run,
+        item=item,
+        type=_source_change_type(previous_snapshot["source"], source),
+        changed_fields=[k for k in source if previous_snapshot["source"].get(k) != source[k]],
+        original_value=frozen(original),
+        new_value=frozen({"input": snapshot}),
+        reason=reason,
+        actor=getattr(request, "user", None),
+        input_revision=run.revision + int(advance_revision),
+    )
+
+
+def _sync_lines(run, item, value):
+    keys = set()
+    for row in value["lines"]:
+        keys.add(row["source_key"])
+        PayrollLine.objects.update_or_create(
+            item=item,
+            source_key=row["source_key"],
+            defaults={
+                "company_id": run.company_id,
+                "category": row["category"],
+                "type": row["type"],
+                "amount": row["amount"],
+                "quantity": row.get("quantity"),
+                "source_kind": row["source_kind"],
+                "source_id": str(row["source_id"]) if row.get("source_id") is not None else None,
+                "source_year": row.get("source_year") or run.year,
+                "source_month": row.get("source_month") or run.month,
+                "requested_amount": row.get("requested_amount"),
+                "collected_amount": row.get("collected_amount"),
+                "uncollected_amount": row.get("uncollected_amount"),
+                "carried_in": row.get("carried_in", False),
+                "calculation_snapshot": frozen(row),
+            },
+        )
+    PayrollLine.objects.filter(item=item).exclude(source_key__in=keys).delete()
+
+
+def _sync_payslip(run, profile, item, amounts):
+    slip = Payslip.objects.filter(payroll_run_item=item).first()
+    if slip is None and profile.user_id:
+        old_slips = list(Payslip.objects.filter(payroll_run=run, employee_id=profile.user_id))
+        if len(old_slips) > 1:
+            raise PayrollDomainError("legacy_link_unresolved")
+        slip = old_slips[0] if old_slips else None
+    slip = slip or Payslip(payroll_run=run, year=run.year, month=run.month)
+    slip.employee_id, slip.employee_profile, slip.payroll_run_item = profile.user_id, profile, item
+    slip.company_id, slip.status, slip.is_active, slip.calculation_version = run.company_id, "DRAFT", True, "1"
+    for name, kind in SALARY_COMPONENTS.items():
+        setattr(slip, name, amounts[kind])
+    slip.total_salary, slip.total_additions = item.gross_salary, item.total_additions
+    slip.total_deductions, slip.net_salary = item.total_deductions, item.net_salary
+    slip.save()
+
+
+def _apply_loan_collection(run, loan, value, request, reason):
+    loan_collection = next(c for c in value["collection"] if c["type"] == "LOAN")
+    if loan and loan_collection["collected"] > 0 and loan.deduction_payroll_run_id != run.pk:
+        from loans.services import apply_payroll_deduction
+
+        loan.payroll_pre_deduction_snapshot = {"status": loan.status}
+        loan.save(update_fields=["payroll_pre_deduction_snapshot"])
+        apply_payroll_deduction(loan, run=run)
+        event(
+            request,
+            "loan_deducted_in_payroll",
+            "LoanRequest",
+            loan.pk,
+            {"status": "approved"},
+            {"status": "deducted", "deducted_amount": loan.deducted_amount},
+            reason,
+            payroll_run_id=run.pk,
+            exact_amount=loan.deducted_amount,
+            rounded_amount=loan_collection["collected"],
+        )
+    elif loan and loan.deduction_payroll_run_id == run.pk and not loan_collection["collected"]:
+        restore_loan(loan, run, request, reason)
+
+
+def _persist_results(
+    run,
+    result,
+    profiles,
+    employee_inputs,
+    old_items,
+    chosen_loans,
+    request,
+    reason,
+    audit_source_changes,
+    advance_revision,
+):
+    """Write one item, its lines and payslip per calculated employee; return (items, collected, changed count)."""
     profile_map = {p.pk: p for p in profiles}
     input_map = {e.employee_profile_id: e for e in employee_inputs}
     active_items, collected, changed_items = {}, {}, 0
@@ -600,129 +825,23 @@ def recalculate(
         }
         if previous_snapshot != snapshot:
             changed_items += 1
-        item.is_active, item.employee_name, item.employee_id = True, profile.full_name, profile.employee_id
-        item.department, item.position = profile.department or "", profile.job_title or ""
-        item.company_id, item.input_snapshot = run.company_id, snapshot
-        for name in (
-            "gross_salary",
-            "total_additions",
-            "total_deductions",
-            "net_salary",
-            "total_provisions",
-            "total_company_cost",
-            "cost_incomplete",
-        ):
-            setattr(item, name, value[name])
-        amounts = {line["type"]: line["amount"] for line in value["lines"] if line["category"] == "SALARY"}
-        item.basic_salary = amounts["BASIC_SALARY"]
-        item.total_allowances = value["gross_salary"] - item.basic_salary
-        item.zero_salary_reason = input_map[profile.pk].zero_salary_reason
-        item.zero_salary_reason_detail = input_map[profile.pk].zero_salary_reason_detail or None
-        item.suspended_pay_decision = input_map[profile.pk].suspended_pay_decision
-        item.accommodation_status = value.get("accommodation_status", input_map[profile.pk].accommodation_status)
-        item.save()
+        amounts = _write_item(run, item, profile, value, input_map[profile.pk], snapshot)
         active_items[profile.pk] = item
         if audit_source_changes and previous_snapshot.get("source") and previous_snapshot["source"] != source:
-            action_type = (
-                "LEAVE_INPUT_CHANGE"
-                if any(
-                    previous_snapshot["source"].get(k) != source[k] for k in ("paid_leave_dates", "unpaid_leave_dates")
-                )
-                else "EMPLOYMENT_INPUT_CHANGE"
-                if any(
-                    previous_snapshot["source"].get(k) != source[k]
-                    for k in ("hire_date", "archive_date", "is_archived", "employment_status", "executive_exempt")
-                )
-                else "MANUAL_ADJUSTMENT"
+            _audit_source_change(
+                run, item, snapshot, source, previous_snapshot, original, request, reason, advance_revision
             )
-            log = event(
-                request,
-                "payroll_input_refreshed",
-                "PayrollRunItem",
-                item.pk,
-                original,
-                {"input": snapshot, "net_salary": item.net_salary},
-                reason,
-                company_id=run.company_id,
-                run_id=run.pk,
-            )
-            PayrollAdjustment.objects.create(
-                company_id=run.company_id,
-                audit_log=log,
-                run=run,
-                item=item,
-                type=action_type,
-                changed_fields=[k for k in source if previous_snapshot["source"].get(k) != source[k]],
-                original_value=frozen(original),
-                new_value=frozen({"input": snapshot}),
-                reason=reason,
-                actor=getattr(request, "user", None),
-                input_revision=run.revision + int(advance_revision),
-            )
-        keys = set()
-        for row in value["lines"]:
-            keys.add(row["source_key"])
-            PayrollLine.objects.update_or_create(
-                item=item,
-                source_key=row["source_key"],
-                defaults={
-                    "company_id": run.company_id,
-                    "category": row["category"],
-                    "type": row["type"],
-                    "amount": row["amount"],
-                    "quantity": row.get("quantity"),
-                    "source_kind": row["source_kind"],
-                    "source_id": str(row["source_id"]) if row.get("source_id") is not None else None,
-                    "source_year": run.year,
-                    "source_month": run.month,
-                    "requested_amount": row.get("requested_amount"),
-                    "collected_amount": row.get("collected_amount"),
-                    "uncollected_amount": row.get("uncollected_amount"),
-                    "carried_in": row.get("carried_in", False),
-                    "calculation_snapshot": frozen(row),
-                },
-            )
-        PayrollLine.objects.filter(item=item).exclude(source_key__in=keys).delete()
-        slip = Payslip.objects.filter(payroll_run_item=item).first()
-        if slip is None and profile.user_id:
-            old_slips = list(Payslip.objects.filter(payroll_run=run, employee_id=profile.user_id))
-            if len(old_slips) > 1:
-                raise PayrollDomainError("legacy_link_unresolved")
-            slip = old_slips[0] if old_slips else None
-        slip = slip or Payslip(payroll_run=run, year=run.year, month=run.month)
-        slip.employee_id, slip.employee_profile, slip.payroll_run_item = profile.user_id, profile, item
-        slip.company_id, slip.status, slip.is_active, slip.calculation_version = run.company_id, "DRAFT", True, "1"
-        for name, kind in SALARY_COMPONENTS.items():
-            setattr(slip, name, amounts[kind])
-        slip.total_salary, slip.total_additions = item.gross_salary, item.total_additions
-        slip.total_deductions, slip.net_salary = item.total_deductions, item.net_salary
-        slip.save()
+        _sync_lines(run, item, value)
+        _sync_payslip(run, profile, item, amounts)
         for c in value["collection"]:
             if c["source_kind"] in ("penalty", "attendance_penalty"):
                 key = (c["source_kind"], c["source_id"])
                 collected[key] = collected.get(key, ZERO) + c["collected"]
-        loan = chosen_loans[profile.pk]
-        loan_collection = next(c for c in value["collection"] if c["type"] == "LOAN")
-        if loan and loan_collection["collected"] > 0 and loan.deduction_payroll_run_id != run.pk:
-            from loans.services import apply_payroll_deduction
+        _apply_loan_collection(run, chosen_loans[profile.pk], value, request, reason)
+    return active_items, collected, changed_items
 
-            loan.payroll_pre_deduction_snapshot = {"status": loan.status}
-            loan.save(update_fields=["payroll_pre_deduction_snapshot"])
-            apply_payroll_deduction(loan, run=run)
-            event(
-                request,
-                "loan_deducted_in_payroll",
-                "LoanRequest",
-                loan.pk,
-                {"status": "approved"},
-                {"status": "deducted", "deducted_amount": loan.deducted_amount},
-                reason,
-                payroll_run_id=run.pk,
-                exact_amount=loan.deducted_amount,
-                rounded_amount=loan_collection["collected"],
-            )
-        elif loan and loan.deduction_payroll_run_id == run.pk and not loan_collection["collected"]:
-            restore_loan(loan, run, request, reason)
+
+def _deactivate_missing_items(run, existing, active_items, result, request, reason, advance_revision):
     for item in existing:
         if item.employee_profile_id not in active_items:
             if item.is_active:
@@ -763,14 +882,9 @@ def recalculate(
             item.is_active = False
             item.save(update_fields=["is_active", "input_snapshot"])
             Payslip.objects.filter(payroll_run_item=item).update(is_active=False)
-    for loan in loans:
-        if loan.deduction_payroll_run_id == run.pk and not any(chosen_loans.get(k) == loan for k in active_items):
-            restore_loan(loan, run, request, reason)
-    counts = {
-        "attendance": reserve_claims(run, arows, collected, active_items, request, reason, True),
-        "penalty": reserve_claims(run, prows, collected, active_items, request, reason),
-    }
-    reserve_carry(run, result["items"], active_items, request, reason)
+
+
+def _persist_rent_allocations(run, reports, profile_map):
     for rent_id, report in reports.items():
         for resident in report["residents"]:
             resident_profile = profile_map.get(resident["employee_profile_id"])
@@ -794,6 +908,9 @@ def recalculate(
             },
         )
     PayrollRentAllocation.objects.filter(run=run).exclude(rent_id__in=reports).delete()
+
+
+def _save_run_totals(run, result, advance_revision):
     for key, value in result["totals"].items():
         setattr(run, {"net_salary": "total_net", "gross_salary": "total_gross"}.get(key, key), value)
     run.total_employees, run.cost_incomplete = result["total_employees"], result["cost_incomplete"]
@@ -803,29 +920,98 @@ def recalculate(
         {"issues": result["issues"], "excluded": result["excluded"], "employees_checked": result["total_employees"]}
     )
     run.save()
+
+
+def _audit_settings_refresh(run, original_run, request, reason):
+    log = event(
+        request,
+        "payroll_settings_refreshed",
+        "PayrollRun",
+        run.pk,
+        original_run["settings_snapshot"],
+        run.settings_snapshot,
+        reason,
+        company_id=run.company_id,
+    )
+    PayrollAdjustment.objects.create(
+        company_id=run.company_id,
+        run=run,
+        audit_log=log,
+        type="SETTINGS_REFRESH",
+        changed_fields=["settings_snapshot"],
+        original_value=frozen(original_run["settings_snapshot"]),
+        new_value=frozen(run.settings_snapshot),
+        reason=reason,
+        actor=getattr(request, "user", None),
+        input_revision=run.revision,
+    )
+
+
+@transaction.atomic
+def recalculate(
+    run,
+    *,
+    request=None,
+    reason="Payroll source synchronization",
+    expected_revision=None,
+    refresh_settings=False,
+    advance_revision=False,
+    audit_source_changes=True,
+    input_snapshots=None,
+):
+    run = lock_run(run)
+    guard(run, expected_revision)
+    original_run = {"revision": run.revision, "total_net": run.total_net, "settings_snapshot": run.settings_snapshot}
+    _resolve_settings_snapshot(run, refresh_settings)
+    profiles = list(
+        EmployeeProfile.objects.select_for_update(of=("self",))
+        .select_related("user", "position_ref")
+        .filter(company_id=run.company_id)
+        .order_by("pk")
+    )
+    executive_flags = {profile.pk: is_executive_profile(profile) for profile in profiles}
+    arows, prows = _lock_penalty_rows(run)
+    candidates = _penalty_candidates(run, arows, prows, executive_flags)
+    loans = _lock_loans(run)
+    balances, reservations = _lock_carry_state(run)
+    assignments = _lock_assignments(run)
+    included_ids = _included_profile_ids(run, profiles)
+    reports, by_rent, extra_issues = _allocate_rents(run, assignments, included_ids)
+    accommodation = _accommodation_by_profile(run, profiles, assignments, reports, by_rent)
+    existing, old_items = _load_existing_items(run, profiles, input_snapshots)
+    employee_inputs, chosen_loans = _build_employee_inputs(
+        run, profiles, loans, balances, reservations, candidates, accommodation, executive_flags, old_items
+    )
+    try:
+        result = calculate_run(employee_inputs, run.settings_snapshot)
+    except PayrollInputError as exc:
+        raise PayrollDomainError(exc.code, field=exc.field or None, **exc.params) from exc
+    result["issues"].extend(extra_issues)
+    active_items, collected, changed_items = _persist_results(
+        run,
+        result,
+        profiles,
+        employee_inputs,
+        old_items,
+        chosen_loans,
+        request,
+        reason,
+        audit_source_changes,
+        advance_revision,
+    )
+    _deactivate_missing_items(run, existing, active_items, result, request, reason, advance_revision)
+    for loan in loans:
+        if loan.deduction_payroll_run_id == run.pk and not any(chosen_loans.get(k) == loan for k in active_items):
+            restore_loan(loan, run, request, reason)
+    counts = {
+        "attendance": reserve_claims(run, arows, collected, active_items, request, reason, True),
+        "penalty": reserve_claims(run, prows, collected, active_items, request, reason),
+    }
+    reserve_carry(run, result["items"], active_items, request, reason)
+    _persist_rent_allocations(run, reports, {p.pk: p for p in profiles})
+    _save_run_totals(run, result, advance_revision)
     if refresh_settings and original_run["settings_snapshot"] != run.settings_snapshot:
-        log = event(
-            request,
-            "payroll_settings_refreshed",
-            "PayrollRun",
-            run.pk,
-            original_run["settings_snapshot"],
-            run.settings_snapshot,
-            reason,
-            company_id=run.company_id,
-        )
-        PayrollAdjustment.objects.create(
-            company_id=run.company_id,
-            run=run,
-            audit_log=log,
-            type="SETTINGS_REFRESH",
-            changed_fields=["settings_snapshot"],
-            original_value=frozen(original_run["settings_snapshot"]),
-            new_value=frozen(run.settings_snapshot),
-            reason=reason,
-            actor=getattr(request, "user", None),
-            input_revision=run.revision,
-        )
+        _audit_settings_refresh(run, original_run, request, reason)
     if advance_revision:
         event(
             request,

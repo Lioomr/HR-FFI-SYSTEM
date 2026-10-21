@@ -1,32 +1,16 @@
-import ExecutiveExemptMarker from "./ExecutiveExemptMarker";
 import { useCallback, useEffect, useState, useRef } from "react";
-import { Link } from "react-router-dom";
 import {
   Alert,
-  Collapse,
   Tabs,
   Button,
-  Col,
-  Descriptions,
-  Divider,
   Form,
   Grid,
   Input,
-  Row,
-  Select,
-  Space,
-  Switch,
-  Table,
-  Tag,
   Typography,
   message,
 } from "antd";
-import type { ColumnsType } from "antd/es/table";
 import { useI18n } from "../../i18n/useI18n";
-import { isManualInformation } from "./validationGroups";
-import { usePayrollEnums } from "../../hooks/usePayrollEnums";
 import LoadingState from "../ui/LoadingState";
-import MoneyText from "./MoneyText";
 import StaleRevisionAlert from "./StaleRevisionAlert";
 import PayrollHistoryDrawer from "./PayrollHistoryDrawer";
 import { REASON_MAX_LENGTH } from "./ReasonModal";
@@ -34,11 +18,8 @@ import {
   ITEM_FIELD_MAP,
   MONEY_FIELDS,
   QUANTITY_FIELDS,
-  SALARY_KEYS,
   buildItemChanges,
   itemToFormValues,
-  needsSuspendedDecision,
-  postedManualLine,
   type ItemFormValues,
 } from "./itemEditForm";
 import {
@@ -51,78 +32,29 @@ import {
   payrollErrorSummary,
 } from "../../services/api/payrollErrors";
 import type {
-  PayrollMoneyLine,
   PayrollRunItemDto,
   PayrollStatus,
-  ProvisionLine,
-  SalaryComponentLine,
   ValidationIssue,
-  ZeroSalaryReason,
 } from "../../services/api/payrollTypes";
 import {
   isNonNegativeDecimal,
   moneyToInput,
   toQuantityString,
 } from "../../utils/payrollMoney";
-import { formatDateTime } from "../../utils/dateTime";
 import type { PayrollHistoryEntry } from "../../services/api/payrollTypes";
 import { useCanManagePayrollHrData } from "./payrollFormat";
+import { changeSize, makeDecimalRule } from "./payrollItemEditorShared";
+import { usePayrollItemColumns } from "./usePayrollItemColumns";
+import PayrollItemEditorSummary from "./PayrollItemEditorSummary";
+import {
+  AbsenceTab,
+  AdditionsTab,
+  DeductionsTab,
+  OverviewTab,
+  ProvisionsTab,
+} from "./PayrollItemEditorTabs";
 
-const { Text, Title } = Typography;
-const SOURCE_LABEL_KEYS = {
-  employee_salary: "payroll.ui.groupSalary",
-  attendance_absence: "payroll.line.absence",
-  unpaid_leave: "payroll.ui.unpaidLeaveDays",
-  manual_adjustment: "payroll.adjustment.manual_adjustment",
-  loan: "payroll.line.loan",
-  attendance_penalty: "payroll.line.attendance_penalty",
-  penalty: "payroll.ui.penalties",
-  carry_forward: "payroll.ui.carriedIn",
-  company_settings: "payroll.ui.settingsTitle",
-  rent_allocation: "payroll.line.accommodation_cost",
-  legacy: "payroll.ui.legacyRun",
-};
-
-const ZERO_REASONS: ZeroSalaryReason[] = [
-  "full_leave",
-  "full_absence",
-  "unpaid_leave",
-  "not_joined",
-  "suspended",
-  "other",
-];
-
-const POSTED_LINE_TYPES = {
-  bonus: "BONUS",
-  incentive: "INCENTIVE",
-  other_addition: "OTHER_ADDITION",
-} as const;
-
-const FIELD_LABEL_KEYS: Record<string, string> = {
-  overtime_normal_hours: "payroll.ui.overtimeNormalHours",
-  weekly_rest_work_days: "payroll.ui.weeklyRestWorkDays",
-  official_holiday_work_days: "payroll.ui.officialHolidayWorkDays",
-  bonus: "payroll.line.bonus",
-  incentive: "payroll.line.incentive",
-  other_addition: "payroll.line.other_addition",
-  other_deduction: "payroll.line.other_deduction",
-};
-
-/** Read-only quantity (day/hour string) or a dash. */
-const qty = (value: string | null | undefined) => (
-  <span dir="ltr">{value ?? "—"}</span>
-);
-
-function changeSize(changes: object | null) {
-  return changes
-    ? Object.values(changes).reduce<number>(
-        (count, value) =>
-          count +
-          (value && typeof value === "object" ? Object.keys(value).length : 1),
-        0,
-      )
-    : 0;
-}
+const { Text } = Typography;
 
 /**
  * Full-page employee editor, reusing the sparse form contract and evidence tables. Shows the item's lines and evidence read-only, and
@@ -158,7 +90,6 @@ export default function PayrollItemEditor({
 }) {
   const { t } = useI18n();
   const canOpenProfiles = useCanManagePayrollHrData();
-  const { label } = usePayrollEnums();
   const screens = Grid.useBreakpoint();
   const [form] = Form.useForm<ItemFormValues & { reason: string }>();
   const absenceValue = Form.useWatch("absence_days_override", form);
@@ -410,146 +341,16 @@ export default function PayrollItemEditor({
     }
   };
 
-  const decimalRule = {
-    validator: (_: unknown, value?: string) =>
-      !value || !value.trim() || isNonNegativeDecimal(value)
-        ? Promise.resolve()
-        : Promise.reject(new Error(t("payroll.ui.invalidAmount"))),
-  };
+  const decimalRule = makeDecimalRule(t);
 
-  const lineLabel = (line: {
-    type: string;
-    label: string;
-    label_key: string;
-  }) => line.label || t(line.label_key) || line.type;
-
-  const salaryColumns: ColumnsType<SalaryComponentLine> = [
-    {
-      title: t("payroll.ui.line"),
-      key: "label",
-      render: (_, line) => lineLabel(line),
-    },
-    {
-      title: t("payroll.ui.amount"),
-      key: "amount",
-      align: "end",
-      render: (_, line) => <MoneyText amount={line.amount} />,
-    },
-  ];
-
-  const moneyLineColumns: ColumnsType<PayrollMoneyLine> = [
-    {
-      title: t("payroll.ui.line"),
-      key: "label",
-      render: (_, line) => (
-        <Space size={4} wrap>
-          {lineLabel(line)}
-          <Text type="secondary">
-            {t(SOURCE_LABEL_KEYS[line.source_kind])}
-            {line.source_id ? ` · ${line.source_id}` : ""}
-          </Text>
-          {line.carried_in && <Tag>{t("payroll.ui.carriedIn")}</Tag>}
-        </Space>
-      ),
-    },
-    {
-      title: t("payroll.ui.quantity"),
-      key: "quantity",
-      render: (_, line) => qty(line.quantity),
-    },
-    {
-      title: t("payroll.ui.requested"),
-      key: "requested",
-      align: "end",
-      render: (_, line) => (
-        <MoneyText amount={line.requested_amount ?? line.amount} />
-      ),
-    },
-    {
-      title: t("payroll.ui.collected"),
-      key: "collected",
-      align: "end",
-      render: (_, line) => (
-        <MoneyText amount={line.collected_amount ?? line.amount} />
-      ),
-    },
-    {
-      title: t("payroll.ui.uncollected"),
-      key: "uncollected",
-      align: "end",
-      render: (_, line) =>
-        line.uncollected_amount && line.uncollected_amount !== "0.00" ? (
-          <MoneyText amount={line.uncollected_amount} />
-        ) : (
-          "—"
-        ),
-    },
-  ];
-
-  const provisionColumns: ColumnsType<ProvisionLine> = [
-    {
-      title: t("payroll.ui.line"),
-      key: "label",
-      render: (_, line) => lineLabel(line),
-    },
-    {
-      title: t("payroll.ui.amount"),
-      key: "amount",
-      align: "end",
-      render: (_, line) => <MoneyText amount={line.amount} />,
-    },
-  ];
-
-  const costReasons = (current: PayrollRunItemDto) => {
-    const reasons: string[] = [];
-    if (
-      current.accommodation_status === "unknown" ||
-      current.accommodation_cost === null
-    ) {
-      reasons.push(
-        label(
-          "accommodation_status",
-          "unknown",
-          "payroll.accommodation_status.unknown",
-        ),
-      );
-    }
-    if (current.medical_provision === null) {
-      reasons.push(t("payroll.ui.medicalInvoiceMissing"));
-    }
-    return reasons;
-  };
-
-  /**
-   * Read-only evidence beside an entered amount: the posted (rounded) line and,
-   * for other deduction, what was actually collected.
-   */
-  const postedEvidence = (field: (typeof MONEY_FIELDS)[number]) => {
-    if (!item) return undefined;
-    const line =
-      field === "other_deduction"
-        ? postedManualLine(item.deductions, "OTHER_DEDUCTION")
-        : postedManualLine(item.additions, POSTED_LINE_TYPES[field]);
-    if (!line) return undefined;
-    const collected =
-      field === "other_deduction"
-        ? (line.collected_amount ?? line.amount)
-        : line.amount;
-    return (
-      <span>
-        {t("payroll.ui.postedAmount")}:{" "}
-        <MoneyText amount={collected} size={11} />
-      </span>
-    );
-  };
+  const { salaryColumns, moneyLineColumns, provisionColumns } =
+    usePayrollItemColumns();
 
   const renderBody = () => {
     if (loading && !item) return <LoadingState />;
     if (loadError && !item)
       return <Alert type="error" showIcon message={loadError} />;
     if (!item) return null;
-    const absence = item.absence;
-    const overtime = item.overtime;
     const fix = (issue: ValidationIssue) => {
       const field =
         issue.field?.replace(/^changes\./, "") ??
@@ -588,157 +389,21 @@ export default function PayrollItemEditor({
           ),
         );
     };
-    const edits = (content: React.ReactNode) => (editable ? content : null);
     const tabs = [
       {
         key: "overview",
         label: t("layout.menu.overview"),
         forceRender: true,
         children: (
-          <>
-            {" "}
-            <Title level={5} style={{ margin: 0 }}>
-              {t("payroll.ui.groupSalary")}
-            </Title>
-            <Table
-              size="small"
-              rowKey="type"
-              pagination={false}
-              columns={salaryColumns}
-              dataSource={item.salary_components}
-            />
-            {edits(
-              <>
-                {" "}
-                {item.monthly_salary_components && (
-                  <>
-                    <Divider style={{ margin: "4px 0 12px" }} />
-                    <Space wrap style={{ marginBottom: 8 }}>
-                      <Text strong>{t("payroll.ui.monthlySalaryTitle")}</Text>
-                      {item.salary_adjusted && (
-                        <Tag>{t("payroll.ui.salaryAdjusted")}</Tag>
-                      )}
-                    </Space>
-                    <div style={{ marginBottom: 8 }}>
-                      <Text type="secondary">
-                        {t("payroll.ui.monthlySalaryHelp")}
-                      </Text>
-                    </div>
-                    <Row gutter={12}>
-                      {SALARY_KEYS.map((key) => (
-                        <Col xs={24} sm={12} key={key}>
-                          <Form.Item
-                            name={["salary", key]}
-                            label={t(`payroll.line.${key}`)}
-                            rules={[decimalRule]}
-                          >
-                            <Input inputMode="decimal" dir="ltr" />
-                          </Form.Item>
-                        </Col>
-                      ))}
-                    </Row>
-                  </>
-                )}
-              </>,
-            )}
-            {edits(
-              <>
-                {" "}
-                {(item.net_salary === "0.00" ||
-                  item.net_salary === "0" ||
-                  (needsSuspendedDecision(item, reportIssues) &&
-                    (suspendedDecision ?? item.suspended_pay_decision) ===
-                      "ZERO_PAY") ||
-                  !!(zeroReason ?? item.zero_salary_reason)) && (
-                  <Row gutter={12}>
-                    <Col xs={24} sm={12}>
-                      <Form.Item
-                        name="zero_salary_reason"
-                        label={t("payroll.ui.zeroSalaryReason")}
-                        extra={t("payroll.employee.zeroReasonHelp")}
-                      >
-                        <Select
-                          allowClear
-                          aria-label={t("payroll.ui.zeroSalaryReason")}
-                          options={ZERO_REASONS.map((value) => ({
-                            value,
-                            label: label(
-                              "zero_salary_reason",
-                              value,
-                              `payroll.zero_salary_reason.${value}`,
-                            ),
-                          }))}
-                        />
-                      </Form.Item>
-                    </Col>
-                    <Col xs={24} sm={12}>
-                      <Form.Item
-                        noStyle
-                        shouldUpdate={(a, b) =>
-                          a.zero_salary_reason !== b.zero_salary_reason
-                        }
-                      >
-                        {({ getFieldValue }) =>
-                          getFieldValue("zero_salary_reason") === "other" ? (
-                            <Form.Item
-                              name="zero_salary_reason_detail"
-                              label={t("payroll.ui.zeroSalaryDetail")}
-                              rules={[
-                                {
-                                  required: true,
-                                  whitespace: true,
-                                  message: t(
-                                    "payroll.ui.zeroSalaryDetailRequired",
-                                  ),
-                                },
-                              ]}
-                            >
-                              <Input />
-                            </Form.Item>
-                          ) : null
-                        }
-                      </Form.Item>
-                    </Col>
-                  </Row>
-                )}
-                {needsSuspendedDecision(item, reportIssues) && (
-                  <Form.Item
-                    name="suspended_pay_decision"
-                    label={t("payroll.ui.suspendedPayDecision")}
-                  >
-                    <Select
-                      aria-label={t("payroll.ui.suspendedPayDecision")}
-                      options={(["FULL_PAY", "ZERO_PAY"] as const).map(
-                        (value) => ({
-                          value,
-                          label: label(
-                            "suspended_pay_decision",
-                            value,
-                            `payroll.suspended_pay_decision.${value.toLowerCase()}`,
-                          ),
-                        }),
-                      )}
-                    />
-                  </Form.Item>
-                )}
-              </>,
-            )}
-            <Collapse
-              items={[
-                {
-                  key: "notes",
-                  label: t("payroll.employee.notes"),
-                  children: (
-                    <ul>
-                      {item.assumptions.map((entry) => (
-                        <li key={entry.key}>{entry.message || t(entry.key)}</li>
-                      ))}
-                    </ul>
-                  ),
-                },
-              ]}
-            />
-          </>
+          <OverviewTab
+            item={item}
+            editable={editable}
+            reportIssues={reportIssues}
+            suspendedDecision={suspendedDecision}
+            zeroReason={zeroReason}
+            salaryColumns={salaryColumns}
+            decimalRule={decimalRule}
+          />
         ),
       },
       {
@@ -746,137 +411,14 @@ export default function PayrollItemEditor({
         label: t("payroll.ui.absenceTitle"),
         forceRender: true,
         children: (
-          <>
-            {" "}
-            <Title level={5} style={{ margin: 0 }}>
-              {t("payroll.ui.absenceTitle")}
-            </Title>
-            <Descriptions
-              size="small"
-              column={screens.md ? 2 : 1}
-              items={[
-                {
-                  key: "att",
-                  label: t("payroll.ui.observedAbsentDays"),
-                  children: qty(absence.attendance_days),
-                },
-                {
-                  key: "unpaid",
-                  label: t("payroll.ui.unpaidLeaveDays"),
-                  children: qty(absence.unpaid_leave_days),
-                },
-                {
-                  key: "paid",
-                  label: t("payroll.ui.paidLeaveDays"),
-                  children: qty(absence.paid_leave_days),
-                },
-                {
-                  key: "penalty",
-                  label: t("payroll.ui.penaltyWithheldDays"),
-                  children: qty(absence.penalty_withheld_days),
-                },
-                {
-                  key: "override",
-                  label: t("payroll.ui.overrideDays"),
-                  children: qty(absence.override_days),
-                },
-                {
-                  key: "effective",
-                  label: t("payroll.ui.effectiveDays"),
-                  children: qty(absence.effective_days),
-                },
-                {
-                  key: "source",
-                  label: t("payroll.ui.attendanceSource"),
-                  children: absence.source_available ? (
-                    <Tag color="green">{t("payroll.ui.attendanceCovered")}</Tag>
-                  ) : (
-                    <Space orientation="vertical" size={2}>
-                      <Tag color="orange">
-                        {t("payroll.ui.attendanceNotCovered", {
-                          count: absence.uncovered_dates.length,
-                        })}
-                      </Tag>
-                      {absence.mapping_start_date && (
-                        <Text type="secondary">
-                          {t("payroll.ui.mappingStart", {
-                            date: absence.mapping_start_date,
-                          })}
-                        </Text>
-                      )}
-                    </Space>
-                  ),
-                },
-                {
-                  key: "manual",
-                  label: t("payroll.ui.manualConfirmation"),
-                  children:
-                    !item.executive_exempt &&
-                    absence.manual_confirmation_required ? (
-                      absence.manual_confirmed ? (
-                        <Tag color="green">{t("payroll.ui.confirmed")}</Tag>
-                      ) : (
-                        <Tag color="red">
-                          {t("payroll.ui.confirmationRequired")}
-                        </Tag>
-                      )
-                    ) : (
-                      t("payroll.ui.notRequired")
-                    ),
-                },
-              ]}
-            />
-            <p>
-              {t("payroll.ui.attendanceNotCovered", {
-                count: absence.uncovered_dates.length,
-              })}
-              :{" "}
-              {absence.uncovered_dates.join(", ") ||
-                t("payroll.ui.notRequired")}
-            </p>
-            <p>
-              {t("payroll.line.absence")}:{" "}
-              <MoneyText amount={item.absence_deduction} />
-            </p>
-            {edits(
-              <Row gutter={16}>
-                {" "}
-                <Col xs={24} sm={12}>
-                  <Form.Item
-                    name="absence_days_override"
-                    label={t("payroll.ui.absenceOverride")}
-                    extra={t("payroll.ui.absenceOverrideHelp")}
-                    help={
-                      alreadyConfirmed ? (
-                        <Text type="secondary">
-                          {t("payroll.employee.alreadyConfirmed", {
-                            days: moneyToInput(
-                              item.manual_inputs.absence_days_override,
-                            ),
-                          })}
-                          {confirmation && (
-                            <>
-                              {" "}
-                              ·{" "}
-                              {t("payroll.employee.confirmedBy", {
-                                name:
-                                  confirmation.actor?.name ??
-                                  t("payroll.ui.unknown"),
-                                date: formatDateTime(confirmation.created_at),
-                              })}
-                            </>
-                          )}
-                        </Text>
-                      ) : undefined
-                    }
-                    rules={[decimalRule]}
-                  >
-                    <Input inputMode="decimal" dir="ltr" allowClear />
-                  </Form.Item>
-                </Col>
-              </Row>,
-            )}
-          </>
+          <AbsenceTab
+            item={item}
+            editable={editable}
+            wide={!!screens.md}
+            alreadyConfirmed={alreadyConfirmed}
+            confirmation={confirmation}
+            decimalRule={decimalRule}
+          />
         ),
       },
       {
@@ -884,105 +426,13 @@ export default function PayrollItemEditor({
         label: t("payroll.employee.additions"),
         forceRender: true,
         children: (
-          <>
-            {" "}
-            <Title level={5} style={{ margin: 0 }}>
-              {t("payroll.ui.overtimeTitle")}
-            </Title>
-            <Descriptions
-              size="small"
-              column={screens.md ? 2 : 1}
-              items={[
-                {
-                  key: "entered",
-                  label: t("payroll.ui.enteredNormalHours"),
-                  children: qty(overtime.normal_hours),
-                },
-                {
-                  key: "limit",
-                  label: t("payroll.ui.allowedOvertime"),
-                  children:
-                    overtime.allowed_overtime === null
-                      ? t("payroll.ui.noLimitSet")
-                      : qty(String(overtime.allowed_overtime)),
-                },
-                {
-                  key: "payable",
-                  label: t("payroll.ui.payableNormalHours"),
-                  children: qty(overtime.payable_normal_hours),
-                },
-                {
-                  key: "over",
-                  label: t("payroll.ui.overAllowedHours"),
-                  children: qty(overtime.over_allowed_hours),
-                },
-                {
-                  key: "unpaid",
-                  label: t("payroll.ui.unpaidNormalHours"),
-                  children: qty(overtime.unpaid_normal_hours),
-                },
-                {
-                  key: "override",
-                  label: t("payroll.ui.overtimeOverride"),
-                  children: overtime.override_overtime_eligibility
-                    ? t("payroll.ui.yes")
-                    : t("payroll.ui.no"),
-                },
-              ]}
-            />
-            <Title level={5} style={{ margin: 0 }}>
-              {t("payroll.pdf.additions")}
-            </Title>
-            <Table
-              size="small"
-              rowKey="id"
-              pagination={false}
-              columns={moneyLineColumns}
-              dataSource={item.additions}
-              locale={{ emptyText: t("payroll.ui.noLines") }}
-              scroll={{ x: 520 }}
-            />
-            {edits(
-              <>
-                <Row gutter={16}>
-                  {" "}
-                  {QUANTITY_FIELDS.map((field) => (
-                    <Col xs={24} sm={12} key={field}>
-                      <Form.Item
-                        name={field}
-                        label={t(FIELD_LABEL_KEYS[field])}
-                        rules={[decimalRule]}
-                      >
-                        <Input inputMode="decimal" dir="ltr" />
-                      </Form.Item>
-                    </Col>
-                  ))}
-                  {MONEY_FIELDS.filter(
-                    (field) => field !== "other_deduction",
-                  ).map((field) => (
-                    <Col xs={24} sm={12} key={field}>
-                      <Form.Item
-                        name={field}
-                        label={t(FIELD_LABEL_KEYS[field])}
-                        rules={[decimalRule]}
-                        extra={postedEvidence(field)}
-                      >
-                        <Input inputMode="decimal" dir="ltr" />
-                      </Form.Item>
-                    </Col>
-                  ))}
-                </Row>{" "}
-                <Form.Item
-                  name="override_overtime_eligibility"
-                  label={t("payroll.ui.overtimeOverride")}
-                  extra={t("payroll.ui.overtimeOverrideHelp")}
-                  valuePropName="checked"
-                >
-                  <Switch aria-label={t("payroll.ui.overtimeOverride")} />
-                </Form.Item>
-              </>,
-            )}
-          </>
+          <AdditionsTab
+            item={item}
+            editable={editable}
+            wide={!!screens.md}
+            moneyLineColumns={moneyLineColumns}
+            decimalRule={decimalRule}
+          />
         ),
       },
       {
@@ -990,60 +440,12 @@ export default function PayrollItemEditor({
         label: t("payroll.pdf.deductions"),
         forceRender: true,
         children: (
-          <>
-            {" "}
-            <Title level={5} style={{ margin: 0 }}>
-              {t("payroll.pdf.deductions")}
-            </Title>
-            <Table
-              size="small"
-              rowKey="id"
-              pagination={false}
-              columns={moneyLineColumns}
-              dataSource={item.deductions}
-              locale={{ emptyText: t("payroll.ui.noLines") }}
-              scroll={{ x: 520 }}
-            />
-            {item.carry_forward.by_category.some(
-              (entry) => entry.manual_reentry_required,
-            ) && (
-              <Alert
-                type="warning"
-                showIcon
-                message={t("payroll.ui.manualReentryRequired")}
-              />
-            )}
-            <Descriptions
-              size="small"
-              column={1}
-              items={item.carry_forward.by_category.map((entry) => ({
-                key: entry.type,
-                label: entry.type,
-                children: entry.manual_reentry_required
-                  ? t("payroll.ui.manualReentryRequired")
-                  : t("payroll.ui.notRequired"),
-              }))}
-            />
-            {edits(
-              <Row gutter={16}>
-                {" "}
-                {MONEY_FIELDS.filter(
-                  (field) => field === "other_deduction",
-                ).map((field) => (
-                  <Col xs={24} sm={12} key={field}>
-                    <Form.Item
-                      name={field}
-                      label={t(FIELD_LABEL_KEYS[field])}
-                      rules={[decimalRule]}
-                      extra={postedEvidence(field)}
-                    >
-                      <Input inputMode="decimal" dir="ltr" />
-                    </Form.Item>
-                  </Col>
-                ))}
-              </Row>,
-            )}
-          </>
+          <DeductionsTab
+            item={item}
+            editable={editable}
+            moneyLineColumns={moneyLineColumns}
+            decimalRule={decimalRule}
+          />
         ),
       },
       {
@@ -1051,24 +453,7 @@ export default function PayrollItemEditor({
         label: t("payroll.ux.columns.provisions"),
         forceRender: true,
         children: (
-          <>
-            {" "}
-            <Title level={5} style={{ margin: 0 }}>
-              {t("payroll.pdf.provisions")}
-            </Title>
-            <Link
-              to={`/hr/payroll/accommodation?employee_profile_id=${item.employee_profile_id}`}
-            >
-              {t("payroll.ui.assignmentsTitle")}
-            </Link>
-            <Table
-              size="small"
-              rowKey="type"
-              pagination={false}
-              columns={provisionColumns}
-              dataSource={item.provisions}
-            />
-          </>
+          <ProvisionsTab item={item} provisionColumns={provisionColumns} />
         ),
       },
       {
@@ -1118,102 +503,13 @@ export default function PayrollItemEditor({
         }}
       >
         <div className="payroll-employee-layout">
-          <aside
-            className="payroll-employee-summary"
-            aria-label={t("payroll.runDetails.summary")}
-          >
-            {item.executive_exempt && <ExecutiveExemptMarker />}
-            {[
-              "gross_salary",
-              "total_additions",
-              "total_deductions",
-              "net_salary",
-              "total_company_cost",
-            ].map((field) => (
-              <div className="payroll-employee-total" key={field}>
-                <Text type="secondary">{t(`payroll.field.${field}`)}</Text>
-                <MoneyText amount={item[field as "gross_salary"]} strong />
-              </div>
-            ))}
-            {item.cost_incomplete && (
-              <Text type="secondary">
-                {t("payroll.field.cost_incomplete")}:{" "}
-                {costReasons(item).join(", ")}
-              </Text>
-            )}
-            <div className="payroll-employee-issues">
-              <Text strong>
-                {issuesAvailable ? (
-                  <>
-                    {t("payroll.ui.errorsCount", {
-                      count: reportIssues.filter(
-                        (issue) => issue.severity === "error",
-                      ).length,
-                    })}{" "}
-                    ·{" "}
-                    {t("payroll.ui.warningsCount", {
-                      count: reportIssues.filter(
-                        (issue) =>
-                          issue.severity === "warning" &&
-                          !isManualInformation(issue, [item]),
-                      ).length,
-                    })}
-                  </>
-                ) : (
-                  t("payroll.ui.validationUnavailable")
-                )}
-              </Text>
-              <ul>
-                {reportIssues.map((issue, index) => (
-                  <li
-                    key={`${issue.code}-${index}`}
-                    data-severity={
-                      isManualInformation(issue, [item])
-                        ? "info"
-                        : issue.severity
-                    }
-                  >
-                    <span>
-                      {isManualInformation(issue, [item]) && (
-                        <>{t("payroll.ux3.confirmedNoCoverage")} · </>
-                      )}
-                      {issue.message}
-                    </span>
-                    {isManualInformation(issue, [
-                      item,
-                    ]) ? null : /medical|invoice/.test(issue.code) ? (
-                      <Link to="/hr/payroll/settings">
-                        {t("payroll.employee.fix")}
-                      </Link>
-                    ) : /accommodation/.test(issue.code) ? (
-                      <Link to="/hr/payroll/accommodation">
-                        {t("payroll.employee.fix")}
-                      </Link>
-                    ) : canOpenProfiles &&
-                      /hire|archived|prehire|terminated/.test(issue.code) ? (
-                      <Link to={`/hr/employees/${item.employee_profile_id}`}>
-                        {t("payroll.employee.fix")}
-                      </Link>
-                    ) : (
-                      <Button
-                        size="small"
-                        type="link"
-                        onClick={() => fix(issue)}
-                      >
-                        {t("payroll.employee.fix")}
-                      </Button>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            </div>
-            <p>
-              {t("payroll.ui.salaryDaysValue", {
-                days: item.salary_days,
-                employed: item.employed_calendar_days,
-              })}
-            </p>
-          </aside>
+          <PayrollItemEditorSummary
+            item={item}
+            reportIssues={reportIssues}
+            issuesAvailable={issuesAvailable}
+            canOpenProfiles={canOpenProfiles}
+            onFix={fix}
+          />
           <section className="payroll-employee-sections">
             {staleMessage && (
               <StaleRevisionAlert

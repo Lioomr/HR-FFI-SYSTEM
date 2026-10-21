@@ -1,11 +1,11 @@
 import csv
 from collections import Counter
 
-from attendance.biotime_policy import attendance_enforced_from
 from django.core.management.base import BaseCommand, CommandError
 from django.utils import timezone
-from employees.models import EmployeeProfile
 
+from attendance.biotime_policy import attendance_enforced_from
+from employees.models import EmployeeProfile
 from payroll.calculator import EmployeeInput, calculate_employee, date_set, default_settings, period_dates
 from payroll.models import PayrollRun
 

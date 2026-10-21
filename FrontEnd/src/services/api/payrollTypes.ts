@@ -157,6 +157,7 @@ export type ValidationCode =
   | "invalid_quantity"
   | "invalid_choice"
   | "invalid_period"
+  | "invalid_calendar_days"
   | "reason_required"
   | "invalid_date_range"
   | "assignment_overlap"
@@ -345,15 +346,20 @@ export interface SettingsSnapshot extends Omit<
 
 export interface PayrollRunDto {
   id: number;
+  period_basis?: "DATE_RANGE" | "LEGACY_FULL_MONTH";
+  /** Compatibility fields anchored to period_end for explicit ranges. */
   year: number;
   month: number;
+  /** null only on pre-migration legacy full-month runs. */
+  calendar_days?: number | null;
   status: PayrollStatus;
   total_net: Money;
   total_employees: number;
   company_id: number;
   company_name: string;
-  period_start: string;
-  period_end: string;
+  /** Canonical server dates. Older cached responses may omit them. */
+  period_start?: string | null;
+  period_end?: string | null;
   revision: number;
   total_gross: Money;
   total_additions: Money | null;
@@ -437,7 +443,7 @@ export interface ItemOvertime {
   normal_hours: Quantity;
   weekly_rest_days: Quantity;
   official_holiday_days: Quantity;
-  /** Normal-overtime HOURS limit per calendar month (integer); null = no limit set. */
+  /** Normal-overtime HOURS limit per payroll window (integer); null = no limit set. */
   allowed_overtime: number | null;
   override_overtime_eligibility: boolean;
   payable_normal_hours: Quantity;
@@ -867,6 +873,9 @@ export interface AccommodationReportProperty {
   rent_name: string;
   year: number;
   month: number;
+  /** Rent allocated to this run's selected calendar window (calendar_days / 30). */
+  period_rent: ExactShare;
+  /** Full monthly amount retained as a reference. */
   monthly_rent: ExactShare;
   residents: RentResidentShare[];
   vacant_unallocated_raw: ExactShare;
@@ -887,6 +896,8 @@ export interface EmployeePayslipListEntry {
   id: number;
   year: number;
   month: number;
+  period_start: string | null;
+  period_end: string | null;
   net_salary: Money;
   payment_mode: string;
   status: EmployeePayslipStatus | string;
@@ -905,6 +916,8 @@ export interface EmployeePayslipDetail {
   id: number;
   year: number;
   month: number;
+  period_start: string | null;
+  period_end: string | null;
   basic_salary: Money;
   transportation_allowance: Money;
   accommodation_allowance: Money;

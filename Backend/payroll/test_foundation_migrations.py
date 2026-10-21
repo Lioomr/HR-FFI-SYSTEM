@@ -2,9 +2,10 @@ from datetime import date
 from decimal import Decimal
 
 import pytest
-from audit.models import AuditLog
 from django.db import connection
 from django.db.migrations.executor import MigrationExecutor
+
+from audit.models import AuditLog
 from employees.models import EmployeeProfile
 from organization.models import OrganizationNode
 
@@ -81,6 +82,20 @@ def test_legacy_backfill_keeps_historical_halala_and_money():
             year=2026,
             month=8,
         )
+        through_calendar_days = [n for n in leaves if n[0] != "payroll"] + [
+            ("payroll", "0013_payrollrun_calendar_days")
+        ]
+        executor = MigrationExecutor(connection)
+        executor.migrate(through_calendar_days)
+        mid_apps = executor.loader.project_state(through_calendar_days).apps
+        MidRun = mid_apps.get_model("payroll", "PayrollRun")
+        explicit = MidRun.objects.create(
+            company_id=company.pk,
+            year=2026,
+            month=9,
+            calendar_days=10,
+            status="CANCELLED",
+        )
         executor = MigrationExecutor(connection)
         executor.migrate(leaves)
         state = executor.loader.project_state(leaves).apps
@@ -98,8 +113,20 @@ def test_legacy_backfill_keeps_historical_halala_and_money():
         assert legacy.amount == Decimal("433.50")
         assert Item.objects.get(pk=unknown.pk).employee_profile_id is None
         migrated = Run.objects.get(pk=run.pk)
+        assert migrated.calendar_days is None
+        assert (migrated.period_start, migrated.period_end, migrated.period_basis) == (
+            date(2026, 6, 1),
+            date(2026, 6, 30),
+            "LEGACY_FULL_MONTH",
+        )
         assert migrated.settings_snapshot == {"schema_version": 0, "legacy_unknown": True}
         assert migrated.validation_snapshot["legacy_link_issues"]
+        explicit_migrated = Run.objects.get(pk=explicit.pk)
+        assert (explicit_migrated.period_start, explicit_migrated.period_end, explicit_migrated.period_basis) == (
+            date(2026, 9, 1),
+            date(2026, 9, 10),
+            "DATE_RANGE",
+        )
         assert AuditLog.objects.filter(
             action="payroll_legacy_backfilled", entity="Payslip", entity_id=str(slip.pk)
         ).exists()

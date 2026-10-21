@@ -576,6 +576,12 @@
         "severity": "error"
       },
       {
+        "value": "invalid_calendar_days",
+        "label": "Enter 1 to 30 calendar days without exceeding the selected month.",
+        "label_key": "payroll.validation.invalid_calendar_days",
+        "severity": "error"
+      },
+      {
         "value": "reason_required",
         "label": "A reason is required.",
         "label_key": "payroll.validation.reason_required",
@@ -737,13 +743,13 @@
       },
       {
         "key": "payroll.assumption.overtime_calendar_month",
-        "message": "Normal overtime limit is per calendar month (assumption)."
+        "message": "Normal overtime limit applies once per payroll window (assumption)."
       }
     ],
     "updated_at": "2026-10-11T09:00:00Z",
     "no_medical_insurance": false,
     "require_manual_absence_confirmation": false,
-    "normal_overtime_limit_period": "CALENDAR_MONTH"
+    "normal_overtime_limit_period": "PAYROLL_WINDOW"
   },
   "run": {
     "id": 7,
@@ -756,6 +762,8 @@
     "company_name": "Example Company",
     "period_start": "2026-09-01",
     "period_end": "2026-09-30",
+    "calendar_days": 30,
+    "period_basis": "DATE_RANGE",
     "revision": 1,
     "total_gross": "110000.00",
     "total_additions": "0.00",
@@ -800,7 +808,7 @@
       "payroll_timezone": "Asia/Riyadh",
       "no_medical_insurance": false,
       "require_manual_absence_confirmation": false,
-      "normal_overtime_limit_period": "CALENDAR_MONTH"
+      "normal_overtime_limit_period": "PAYROLL_WINDOW"
     },
     "calculator_version": "1",
     "legacy_calculation": false,
@@ -912,7 +920,7 @@
       "payable_normal_hours": "0.00",
       "over_allowed_hours": "0.00",
       "unpaid_normal_hours": "0.00",
-      "limit_period": "CALENDAR_MONTH"
+      "limit_period": "PAYROLL_WINDOW"
     },
     "deduct_gosi_from_employee": false,
     "zero_salary_reason": null,
@@ -1158,6 +1166,8 @@
     "id": 201,
     "year": 2026,
     "month": 9,
+    "period_start": "2026-09-01",
+    "period_end": "2026-09-30",
     "basic_salary": "6000.00",
     "transportation_allowance": "1500.00",
     "accommodation_allowance": "3000.00",
@@ -1325,10 +1335,17 @@
         "rent_name": "Example Residence",
         "year": 2026,
         "month": 9,
+        "period_start": "2026-09-01",
+        "period_end": "2026-09-30",
         "monthly_rent": {
           "numerator": "12000.00",
           "denominator": 12,
           "decimal": "1000.00"
+        },
+        "period_rent": {
+          "numerator": "1000.00",
+          "denominator": 1,
+          "decimal": "1000"
         },
         "residents": [
           {
@@ -1438,6 +1455,8 @@
       "company_name": "Example Company",
       "period_start": "2026-08-01",
       "period_end": "2026-08-31",
+      "calendar_days": null,
+      "period_basis": "LEGACY_FULL_MONTH",
       "revision": 1,
       "total_gross": "62439.00",
       "total_additions": null,

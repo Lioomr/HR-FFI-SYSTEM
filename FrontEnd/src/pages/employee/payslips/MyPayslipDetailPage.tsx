@@ -15,6 +15,7 @@ import PayrollTheme from "../../../components/payroll/PayrollTheme";
 import MoneyText from "../../../components/payroll/MoneyText";
 import { PayrollStatusTag } from "../../../components/payroll/payrollDisplay";
 import {
+  formatEmployeePayslipPeriod,
   formatPayrollPeriod,
   paymentModeLabel,
 } from "../../../components/payroll/payrollFormat";
@@ -182,7 +183,7 @@ export default function MyPayslipDetailPage() {
       const blob = await downloadMyPayslip(payslip.id);
       triggerBlobDownload(
         blob,
-        `payslip_${payslip.year}_${String(payslip.month).padStart(2, "0")}.pdf`,
+        `payslip_${payslip.id}_${payslip.period_start ?? payslip.year}_${payslip.period_end ?? String(payslip.month).padStart(2, "0")}.pdf`,
       );
     } catch (err) {
       message.error(
@@ -238,7 +239,13 @@ export default function MyPayslipDetailPage() {
     }
     return parts.join(" · ") || undefined;
   };
-  const period = formatPayrollPeriod(payslip.year, payslip.month, language);
+  const period = formatEmployeePayslipPeriod(
+    payslip.year,
+    payslip.month,
+    payslip.period_start,
+    payslip.period_end,
+    language,
+  );
   // Zero allowances add nothing to read; the footer says they were hidden.
   const earnings = payslip.salary_components.filter(
     (line) => !isZeroMoney(line.amount),

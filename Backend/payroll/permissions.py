@@ -1,5 +1,6 @@
-from core.permissions import get_role
 from rest_framework.permissions import BasePermission
+
+from core.permissions import get_role
 
 PAYROLL_MANAGER_ROLES = frozenset({"SystemAdmin", "HRManager", "CFO"})
 

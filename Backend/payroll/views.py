@@ -2,6 +2,15 @@ import csv
 import logging
 from html import escape
 
+from django.http import HttpResponse
+from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+from reportlab.lib.units import mm
+from reportlab.platypus import Paragraph, Spacer, Table, TableStyle
+from rest_framework import mixins, status, viewsets
+from rest_framework.decorators import action
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+
 from audit.utils import audit
 from core.pagination import StandardPagination
 from core.pdf import (
@@ -13,19 +22,12 @@ from core.pdf import (
     shape_ar,
 )
 from core.responses import error, success
-from django.http import HttpResponse
 from organization.services import (
     filter_queryset_by_company_scope,
     get_active_company_for_request,
 )
-from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
-from reportlab.lib.units import mm
-from reportlab.platypus import Paragraph, Spacer, Table, TableStyle
-from rest_framework import mixins, status, viewsets
-from rest_framework.decorators import action
-from rest_framework.permissions import IsAuthenticated
-from rest_framework.response import Response
 
+from .calculator import period_dates
 from .models import PayrollRun, PayrollRunItem, Payslip
 from .permissions import IsEmployeeOnly
 from .serializers import (
@@ -96,10 +98,22 @@ def _build_payslip_pdf(payslip):
             ]
         )
     )
+    period_start, period_end = period_dates(
+        payslip.payroll_run.year,
+        payslip.payroll_run.month,
+        payslip.payroll_run.calendar_days,
+        period_start=payslip.payroll_run.period_start,
+        period_end=payslip.payroll_run.period_end,
+        period_basis=payslip.payroll_run.period_basis,
+    )
+    period_day_count = payslip.payroll_run.calendar_days or (period_end - period_start).days + 1
     story = [
         build_corporate_header(
             title=translated("payroll.pdf.payslip"),
-            period_text=f"{translated('payroll.pdf.period')} {payslip.year}-{payslip.month:02d}",
+            period_text=(
+                f"{translated('payroll.pdf.period')} {period_start.isoformat()} – {period_end.isoformat()} "
+                f"({period_day_count} {translated('payroll.pdf.calendar_days')})"
+            ),
             second_col_width=138 * mm,
         ),
         Spacer(1, 8),
@@ -196,7 +210,7 @@ class EmployeePayslipViewSet(
     def get_queryset(self):
         queryset = (
             Payslip.objects.select_related("payroll_run")
-            .order_by("-year", "-month", "-id")
+            .order_by("-payroll_run__period_end", "-payroll_run__period_start", "-id")
             .filter(
                 employee=self.request.user,
                 is_active=True,

@@ -1,6 +1,6 @@
 # Payroll Rebuild API Contract
 
-Version: 0.6.1. Date: 2026-10-15 (Africa/Cairo). Delivery: **Phase 2 implemented; full backend verification has five failures outside payroll (see handoff)**.
+Version: 0.8.0. Date: 2026-10-21 (Africa/Cairo). Delivery: **Phase 2 implemented; inclusive payroll date ranges added**.
 
 **Status: v0.3.0 was approved; the user authorized Phase 1 and then instructed “continue with phase 2”.** Phase 2 wires the transactional writer, source/carry/loan lifecycle, approved endpoints, employee itemized JSON/PDF, HR exports and integration/security tests. Provision proration remains FULL_MONTH by default, configurable and snapshotted. CFO remains in the single PAYROLL_MANAGER_ROLES constant. The original task ended at the Phase 2 handoff and did not authorize Phase 3. This is historical task scope, not a standing limit on later user-authorized work. Contract changes in this version are listed below and in the Phase 2 handoff.
 
@@ -16,7 +16,7 @@ Verified source: `Backend/config/urls.py`; `payroll/{models,serializers,views,ur
 | Verified current behavior | Contract disposition |
 |---|---|
 | Payroll router is mounted at the root; rent router is `/api/hr/` | Retain `/payroll-runs/`, `/employee/payslips/`; new payroll resources also root-mounted. Assignment resource belongs to payroll and references existing `/api/hr/rents/`. No invented `/api/payroll/` family. |
-| Run year/month, not period_start/period_end, are persisted | Retain year/month; expose derived period dates additively. |
+| Run year/month are persisted | New runs persist required inclusive `period_start`/`period_end`, may cross month/year boundaries, and contain at most 30 days. Compatibility year/month use the period-end month and `calendar_days` is the inclusive length. Historical full-month rows are backfilled to actual month dates with `LEGACY_FULL_MONTH`, retaining prior 30-day calculation semantics. |
 | Run access is `IsAuthenticated` + `employees.permissions.IsHRManagerOrAdmin` | Proposed payroll permission adds existing `CFO` role; no new finance role. |
 | Lists use `StandardPagination`, `data.items`, default 25 | Retain exact envelope; never return DRF `results/next/previous`. |
 | Payslip user FK is mandatory; no payslip for an employee without a login | Add profile and item links, allow null user, one payslip per included employee; accountless records remain HR-only. |
@@ -37,13 +37,13 @@ All input/calculation money uses `Decimal`, never binary float. API money is **a
 
 Calculate without rounding daily/hourly rates; apply `ROUND_HALF_UP` to **each final money line** at one riyal. Sum rounded lines for all payroll totals. Do not round a subtotal independently or round a daily rent share before summing it. Salary components remain distinct: Basic, Housing (`accommodation_allowance`), Transportation, Telephone, Petrol, Other Allowance. Housing is a salary component; rent is a separate company cost.
 
-Salary base selections are fixed enums, never formulas. Resolve against the **full monthly contractual components**, except Article 70, which explicitly uses **earned run gross**. `FIXED_AMOUNT` has a nonnegative monthly `fixed_amount`; other selectors require `fixed_amount: null`. Defaults: absence GROSS, GOSI BASIC_HOUSING, leave BASIC, EOS BASIC, overtime BASIC. BASIC overtime and the calendar-month period for the normal-overtime hours limit are labelled assumptions in settings and the response. Provision proration is configurable, with FULL_MONTH as the default. HR's later statement that absence uses full monthly gross resolves the proration question; the company absence selector remains configurable as originally required, with GROSS default.
+Salary base selections are fixed enums, never formulas. Resolve against the **full monthly contractual components**, except Article 70, which explicitly uses **earned run gross**. `FIXED_AMOUNT` has a nonnegative monthly `fixed_amount`; other selectors require `fixed_amount: null`. Defaults: absence GROSS, GOSI BASIC_HOUSING, leave BASIC, EOS BASIC, overtime BASIC. BASIC overtime and the once-per-payroll-window period for the normal-overtime hours limit are labelled assumptions in settings and the response. Provision proration is configurable, with FULL_MONTH as the default. HR's later statement that absence uses full monthly gross resolves the proration question; the company absence selector remains configurable as originally required, with GROSS default.
 
 Gross paid = sum of independently rounded, prorated salary component lines. `total_allowances` excludes Basic and includes the five allowance lines. Full monthly gross is a separate snapshot, not `EmployeeProfile.total_salary`. A mismatched/null profile total never drives pay or the fine cap; mismatches produce a warning.
 
 ### 2.2 Employment, attendance and leave
 
-Use a 30-day divisor in every month. An employee employed for the entire calendar month earns 30 salary days, including February. For an actual mid-month join/end, count calendar days inclusively within the employed interval and cap at 30. Example: joined on June 16 earns 15 days; joined on the first of a 31-day month earns 30. Store both actual employed dates/days and payable salary days.
+Use a 30-day divisor for every payroll window. A new explicit range earns its actual inclusive employed days, capped at 30; a 28-day February range therefore earns 28/30. Historical `LEGACY_FULL_MONTH` rows preserve the prior rule that a fully employed calendar month earns 30 salary days, including February. For an actual mid-window join/end, count dates inclusively within the employed interval and cap at 30. Store both actual employed dates/days and payable salary days.
 
 An archive date is the inclusive last employed date. An archived employee before the month is excluded; an employee archived within the month is included up to that date; an archive date after the month permits historical inclusion. Read `archived_at` as a date in the configured application payroll timezone (existing Django TIME_ZONE, frozen with the run). Do not invent an end date from updated_at. ACTIVE profiles are included. Future hire_date after month end excludes a profile without a warning. PREHIRE profiles are excluded; if hire_date is on/before month end, emit blocking prehire_status_conflict. Non-archived SUSPENDED profiles are included, with blocking suspended_pay_decision_required until HR selects FULL_PAY or ZERO_PAY for this run; ZERO_PAY requires zero_salary_reason=suspended and an audit reason. Non-archived TERMINATED profiles lacking an end date are excluded with blocking terminated_without_end_date. Dated archival inclusion above remains the historical exception. An excluded profile can still be present in validation and the pre-go-live audit.
 
@@ -65,7 +65,7 @@ Full-month absence: if every scheduled day the employee was due to work within t
 
 Normal overtime quantity is eligible hours beyond an eight-hour day, entered as **excess hours**, not total shift hours. Amount = overtime base / 30 / 8 x 1.5 x excess hours. Weekly rest/Friday = base / 30 x 1.5 x worked days. Official holiday = base / 30 x 2 x worked days. Bonus, incentives, other additions are independent amount lines. No inferred attendance overtime approval. Apply the configured normal-hour cap before calculating the final normal-overtime line.
 
-`allowed_overtime` is an **HOURS value**, applying only to normal excess hourly overtime, with a **per-calendar-month** limit period (explicit assumption). It does not limit day-based weekly-rest/Friday or official-holiday work. A positive value caps total normally payable excess hours for that employee/month at that value. Value 0 pays no normal overtime automatically. Save the entered hours; pay only min(entered hours, configured limit) without an override, and expose excess/unpaid hours with nonblocking `overtime_over_allowed` (including cap 0). Excess hours are not automatically paid or carried as a debt. HR may explicitly authorize them using the existing `override_overtime_eligibility: true` field with a mandatory reason and audit; a reason alone is not an override. Keep the excess warning with the overridden/payable quantities visible. Null means no limit configured: entry/pay are allowed with nonblocking `overtime_limit_not_set` when normal overtime is entered. Day-based work alone emits neither normal-limit warning. Recalculation aggregates the employee's normal hours for this calendar month, never treating separate edits as fresh allowance. Retain the existing override field/adjustment wire names for compatibility, but their meaning is a normal-hours limit override.
+`allowed_overtime` is an **HOURS value**, applying only to normal excess hourly overtime, once per payroll window (explicit assumption). It does not limit day-based weekly-rest/Friday or official-holiday work. A positive value caps total normally payable excess hours for that employee/window at that value. Value 0 pays no normal overtime automatically. Save the entered hours; pay only min(entered hours, configured limit) without an override, and expose excess/unpaid hours with nonblocking `overtime_over_allowed` (including cap 0). Excess hours are not automatically paid or carried as a debt. HR may explicitly authorize them using the existing `override_overtime_eligibility: true` field with a mandatory reason and audit; a reason alone is not an override. Keep the excess warning with the overridden/payable quantities visible. Null means no limit configured: entry/pay are allowed with nonblocking `overtime_limit_not_set` when normal overtime is entered. Day-based work alone emits neither normal-limit warning. Recalculation aggregates the employee's normal hours for this payroll window, never treating separate edits as fresh allowance. Retain the existing override field/adjustment wire names for compatibility, but their meaning is a normal-hours limit override.
 
 Pre-go-live data risk: `employees/services/importer.py` maps yes/no to 1/0 while also accepting integers. The audit must list all employees with allowed_overtime in (0, 1) for HR review; these are candidates, not proof of bad data. Do not auto-convert or reinterpret their stored values.
 
@@ -105,7 +105,7 @@ Total Company Cost = Net + sum of known, rounded company provisions. Missing acc
 
 Assignment enum: `assigned`, `none`, `unknown`. `assigned` requires a same-company Rent with annual_rent_value; `none` explicitly means no company accommodation and rent_id null; `unknown` means missing information and rent_id null. No overlapping assignment intervals for any status per employee. Dates are inclusive and **both start/end are required**. No assignment for the employed month yields unknown/null; it does not automatically create an assignment. Ending/creating assignments must preserve historical records.
 
-Every month has 30 allocation slots. Slot d uses real calendar day d if present; in February, slots after the last real day reuse the last real day's occupancy. Calendar day 31 is **ignored**, replacing HR's earlier "beyond 30 counts as day 30" wording. Slot share = annual_rent_value / 12 / 30 / all assigned residents on the slot. Include residents outside payroll; their costs are marked not in payroll and never redistributed. Slots with zero residents remain vacant/unallocated. An archived employee's assigned interval ends automatically on the archive date, through an audited assignment service.
+Historical monthly runs retain 30 allocation slots. Slot d uses real calendar day d if present; in February, legacy slots after the last real day reuse the last real day's occupancy. New date-range runs use each actual selected calendar date, including cross-month dates. For either mode, each slot share = annual_rent_value / 12 / 30 / all assigned residents on the slot. Include residents outside payroll; their costs are marked not in payroll and never redistributed. Slots with zero residents remain vacant/unallocated. An archived employee's assigned interval ends automatically on the archive date, through an audited assignment service.
 
 Sum each resident's unrounded slot shares before independently rounding their monthly money line. Keep raw allocation provenance in storage and the rent report. Never give a rounding remainder to an employee. Report:
 
@@ -151,7 +151,7 @@ Existing money columns remain Decimal(12,2); new payroll totals/lines use Decima
 
 | Model/table proposal | Fields/types and constraints |
 |---|---|
-| PayrollSettings (`payroll_payrollsettings`) | id bigint; company OneToOne(OrganizationNode, PROTECT, COMPANY only); revision positive integer; absence_base_type/gosi_base_type/leave_base_type/eos_base_type/overtime_base_type Char(32); absence_fixed_amount/gosi_fixed_amount/leave_fixed_amount/eos_fixed_amount/overtime_fixed_amount Decimal(18,2) nullable (DTO nests type/fixed_amount under each base); foreign_gosi_rate, saudi_gosi_rate Decimal(8,6), [0,1]; annual_medical_invoice Decimal(18,2) nullable; no_medical_insurance bool default false; monthly_foreign_id_cost and annual_air_ticket Decimal(18,2); provision_proration Char(24), FULL_MONTH/PRORATED_BY_DAYS, default FULL_MONTH; require_manual_absence_confirmation bool default false; timestamps. Read-only constants day_basis=30, rounding=ROUND_HALF_UP, overtime_default_is_assumption=true, normal_overtime_limit_period=CALENDAR_MONTH. |
+| PayrollSettings (`payroll_payrollsettings`) | id bigint; company OneToOne(OrganizationNode, PROTECT, COMPANY only); revision positive integer; absence_base_type/gosi_base_type/leave_base_type/eos_base_type/overtime_base_type Char(32); absence_fixed_amount/gosi_fixed_amount/leave_fixed_amount/eos_fixed_amount/overtime_fixed_amount Decimal(18,2) nullable (DTO nests type/fixed_amount under each base); foreign_gosi_rate, saudi_gosi_rate Decimal(8,6), [0,1]; annual_medical_invoice Decimal(18,2) nullable; no_medical_insurance bool default false; monthly_foreign_id_cost and annual_air_ticket Decimal(18,2); provision_proration Char(24), FULL_MONTH/PRORATED_BY_DAYS, default FULL_MONTH; require_manual_absence_confirmation bool default false; timestamps. Read-only constants day_basis=30, rounding=ROUND_HALF_UP, overtime_default_is_assumption=true, normal_overtime_limit_period=PAYROLL_WINDOW. |
 | EmployeeProfile additions | deduct_gosi_from_employee bool default false; payroll_config_revision positive integer default 0. All payroll config writes use a request/service audit; no serializer/model-side audit. |
 | PayrollRun extensions | existing fields retained; revision integer; total_gross, total_additions, total_deductions, total_provisions, total_company_cost Decimal(18,2); cost_incomplete bool; settings_snapshot JSON (schema_version, company, settings revision, bases, constants, timezone and assumption); calculated_at nullable datetime; finalized_at/paid_at/cancelled_at nullable datetimes; cancelled_by User nullable SET_NULL; cancel_reason Text; calculator_version Char; validation_snapshot JSON including excluded profiles; legacy_calculation bool. company/year/month noncancelled unique; cancelled runs retained and replacement for same period permitted. |
 | PayrollRunItem extensions | is_active bool default true, internal inclusion marker (not a DTO field); employee_profile FK PROTECT nullable during migration; existing employee_id/name/department/position snapshot; input_snapshot JSON (monthly salary, lifecycle, employee flag/nationality/OT limit, entered/payable/excess/unpaid hours and override evidence, mapping coverage/manual absence confirmation, absent/leave/penalty evidence, allocations); gross_salary, total_additions, total_provisions, total_company_cost Decimal(18,2); cost_incomplete bool; zero_salary_reason Char(24) nullable, zero_salary_reason_detail Text nullable; suspended_pay_decision Char(12) nullable (FULL_PAY/ZERO_PAY); accommodation_status Char(12); company FK PROTECT, consistent with run/profile; one item per (run, profile). Existing scalar basic/allowances/deductions/net projected by one writer. |
@@ -162,7 +162,7 @@ Existing money columns remain Decimal(12,2); new payroll totals/lines use Decima
 | PayrollCarryForward (`payroll_payrollcarryforward`) | company FK PROTECT; profile FK PROTECT; origin_run FK PROTECT; source_key unique by company/profile/category/origin; type ABSENCE/GOSI_EMPLOYEE only; original_authorized_amount, remaining_amount Decimal(18,2); source_period year/month; status PENDING/SETTLED; created_at/updated_at. Provisional draft debts are snapshots, not committed carry balances. No Loan, Penalty or HR manual Other duplicate ledger rows. |
 | PayrollCarryForwardCollection | company FK; carry FK PROTECT; run/item FK PROTECT; amount Decimal(18,2); state CLAIMED/APPLIED/RELEASED; one reservation per (carry, run); audit reference and timestamps. Frozen collections remain historical. |
 | AccommodationAssignment (`payroll_accommodationassignment`) | company FK PROTECT; employee_profile FK PROTECT; rent FK Rent PROTECT nullable; status assigned/none/unknown; start_date and end_date Date NOT NULL; is_active bool (record validity, not today's occupancy); created_by/updated_by User SET_NULL; timestamps. end>=start; assigned iff rent nonnull; no overlapping active inclusive ranges for profile, including scheduled/history ranges (service overlap validation on every supported database; extra exclusion constraint only on PostgreSQL, guarded by connection vendor). |
-| PayrollRentAllocation | company/run FK; rent FK PROTECT; annual_rent snapshot Decimal(18,2); slot_inputs JSON (30 dates, resident profile IDs, exact share ratios, vacancy); resident_allocations JSON including not-in-payroll rows; monthly_rent, vacant_unallocated_raw, not_in_payroll_raw, rounding_difference exact-ratio JSON. Unique(run, rent); freezes historical occupancy/price for the report. |
+| PayrollRentAllocation | company/run FK; rent FK PROTECT; annual_rent snapshot Decimal(18,2); slot_inputs JSON (N dates for explicit windows, 30 legacy slots, resident profile IDs, exact share ratios, vacancy); resident_allocations JSON including not-in-payroll rows; monthly_rent, vacant_unallocated_raw, not_in_payroll_raw, rounding_difference exact-ratio JSON. `period_rent` is derived in responses as monthly_rent x N/30 (or full monthly rent for legacy rows). Unique(run, rent); freezes historical occupancy/price for the report. |
 
 Phase 2 adds `Backend/payroll/migrations/0012_payrollrunitem_is_active.py` after 0011: `PayrollRunItem.is_active`, Boolean default true. Recalculation marks an item excluded by corrected lifecycle data inactive instead of deleting an item referenced by immutable adjustments/carry evidence. Inactive items/slips are omitted from current item lists, totals and reconciliation; historical item adjustments stay readable through the authorized run. Cancellation retains items and deactivates slips as already specified. No public is_active item field is introduced. The new SQLite forward/backfill/reverse probe includes 0012; older PostgreSQL-only bootstrap migrations remain outside this chain.
 
@@ -323,7 +323,7 @@ Every table entry is the exact wire value. Label keys are translated in English/
 | carry status | PENDING, SETTLED; collection state CLAIMED, APPLIED, RELEASED; `payroll.carry_status.<lowercase>`, `payroll.collection_state.<lowercase>` |
 | source_kind | employee_salary, attendance_absence, unpaid_leave, manual_adjustment, loan, attendance_penalty, penalty, carry_forward, company_settings, rent_allocation, legacy; machine values, no user label |
 
-Each validation code maps **exactly** to `payroll.validation.<code>`. The following is the complete v1 domain code set (**44 distinct validation codes**); error text is translated with these catalog entries (Arabic values to be implemented in Backend locale catalogs, not frontend files):
+Each validation code maps **exactly** to `payroll.validation.<code>`. The following is the complete v1 domain code set (**45 distinct validation codes**); error text is translated with these catalog entries (Arabic values to be implemented in Backend locale catalogs, not frontend files):
 
 | Code | Severity/use | English message / Arabic message |
 |---|---|---|
@@ -357,6 +357,7 @@ Each validation code maps **exactly** to `payroll.validation.<code>`. The follow
 | invalid_quantity | 422 | Enter a valid nonnegative day or hour quantity. / أدخل عدد أيام أو ساعات صحيحًا وغير سالب. |
 | invalid_choice | 422 | Select a supported value. / اختر قيمة مدعومة. |
 | invalid_period | 422 | Select a valid payroll year and month. / اختر سنة وشهر رواتب صحيحين. |
+| invalid_calendar_days | 422 | Enter 1 to 30 calendar days without exceeding the selected month. / أدخل من 1 إلى 30 يومًا تقويميًا دون تجاوز عدد أيام الشهر المحدد. |
 | reason_required | 422 | A reason is required. / السبب مطلوب. |
 | invalid_date_range | 422 | The end date must be on or after the start date. / يجب ألا يسبق تاريخ النهاية تاريخ البداية. |
 | assignment_overlap | 409 | An accommodation assignment overlaps these dates. / يتداخل تخصيص سكن مع هذه التواريخ. |
@@ -383,7 +384,7 @@ Messages and labels in addition to enums/validation:
 | payroll.message.cancelled | Payroll run cancelled. / تم إلغاء مسير الرواتب. |
 | payroll.message.already_cancelled | Payroll run already cancelled. / تم إلغاء مسير الرواتب مسبقًا. |
 | payroll.assumption.overtime_basic | Overtime defaults to Basic salary; HR may configure the base. / يعتمد العمل الإضافي افتراضيًا على الراتب الأساسي؛ يمكن للموارد البشرية ضبط الأساس. |
-| payroll.assumption.overtime_calendar_month | Normal overtime limit is per calendar month (assumption). / حد العمل الإضافي العادي لكل شهر تقويمي (افتراض). |
+| payroll.assumption.overtime_calendar_month | Normal overtime limit applies once per payroll window (assumption). / يطبق حد العمل الإضافي العادي مرة واحدة لكل فترة رواتب (افتراض). |
 | payroll.provision_proration.full_month | Full month / شهر كامل |
 | payroll.provision_proration.prorated_by_days | Prorated by payable days / موزع نسبيًا حسب أيام الأجر |
 | payroll.field.require_manual_absence_confirmation | Require manual absence confirmation / اشتراط تأكيد الغياب يدويًا |
@@ -998,6 +999,12 @@ Subsequent endpoint tables reference these exact JSON examples by name, to avoid
         "severity": "error"
       },
       {
+        "value": "invalid_calendar_days",
+        "label": "Enter 1 to 30 calendar days without exceeding the selected month.",
+        "label_key": "payroll.validation.invalid_calendar_days",
+        "severity": "error"
+      },
+      {
         "value": "reason_required",
         "label": "A reason is required.",
         "label_key": "payroll.validation.reason_required",
@@ -1167,13 +1174,13 @@ Subsequent endpoint tables reference these exact JSON examples by name, to avoid
       },
       {
         "key": "payroll.assumption.overtime_calendar_month",
-        "message": "Normal overtime limit is per calendar month (assumption)."
+        "message": "Normal overtime limit applies once per payroll window (assumption)."
       }
     ],
     "updated_at": "2026-10-11T09:00:00Z",
     "no_medical_insurance": false,
     "require_manual_absence_confirmation": false,
-    "normal_overtime_limit_period": "CALENDAR_MONTH"
+    "normal_overtime_limit_period": "PAYROLL_WINDOW"
   }
 }
 ```
@@ -1193,6 +1200,8 @@ Complete example fixture: 10 included foreign employees each have the A salary/a
     "id": 7,
     "year": 2026,
     "month": 9,
+    "calendar_days": 30,
+    "period_basis": "DATE_RANGE",
     "status": "DRAFT",
     "total_net": "102670.00",
     "total_employees": 10,
@@ -1244,7 +1253,7 @@ Complete example fixture: 10 included foreign employees each have the A salary/a
       "payroll_timezone": "Asia/Riyadh",
       "no_medical_insurance": false,
       "require_manual_absence_confirmation": false,
-      "normal_overtime_limit_period": "CALENDAR_MONTH"
+      "normal_overtime_limit_period": "PAYROLL_WINDOW"
     },
     "calculator_version": "1",
     "legacy_calculation": false,
@@ -1372,7 +1381,7 @@ Complete example fixture: 10 included foreign employees each have the A salary/a
       "payable_normal_hours": "0.00",
       "over_allowed_hours": "0.00",
       "unpaid_normal_hours": "0.00",
-      "limit_period": "CALENDAR_MONTH"
+      "limit_period": "PAYROLL_WINDOW"
     },
     "deduct_gosi_from_employee": false,
     "zero_salary_reason": null,
@@ -1759,13 +1768,13 @@ Writable company fields: absence_base, gosi_base, leave_base, eos_base, overtime
 
 | Method + exact path | Permission; query | Request JSON example | Response example; domain status |
 |---|---|---|---|
-| POST `/payroll-runs/` | P; none | `{"year":2026,"month":9}` | R, 201; duplicate period 409 (retain legacy string-array errors), invalid year/month 422. Draft builds even with report errors; only system/integrity errors roll back creation. |
+| POST `/payroll-runs/` | P; none | `{"period_start":"2026-01-20","period_end":"2026-02-18"}` | R, 201. Both ISO dates are required; the inclusive range may cross month/year boundaries and must contain 1..30 days. Mixed legacy year/month/calendar_days input is rejected. Salary and other daily rates keep divisor30. Any overlapping active company range returns409 duplicate_period; cancelled ranges permit replacements. Draft builds even with report errors; only system/integrity errors roll back creation. |
 | GET `/payroll-runs/` | P; year 1900..2100, month 1..12, status enum, page/page_size | No body; `?year=2026&month=9&status=DRAFT&page=1&page_size=25` | `{"status":"success","data":{"items":[],"page":1,"page_size":25,"count":0,"total_pages":1}}` for no matching runs; each nonempty entry is R.data; 200. Order -year,-month,-id. Invalid filters 422 (existing invalid year was ignored; documented behavioral correction). |
 | GET `/payroll-runs/{run_id}/` | P; none | No body | R; 200/404. |
 | GET `/payroll-runs/{run_id}/items/` | P; employee_profile_id integer, search (employee_id/name), has_warnings true/false, page/page_size | No body; `?employee_profile_id=101&page=1&page_size=25` | Page envelope with I.data items; empty page example as above; 200/404/422. Order id. |
 | GET `/payroll-runs/{run_id}/items/{item_id}/` | P; none | No body | I; 200/404, require item belongs to authorized run. |
 
-Legacy run fields and item basic/allowances/deductions/net remain read-only and present. All filters are opt-in; no ability to supply company/owner bypass. No employee email/national_id is necessary in HR item responses.
+Legacy run fields and item basic/allowances/deductions/net remain read-only and present. `calendar_days` is numeric on every newly created range and may be null only on pre-window historical rows. Canonical dates are persisted on both; `period_basis=LEGACY_FULL_MONTH` preserves historical full-month salary/rent behavior. All filters are opt-in; no ability to supply company/owner bypass. No employee email/national_id is necessary in HR item responses. HR CSV/XLSX exports and payroll/payslip PDFs display the inclusive dates and effective day count.
 
 ### 7.3 Summary, validation, recalculation, finalize, publication, cancellation
 
@@ -1945,10 +1954,17 @@ Rent report example: annual 12,000, monthly 1,000, three full-month residents, o
         "rent_name": "Example Residence",
         "year": 2026,
         "month": 9,
+        "period_start": "2026-09-01",
+        "period_end": "2026-09-30",
         "monthly_rent": {
           "numerator": "12000.00",
           "denominator": 12,
           "decimal": "1000.00"
+        },
+        "period_rent": {
+          "numerator": "1000.00",
+          "denominator": 1,
+          "decimal": "1000"
         },
         "residents": [
           {
@@ -2056,7 +2072,7 @@ The example expands one slot; actual slots contains **all 30**, including vacant
 | Method + exact path | Permission; query | Request JSON example | Response example; domain status |
 |---|---|---|---|
 | GET `/payroll-runs/{run_id}/export/` | P; PayrollExportThrottle; file_format pdf/xlsx/csv (default pdf); retained aliases export_format/format, preference file_format > export_format > format | No body; `?file_format=xlsx` or `?file_format=pdf` | 200 binary `payroll_run_7.xlsx` / `payroll_run_7.pdf`; invalid format 422 retained error; hidden run 404. CSV remains compatible. |
-| GET `/employee/payslips/` | E; year 1900..2100, page/page_size | No body; `?year=2026&page=1&page_size=25` | `{"status":"success","data":{"items":[{"id":201,"year":2026,"month":9,"net_salary":"10267.00","payment_mode":"Bank Transfer","status":"COMPLETED"}],"page":1,"page_size":25,"count":1,"total_pages":1}}`; 200; invalid year/employee_id selector 422. Order -year,-month,-id. |
+| GET `/employee/payslips/` | E; year 1900..2100, page/page_size | No body; `?year=2026&page=1&page_size=25` | `{"status":"success","data":{"items":[{"id":201,"year":2026,"month":9,"period_start":"2026-09-01","period_end":"2026-09-30","net_salary":"10267.00","payment_mode":"Bank Transfer","status":"COMPLETED"}],"page":1,"page_size":25,"count":1,"total_pages":1}}`; 200; invalid year/employee_id selector 422. Order -run.period_end,-run.period_start,-id. |
 | GET `/employee/payslips/{payslip_id}/` | E; none | No body | EP; 200; unowned/cross-company/inactive/DRAFT/CANCELLED => same generic 404. |
 | GET `/employee/payslips/{payslip_id}/download/` | E; none | No body | 200 binary PDF `payslip_201.pdf` with section 4 headers; same hidden 404. Protected web-only binary policy retained. |
 
@@ -2076,7 +2092,7 @@ Every payroll/settings/manual/assignment/carry/status/source change uses existin
 | payroll_employee_gosi_updated | Flag and config revision old/new, reason. |
 | payroll_item_adjusted | Every run-local changed field; original/new, reason; adjustment projection. |
 | payroll_input_refreshed | LEAVE_INPUT_CHANGE/EMPLOYMENT_INPUT_CHANGE and original/new evidence; reason of triggering recalc/finalize. |
-| payroll_overtime_override | Explicit normal-hours limit exception; original/new cap and entered/payable/excess/unpaid hours, calendar month, actor/reason. Does not govern day-based rest/holiday work. |
+| payroll_overtime_override | Explicit normal-hours limit exception; original/new cap and entered/payable/excess/unpaid hours, payroll window, actor/reason. Does not govern day-based rest/holiday work. |
 | payroll_run_finalized | Retain currently emitted name; also emit canonical `payroll_finalized` once per actual transition for repository audit convention; both link same transition ID. Repeated finalize emits no transition audit. |
 | payroll_cancelled | Cancellation old/new state and reason. |
 | payroll_loan_restored | Each loan restoration with prior/new deduction fields and approved status. |
@@ -2107,6 +2123,8 @@ Complete production-shaped example: 52 active items with basic1000.25 + allowanc
     "id": 8,
     "year": 2026,
     "month": 8,
+    "calendar_days": null,
+    "period_basis": "LEGACY_FULL_MONTH",
     "status": "COMPLETED",
     "total_net": "57239.00",
     "total_employees": 52,
@@ -2316,7 +2334,7 @@ Phase 1: pure calculator/model/settings/migration tests, including every row bel
 | Rent exact reconciliation |Raw shares + vacant = monthly rent exactly via rational provenance; nonpayroll subset counted once. Monthly1,000/3=>333 each,+1 difference; add vacancy and nonpayroll resident; test negative rounding_difference too. Difference never changes an employee or Company Cost. |
 | February absence |28/28=>100%,27/28 with one non-absent due-work date=>9,900 for base11,000; leap-year29/29 full; join/archive interval drives full-month determination. |
 | Missing dates |Missing hire_date draft succeeds with flagged full-month/old tier; finalize code missing_hire_date. Archived missing archive date excluded but blocking archived_without_date; one-time report also lists non-archived TERMINATED profiles missing end date. |
-| Normal overtime cap20/entered24 |Basic6,000: retain24 excess hours, pay20=>750; excess/unpaid4 flagged overtime_over_allowed. Explicit override with reason pays24=>900; retain excess warning and audit requested/payable/cap. Limit period calendar month, not per edit/day. |
+| Normal overtime cap20/entered24 |Basic6,000: retain24 excess hours, pay20=>750; excess/unpaid4 flagged overtime_over_allowed. Explicit override with reason pays24=>900; retain excess warning and audit requested/payable/cap. Limit applies once per payroll window. |
 | Normal overtime cap0 |Entered4: automatic payable0, unpaid4 + overtime_over_allowed; explicit audited reason/override may pay4=>150; no override never pays normal overtime. |
 | Normal overtime cap null |Entered4 paid=>150 with nonblocking overtime_limit_not_set. |
 | Friday/holiday work cap0 |Friday1 day=>300 and official holiday1 day=>400, allowed without normal-hours override; neither limited by allowed_overtime nor emits normal-limit warning on its own. |
@@ -2379,3 +2397,7 @@ Verifier F4 corrections v0.5.4 (2026-10-13): ExactShare.numerator is a two-decim
 Verifier user rule v0.6.0 (2026-10-14): added the executive exemption in section2.7 and the readonly HR I.executive_exempt boolean in section6/example, plus executive golden rows in section10. Engine normalization uses only core.executives.is_executive_profile; private input_snapshot.source flags executive_exempt/accommodation_assignment_present preserve calculation evidence. Exemption changes only attendance absence/source-confirmation requirements, normal overtime caps/warnings, unassigned accommodation applicability and AttendancePayrollDeduction late-fine selection; all other financial rules/errors remain. Existing draft attendance claims release through the audited service on reclassification. No info validation channel/code was added: executive_attendance_exempt is not emitted; visibility relies on the permitted DTO fallback. Paths, settings, roles, enum values, status codes and error shapes are unchanged. Exactly44 validation codes,121 enum entries,148 bilingual keys and16 JSON examples remain; only I gains executive_exempt and its stored fixture is updated. Existing upstream executive request/penalty creation restrictions are outside this payroll change; eligible approved leave/issued disciplinary claims remain payroll inputs. Evidence: plans/Payroll Rebuild v0.6.0 Handoff.md.
 
 Verifier legacy presentation v0.6.1 (2026-10-15): sections2.7/5/6/7.3/9/10/12 and the version header changed. Section2.7 only clarifies that the newer finalized-report schema applies independently of executive classification; no exemption rule changed. R.total_gross and summary.total_gross_salary derive from active legacy paid basic+allowances; R/summary total_additions, total_provisions and total_company_cost are nullable/unknown and cost_incomplete true for legacy runs only. No database writes, money recalculation or migration. Legacy reconciliation compares item net/count only; payslip coverage/net remains informational. Nonlegacy checks are unchanged. V adds finalize_state and infos; finalized blockers project severity info, leave the immutable source untouched, and do not contribute to blocking counts. can_finalize remains boolean and is true for finalized runs; action/status guards and HTTP error envelopes/codes are unchanged. The validation-report severity filter accepts info. Enums add finalize_state(finalized,not_finalized) and validation_severity.info, with the three matching bilingual catalog keys; exactly44 validation codes,124 enum entries and151 bilingual keys. Examples: enum and V updated; one combined legacy R/summary/V example added (17 JSON blocks,11 stored fixtures). All other settings, roles, executive rules, endpoints and DTO fields are unchanged. Evidence: plans/Payroll Rebuild v0.6.1 Handoff.md.
+
+Payroll date-window extension v0.7.0 (2026-10-21): new run creation requires `calendar_days`, an integer from1 through30 that cannot exceed the actual selected month length. The inclusive calculation window is day1 through day N. Attendance, leave, penalty occurrence/wage evidence, employment eligibility, accommodation coverage and rent allocation are clipped to that window while all established salary and daily rates keep the divisor30. An indivisible penalty claim whose wage evidence extends past the cutoff remains wholly pending with the existing wage-evidence blocker; a later replacement/full window can collect the complete claim without losing the excluded remainder. Explicit February N=28 therefore earns 28/30 for a fully employed employee. Existing rows migrate with `calendar_days=null`, which retains their historical full-calendar-month inputs and 30 salary/rent slots. R adds `calendar_days`; CSV/XLSX exports and payroll/payslip PDFs display the inclusive range and effective day count. Rent allocation responses expose the full `monthly_rent` and the window-adjusted `period_rent`; PDF/XLSX allocation tables use or separately identify `period_rent`. `invalid_calendar_days` is the new translated 422 code. Current totals are45 validation codes,125 enum entries and153 bilingual enum/presentation keys; historical amendment counts above remain historical.
+
+Inclusive range extension v0.8.0 (2026-10-21): run creation replaces year/month/calendar_days input with required inclusive ISO `period_start`/`period_end`, allowing cross-month/year ranges of at most30 days. Canonical dates and `period_basis` are persisted; compatibility year/month use period_end and calendar_days is the inclusive length. Migration0014 converts prior explicit N rows to their existing day1..N dates and full-month historical rows to actual month bounds plus LEGACY_FULL_MONTH, preserving 30 salary/rent slots. Active company ranges cannot overlap; create locks the company before checking. Loan, penalty and carry monthly obligations are eligible through the period-end month. New rent slots use real dates and monthly rent/30; one current annual rent snapshot applies across the range because rent values are not effective-dated. Aggregate normal-overtime inputs receive one cap per payroll window and expose PAYROLL_WINDOW. Paths, money rounding/divisors, roles and lifecycle states are otherwise unchanged.

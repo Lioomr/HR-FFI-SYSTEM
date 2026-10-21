@@ -146,7 +146,15 @@ export default function AccommodationReport({
       ),
     },
     {
-      title: t("payroll.ui.monthlyRent"),
+      title: t("payroll.ui.periodRent"),
+      key: "period",
+      align: "end",
+      render: (_, row) => (
+        <ExactShareText share={row.period_rent ?? row.monthly_rent} />
+      ),
+    },
+    {
+      title: t("payroll.ui.monthlyRentReference"),
       key: "monthly",
       align: "end",
       render: (_, row) => <ExactShareText share={row.monthly_rent} />,
@@ -219,7 +227,7 @@ export default function AccommodationReport({
           loading={loading}
           columns={columns}
           dataSource={properties}
-          scroll={{ x: 850 }}
+          scroll={{ x: 980 }}
           pagination={
             count > 10
               ? {

@@ -16,7 +16,7 @@ import PayrollTheme from "../../../../components/payroll/PayrollTheme";
 import PayrollItemEditor from "../../../../components/payroll/PayrollItemEditor";
 import { PayrollStatusTag } from "../../../../components/payroll/payrollDisplay";
 import {
-  formatPayrollPeriod,
+  formatPayrollWindowSummary,
   useCanManagePayrollHrData,
 } from "../../../../components/payroll/payrollFormat";
 import { readPayrollIndex } from "../../../../components/payroll/payrollIndex";
@@ -191,7 +191,16 @@ function EmployeeRunSession() {
       />
     );
   if (!run) return <LoadingState />;
-  const period = formatPayrollPeriod(run.year, run.month, language);
+  const windowSummary = formatPayrollWindowSummary(
+    run.period_start,
+    run.period_end,
+    run.calendar_days,
+    language,
+    t,
+    run.year,
+    run.month,
+  );
+  const period = windowSummary;
   return (
     <PayrollTheme>
       <Breadcrumb
@@ -225,6 +234,7 @@ function EmployeeRunSession() {
             <bdi dir="ltr">{item?.employee_id}</bdi>
             <span>{item?.department}</span>
             <span>{item?.position}</span>
+            <Typography.Text type="secondary">{windowSummary}</Typography.Text>
             <Typography.Text type="secondary">
               {t("payroll.ui.revisionTag", {
                 revision: item?.run_revision ?? run.revision,

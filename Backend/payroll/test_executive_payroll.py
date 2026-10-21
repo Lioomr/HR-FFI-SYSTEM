@@ -2,10 +2,11 @@ from datetime import date, datetime
 from decimal import Decimal
 
 import pytest
-from attendance.models import AttendanceDailyResult, AttendanceLateViolation, AttendanceRecord
-from audit.models import AuditLog
 from django.contrib.auth.models import Group
 from django.utils import timezone
+
+from attendance.models import AttendanceDailyResult, AttendanceLateViolation, AttendanceRecord
+from audit.models import AuditLog
 from employees.models import EmployeeProfile
 from leaves.models import LeaveRequest, LeaveType
 from rents.models import Rent, RentType
