@@ -52,6 +52,7 @@ import {
 } from "../../../services/api/leaveApi";
 import { isApiError } from "../../../services/api/apiTypes";
 import { useI18n } from "../../../i18n/useI18n";
+import { humanizeCode } from "../../../utils/humanizeCode";
 import LeaveApprovalMap from "../../../components/leaves/LeaveApprovalMap";
 import RequestObligationsPanel from "../../../components/requests/RequestObligationsPanel";
 import DocumentIntegrityPanel from "../../../components/documents/DocumentIntegrityPanel";
@@ -469,12 +470,12 @@ export default function LeaveRequestDetailsPage({
   const canAction =
     !isCEO &&
     ["submitted", "pending_hr"].includes(request.status?.toLowerCase() ?? "");
-  const canSendToCEO = !isCEO && canAction;
   const employeeArchivedOpen =
     Boolean(request.employee_archived) &&
     !["approved", "rejected", "cancelled"].includes(
       request.status?.toLowerCase() ?? "",
     );
+  const canSendToCEO = !isCEO && canAction;
   const canCeoDecide = isCEO && request.status?.toLowerCase() === "pending_ceo";
   const canHrComplete =
     !isCEO && request.status?.toLowerCase() === "pending_hr_completion";
@@ -500,9 +501,7 @@ export default function LeaveRequestDetailsPage({
     const statusKey = `leave.status.${(request.status || "").toLowerCase()}`;
     const translated = t(statusKey);
     return translated === statusKey
-      ? (request.status || "")
-          .replace(/_/g, " ")
-          .replace(/\b\w/g, (c) => c.toUpperCase())
+      ? humanizeCode(request.status)
       : translated;
   })();
 
@@ -598,6 +597,7 @@ export default function LeaveRequestDetailsPage({
           </div>
         }
       />
+
       {employeeArchivedOpen && (
         <Alert
           type="warning"
@@ -606,7 +606,6 @@ export default function LeaveRequestDetailsPage({
           title={t("leave.employeeArchivedNotice")}
         />
       )}
-
 
       <Row gutter={[18, 18]} align="top">
         <Col xs={24} xl={10}>
@@ -715,8 +714,8 @@ export default function LeaveRequestDetailsPage({
             size="large"
             subjectLabel={employeeName}
             approveLoading={processing && ceoApproveOpen}
-            approveDisabled={employeeArchivedOpen}
             disabled={processing}
+            approveDisabled={employeeArchivedOpen}
             onApprove={() => setCeoApproveOpen(true)}
             onReject={() => setCeoRejectOpen(true)}
           />
@@ -769,8 +768,8 @@ export default function LeaveRequestDetailsPage({
                   type="primary"
                   icon={<CheckCircleOutlined />}
                   onClick={handleApprove}
-                  disabled={employeeArchivedOpen}
                   loading={processing}
+                  disabled={employeeArchivedOpen}
                 >
                   {t("leave.approve")}
                 </Button>

@@ -9,6 +9,7 @@ import { PlusOutlined, EyeOutlined, FilePdfOutlined } from "@ant-design/icons";
 import PageHeader from "../../../components/ui/PageHeader";
 import ResponsiveTable from "../../../components/ui/ResponsiveTable";
 import { useI18n } from "../../../i18n/useI18n";
+import { humanizeCode } from "../../../utils/humanizeCode";
 import {
   getMyLeaveRequests,
   cancelLeaveRequest,
@@ -184,9 +185,7 @@ export default function MyLeaveRequestsPage() {
         const translated = t(statusKey);
         const display =
           translated === statusKey
-            ? (
-                status?.charAt(0).toUpperCase() + status?.slice(1).toLowerCase()
-              ).replace(/_/g, " ")
+            ? humanizeCode(status)
             : translated;
         return (
           <div

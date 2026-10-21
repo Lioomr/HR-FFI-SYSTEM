@@ -50,6 +50,7 @@ import {
 } from "../../../services/api/leaveApi";
 import { getHttpStatus } from "../../../services/api/httpErrors";
 import { useI18n } from "../../../i18n/useI18n";
+import { humanizeCode } from "../../../utils/humanizeCode";
 import { formatDateTime } from "../../../utils/dateTime";
 import { downloadBlob } from "../../../utils/download";
 
@@ -130,7 +131,7 @@ export default function EmployeeLeaveRequestDetailsPage() {
     const statusKey = `leave.status.${(status || "").toLowerCase()}`;
     const translated = t(statusKey);
     return translated === statusKey
-      ? (status || "").replace(/_/g, " ")
+      ? humanizeCode(status)
       : translated;
   };
 

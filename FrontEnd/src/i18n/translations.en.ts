@@ -583,7 +583,7 @@ const en: TranslationMap = {
   "auth.loginLockedTitle": "Account temporarily locked",
   "auth.backendUnavailableTitle": "Server unavailable",
   "auth.backendNotConnected":
-    "Backend not connected (API login failed). Start the backend or set VITE_API_BASE_URL.",
+    "We couldn't reach the server. Please check your connection and try again, or contact support if it continues.",
   "auth.tryAgain": "Please try again later",
   "auth.invite.missingToken": "Invitation token is missing.",
   "auth.invite.invalidLink": "Invalid invite link.",
@@ -2342,6 +2342,19 @@ const en: TranslationMap = {
   "pendingBanner.waitingHrCompletion":
     "Waiting for HR to complete the request.",
   "pendingBanner.waitingForStage": "Waiting for {stage}",
+  "approvalStage.status.draft": "Draft",
+  "approvalStage.status.submitted": "Submitted",
+  "approvalStage.status.in_review": "In review",
+  "approvalStage.status.approved": "Approved",
+  "approvalStage.status.rejected": "Rejected",
+  "approvalStage.status.cancelled": "Cancelled",
+  "approvalStage.stage.delegate": "Alternative employee",
+  "approvalStage.stage.manager": "Manager",
+  "approvalStage.stage.hr": "HR",
+  "approvalStage.stage.hr_completion": "HR completion",
+  "approvalStage.stage.finance": "Finance",
+  "approvalStage.stage.cfo": "CFO",
+  "approvalStage.stage.ceo": "CEO",
   "leave.visaDetails": "Visa Details",
   "leave.visaNumber": "Visa Number",
   "leave.exitBefore": "Exit Before",
@@ -2728,6 +2741,7 @@ const en: TranslationMap = {
   "payroll.runExists": "Payroll Run Exists",
   "payroll.runExistsDesc":
     "A run for {month}/{year} already exists. Opening it...",
+  "payroll.runExistsRangeDesc": "A payroll run overlaps {range}. Opening it...",
   "payroll.alreadyExists": "Already Exists",
   "payroll.alreadyExistsDesc": "A payroll run for this period already exists.",
   "payroll.creationFail": "Creation Failed",
@@ -2741,6 +2755,20 @@ const en: TranslationMap = {
   "payroll.createDesc": "Select the period for the new payroll run",
   "payroll.yearReq": "Please select a year",
   "payroll.monthReq": "Please select a month",
+  "payroll.calendarDays": "Calendar days",
+  "payroll.calendarDaysHelp":
+    "Choose how many days from the start of the month to include (1–30).",
+  "payroll.calendarDaysReq": "Please enter the number of calendar days",
+  "payroll.calendarDaysMonthRange":
+    "Enter a whole number from 1 to {max} for this month",
+  "payroll.periodRange": "Payroll period",
+  "payroll.periodRangeHelp":
+    "Select inclusive start and end dates. The period can cross months and must be 30 days or fewer.",
+  "payroll.periodRangeReq": "Select the payroll start and end dates",
+  "payroll.periodRangeInvalid":
+    "The end date must be on or after the start date",
+  "payroll.periodRangeTooLong": "Select a period of 30 days or fewer",
+  "payroll.windowPreview": "Payroll window",
 
   // Announcements
   "announcements.title": "Announcements",
@@ -4067,13 +4095,13 @@ const en: TranslationMap = {
     "You do not have access to contract decisions for this company.",
   "contractDecisions.empty": "No contract decisions match this filter.",
   "contractDecisions.resolve": "Resolve manually",
-  "contractDecisions.resultStatus": "Backend status: {status}",
+  "contractDecisions.resultStatus": "Contract status: {status}",
   "contractDecisions.staleAction":
     "This decision moved on before your action was saved. The latest state has been reloaded.",
-  "contractDecisions.validationTitle": "The backend rejected this request",
+  "contractDecisions.validationTitle": "This request could not be completed",
   "contractDecisions.invalidAmount":
     "Enter a non-negative amount with at most ten digits and two decimal places.",
-  "contractDecisions.derivedTotal": "Total salary (derived by the backend)",
+  "contractDecisions.derivedTotal": "Total salary (calculated automatically)",
   "contractDecisions.derivedTotalInvalid": "Not calculable",
   "contractDecisions.deliveryInAppOnly": "in-app only",
   "contractDecisions.finalNotificationSent": "Sent",
@@ -4811,7 +4839,14 @@ const en: TranslationMap = {
   "common.error.checkInput": "Please check your input and try again.",
   "common.error.unexpectedResponse": "An unexpected server response occurred.",
   "common.error.unexpected": "An unexpected error occurred",
-  "common.error.requestFailed": "API request failed",
+  "admin.audit.loadFailed":
+    "We couldn't load the audit logs. Please try again.",
+  "admin.invites.loadFailed": "We couldn't load the invites. Please try again.",
+  "admin.users.loadFailed": "We couldn't load the users. Please try again.",
+  "crud.prepareEditFailed":
+    "We couldn't open this record for editing. Please try again.",
+  "common.error.requestFailed":
+    "The request could not be completed. Please try again.",
   "error.loadData": "Failed to load data",
   "error.renderFailed":
     "An unexpected error occurred while rendering this page.",
@@ -5674,7 +5709,7 @@ const en: TranslationMap = {
   "payroll.ui.roundingValue":
     "Each payroll line to the nearest riyal (half up)",
   "payroll.ui.overtimeLimitPeriod": "Normal overtime limit period",
-  "payroll.ui.overtimeLimitPeriodValue": "Calendar month",
+  "payroll.ui.overtimeLimitPeriodValue": "Payroll window",
   "payroll.ui.lastUpdated": "Last updated {date}",
   "payroll.ui.defaultsHelp":
     "These are the documented defaults. Saving creates the company's first settings revision.",
@@ -5714,7 +5749,7 @@ const en: TranslationMap = {
   "payroll.assumption.overtime_basic":
     "Overtime defaults to Basic salary; HR may configure the base.",
   "payroll.assumption.overtime_calendar_month":
-    "Normal overtime limit is per calendar month (assumption).",
+    "Normal overtime limit applies once per payroll window (assumption).",
   "payroll.assumption.missing_hire_date":
     "Full month and under-five-year tier assumed for this draft only.",
   "payroll.history.settings_change": "Settings change",
@@ -5831,6 +5866,23 @@ const en: TranslationMap = {
   "payroll.pdf.additions": "Additions",
   "payroll.pdf.deductions": "Deductions",
   "payroll.pdf.provisions": "Company Provisions",
+  "payroll.field.absence_days_override": "Absence days",
+  "payroll.field.overtime_normal_hours": "Overtime hours",
+  "payroll.field.weekly_rest_work_days": "Weekly rest days worked",
+  "payroll.field.official_holiday_work_days": "Official holiday days worked",
+  "payroll.field.bonus": "Bonus",
+  "payroll.field.incentive": "Incentive",
+  "payroll.field.other_addition": "Other addition",
+  "payroll.field.other_deduction": "Other deduction",
+  "payroll.field.salary_components": "Salary components",
+  "payroll.field.zero_salary_reason": "Zero salary reason",
+  "payroll.field.zero_salary_reason_detail": "Zero salary reason details",
+  "payroll.field.suspended_pay_decision": "Suspended pay decision",
+  "payroll.field.override_overtime_eligibility":
+    "Overtime eligibility override",
+  "payroll.field.employment_status": "Employment status",
+  "payroll.field.is_active": "Active",
+  "payroll.field.settings_snapshot": "Payroll settings",
   "payroll.field.gross_salary": "Gross Salary",
   "payroll.field.total_additions": "Total Additions",
   "payroll.field.total_deductions": "Total Deductions",
@@ -5885,6 +5937,7 @@ const en: TranslationMap = {
   "payroll.line.accommodation_cost": "Company accommodation cost",
   "payroll.line.gosi_company": "Company GOSI",
   "payroll.ui.period": "Period",
+  "payroll.ui.calendarWindow": "{range} · {days} calendar days",
   "payroll.ui.status": "Status",
   "payroll.ui.employee": "Employee",
   "payroll.ui.employees": "Employees",
@@ -6076,6 +6129,8 @@ const en: TranslationMap = {
   "payroll.ui.legacyPayslip":
     "This payslip comes from the previous payroll system, so its deductions are shown as one total.",
   "payroll.ui.monthlyRent": "Monthly rent",
+  "payroll.ui.monthlyRentReference": "Monthly rent (reference)",
+  "payroll.ui.periodRent": "Payroll window rent",
   "payroll.ui.monthlySalaryHelp":
     "Full monthly amounts for this run only. The paid amounts are prorated by payroll; the employee profile does not change.",
   "payroll.ui.monthlySalaryTitle": "Monthly salary (this run only)",
@@ -6179,14 +6234,12 @@ const en: TranslationMap = {
   "payroll.ux3.confirmedNoCoverage":
     "Confirmed manually - no attendance device coverage",
   "payroll.ux3.informational": "Informational",
-  "payroll.ux3.apiCounts": "API: {errors} errors, {warnings} warnings",
-  "payroll.ux3.showApiCounts": "Show API counts",
   "payroll.ux3.progress": "{confirmed} of {total} employees confirmed",
   "payroll.ux3.validationCounts":
     "Validation: {errors} blocking errors, {warnings} actionable warnings",
   "payroll.ux3.dates": "Show dates",
-  "payroll.ux3.setNone": "Set 'none' for this month",
-  "payroll.ux3.confirmNone": "Confirm no company accommodation for {name} in",
+  "payroll.ux3.setNone": "Set 'none' for this payroll window",
+  "payroll.ux3.confirmNone": "Confirm no company accommodation for {name} during",
   "payroll.ux3.noResidents": "No residents",
   "payroll.ux3.accommodationUnknown": "Accommodation unknown ({count})",
   "payroll.ux3.changeHistory": "Change history",
@@ -6195,7 +6248,7 @@ const en: TranslationMap = {
     "Your draft is retained. Review the latest settings before saving again.",
   "payroll.ux.executiveExempt": "Executive - attendance checks not applicable",
   "payroll.ux.executiveExemptHelp":
-    "Executive exemption recorded in this payroll calculation. Other API validation checks still apply.",
+    "Executive exemption recorded in this payroll calculation. Other validation checks still apply.",
   "payroll.ux.legacyUnavailable": "Not available - previous system",
   "payroll.finalize_state.finalized": "Finalized",
   "payroll.validation_severity.info": "Informational",

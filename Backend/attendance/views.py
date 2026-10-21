@@ -14,6 +14,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
 
 from audit.utils import audit
+from core.executives import executive_profile_q
 from core.pagination import StandardPagination
 from core.permissions import (
     IsDepartmentCEOApprover,
@@ -126,8 +127,11 @@ class AttendanceViolationViewSet(viewsets.ReadOnlyModelViewSet):
     pagination_class = StandardPagination
 
     def get_queryset(self):
-        qs = AttendanceLateViolation.objects.select_related("employee_profile", "result", "payroll_deduction").order_by(
-            "-date", "-id"
+        # The CEO and General Manager are never penalized, so they never appear here.
+        qs = (
+            AttendanceLateViolation.objects.select_related("employee_profile", "result", "payroll_deduction")
+            .exclude(executive_profile_q("employee_profile__"))
+            .order_by("-date", "-id")
         )
         mine = self.request.query_params.get("mine", "").lower() in {"1", "true"}
         if mine or get_role(self.request.user) not in {"HRManager", "SystemAdmin"}:

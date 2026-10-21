@@ -2,6 +2,7 @@ import { Avatar, Tag } from "antd";
 import ResponsiveTable from "../../ui/ResponsiveTable";
 import type { ColumnsType } from "antd/es/table";
 import { useI18n } from "../../../i18n/useI18n";
+import { humanizeCode } from "../../../utils/humanizeCode";
 import type { HrRecentActivityItem } from "../../../services/api/hrSummaryApi";
 
 interface RecentActivityFeedProps {
@@ -103,7 +104,7 @@ export default function RecentActivityFeed({
               >
                 {t(
                   `audit.action.${item.action}`,
-                  item.action.replace(/_/g, " "),
+                  humanizeCode(item.action),
                 )}
               </div>
               <div
@@ -175,7 +176,7 @@ export default function RecentActivityFeed({
       key: "action",
       render: (text: string) => (
         <span style={{ color: "#64748b", fontSize: 13 }}>
-          {t(`audit.action.${text}`, text.replace(/_/g, " "))}
+          {t(`audit.action.${text}`, humanizeCode(text))}
         </span>
       ),
     },

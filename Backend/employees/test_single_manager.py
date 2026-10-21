@@ -267,6 +267,7 @@ class CrossCompanyManagerRightsTests(SingleManagerTestCase):
         from assets.models import AssetReturnRequest
         from attendance.models import AttendanceCorrectionRequest, AttendanceRecord
         from core.services.workflow_engine import _get_manager_user_for_instance
+        from employees.services.manager_relationships import manager_capability_for
         from loans.models import LoanRequest
 
         employee = self.profile(self.employee)
@@ -274,11 +275,13 @@ class CrossCompanyManagerRightsTests(SingleManagerTestCase):
             LeaveRequest(employee=self.employee, employee_profile=employee),
             LoanRequest(employee=self.employee, employee_profile=employee),
             AttendanceRecord(employee_profile=employee),
-            AttendanceCorrectionRequest(employee_profile=employee),
             AssetReturnRequest(employee=employee),
         ):
             with self.subTest(model=instance.__class__.__name__):
                 self.assertEqual(_get_manager_user_for_instance(instance, self.employee), self.cross_manager)
+
+        # AttendanceCorrectionRequest is retired storage with no workflow, so it has no manager capability.
+        self.assertIsNone(manager_capability_for(AttendanceCorrectionRequest(employee_profile=employee)))
 
     def test_cross_company_manager_can_open_the_attendance_manager_queue(self):
         self.client.force_authenticate(user=self.cross_manager)

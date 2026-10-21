@@ -60,6 +60,7 @@ import {
 } from "../../../services/api/employeesApi";
 import { formatDelegationCandidateLabel } from "../../../utils/delegationCandidates";
 import { useI18n } from "../../../i18n/useI18n";
+import { humanizeCode } from "../../../utils/humanizeCode";
 import {
   apply422ToForm,
   getFirstApiErrorMessage,
@@ -349,9 +350,7 @@ export default function LeaveInboxPage() {
         const translated = t(statusKey);
         const display =
           translated === statusKey
-            ? (
-                status?.charAt(0).toUpperCase() + status?.slice(1).toLowerCase()
-              ).replace(/_/g, " ")
+            ? humanizeCode(status)
             : translated;
         return (
           <div

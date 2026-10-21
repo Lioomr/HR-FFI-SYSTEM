@@ -3,6 +3,7 @@ import { Alert } from "antd";
 
 import type { WorkflowSnapshot } from "../../types/workflow";
 import { useI18n } from "../../i18n/useI18n";
+import { approvalStageLabel } from "./approvalLabels";
 
 export default function PendingActionBanner({
   workflow,
@@ -29,8 +30,9 @@ export default function PendingActionBanner({
       "Waiting for HR to complete the request.",
     );
   } else {
-    const stageLabel =
-      stage?.replace(/_/g, " ") || workflow.current_approver_role || "approval";
+    const stageLabel = stage
+      ? approvalStageLabel(t, stage)
+      : workflow.current_approver_role || "approval";
     message = t(
       "pendingBanner.waitingForStage",
       { stage: stageLabel },

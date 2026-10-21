@@ -16,6 +16,7 @@ import {
   ReloadOutlined,
 } from "@ant-design/icons";
 import { useI18n } from "../../../i18n/useI18n";
+import { humanizeCode } from "../../../utils/humanizeCode";
 import { getHrRecentActivity } from "../../../services/api/hrSummaryApi";
 import type { HrRecentActivityItem } from "../../../services/api/hrSummaryApi";
 import ErrorState from "../../../components/ui/ErrorState";
@@ -175,7 +176,7 @@ export default function RecentActivityPage() {
       key: "action",
       render: (text: string) => (
         <span style={{ color: "#64748b", fontWeight: 500 }}>
-          {t(`audit.action.${text}`, text.replace(/_/g, " "))}
+          {t(`audit.action.${text}`, humanizeCode(text))}
         </span>
       ),
     },

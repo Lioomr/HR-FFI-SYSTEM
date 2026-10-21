@@ -336,7 +336,7 @@ export default function AdminInvitesPage() {
         if (seq !== invitesRequestSeq.current) return;
 
         if (isApiError(res)) {
-          setError(res.message || "Failed to load invites.");
+          setError(res.message || t("admin.invites.loadFailed"));
           setMode("error");
           return;
         }
@@ -358,7 +358,7 @@ export default function AdminInvitesPage() {
           setUnauthorized(true);
           return;
         }
-        setError("Failed to load invites.");
+        setError(t("admin.invites.loadFailed"));
         setMode("error");
       } finally {
         if (seq === invitesRequestSeq.current) setRefreshing(false);

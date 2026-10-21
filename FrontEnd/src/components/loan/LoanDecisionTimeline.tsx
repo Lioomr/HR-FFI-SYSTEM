@@ -7,6 +7,7 @@ import { Typography } from "antd";
 import type { ReactNode } from "react";
 
 import { formatDateTimeShort } from "../../utils/dateTime";
+import { humanizeCode } from "../../utils/humanizeCode";
 
 const { Text } = Typography;
 
@@ -72,7 +73,7 @@ export default function LoanDecisionTimeline({
   const stageLabel = (stage: string) => {
     const key = `loans.history.stage.${stage}`;
     const translated = t(key);
-    return translated === key ? stage.replace(/_/g, " ") : translated;
+    return translated === key ? humanizeCode(stage) : translated;
   };
 
   return (

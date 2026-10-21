@@ -10,12 +10,18 @@ from django.db.migrations.executor import MigrationExecutor
 from django.test import TransactionTestCase
 from django.utils import timezone
 
+from core.testing_seed import restore_migration_seed_data
 from organization.models import OrganizationNode
 
 from ..models import JobOffer as CurrentJobOffer
 
 
 class HiringRequestRemovalMigrationTests(TransactionTestCase):
+    @classmethod
+    def tearDownClass(cls):
+        super().tearDownClass()
+        restore_migration_seed_data()
+
     required_job_offer_columns = {
         "approval_events",
         "approval_status",

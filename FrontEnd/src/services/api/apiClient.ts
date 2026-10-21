@@ -12,6 +12,7 @@ import {
 } from "../../auth/authStore";
 import { getFirstApiErrorMessage } from "../../utils/formErrors";
 import { STORAGE_KEYS } from "../../utils/storageKeys";
+import { translate } from "../../i18n/translate";
 
 export const api = axios.create({
   // Empty baseURL keeps browser requests same-origin; Docker Nginx proxies
@@ -78,6 +79,32 @@ function clearAuthenticationAndRedirect() {
     window.location.search,
     window.location.hash,
   );
+}
+
+/**
+ * Axios's own wording ("Network Error", "timeout of 20000ms exceeded",
+ * "Request failed with status code 502") and proxy HTML error pages are not
+ * text a user can act on. Used only when the server sent no message of its own.
+ */
+function transportErrorMessage(err: any): string | null {
+  const status = err?.response?.status;
+  if (err?.code === "ECONNABORTED" || err?.code === "ETIMEDOUT") {
+    return translate("common.error.timeoutDetailed");
+  }
+  if (!err?.response && err?.request) {
+    return translate("common.error.networkDetailed");
+  }
+  if (typeof status === "number" && status >= 500) {
+    return translate("common.error.serverDetailed");
+  }
+  if (/^request failed with status code \d+$/i.test(String(err?.message))) {
+    return translate("common.error.genericDetailed");
+  }
+  return null;
+}
+
+function looksLikeHtml(value: unknown): boolean {
+  return typeof value === "string" && /^\s*<(!doctype|html|head|body)/i.test(value);
 }
 
 function shouldRedirectOnUnauthorized(err: any): boolean {
@@ -187,7 +214,7 @@ api.interceptors.response.use(
     }
 
     // Try to extract a user-friendly message
-    let friendlyMessage = err.message;
+    let friendlyMessage = transportErrorMessage(err) ?? err.message;
     const extractedMessage = getFirstApiErrorMessage({
       response: { data },
       apiData: data,
@@ -196,7 +223,7 @@ api.interceptors.response.use(
       friendlyMessage = extractedMessage;
     } else if (data?.message) {
       friendlyMessage = data.message;
-    } else if (typeof data === "string") {
+    } else if (typeof data === "string" && !looksLikeHtml(data)) {
       friendlyMessage = data;
     }
 

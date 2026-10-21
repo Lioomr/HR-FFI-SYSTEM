@@ -61,7 +61,7 @@ def test_the_stale_manager_really_does_block_a_full_profile_save(world):
     attach_stale_manager(profile)
 
     with pytest.raises(DjangoValidationError) as excinfo:
-        profile.save(update_fields=["signature", "signature_uploaded_at", "updated_at"])
+        profile.save()
 
     assert "manager_profile" in excinfo.value.message_dict
     assert "linked to a user account" in excinfo.value.message_dict["manager_profile"][0]

@@ -182,7 +182,7 @@ export default function AdminUsersListPage() {
       try {
         const res = await listUsers(params);
         if (isApiError(res)) {
-          setError(res.message || "Failed to load users.");
+          setError(res.message || t("admin.users.loadFailed"));
           setMode("error");
           return;
         }
@@ -194,7 +194,7 @@ export default function AdminUsersListPage() {
           setUnauthorized(true);
           return;
         }
-        setError("Failed to load users.");
+        setError(t("admin.users.loadFailed"));
         setMode("error");
       }
     },

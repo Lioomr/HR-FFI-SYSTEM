@@ -234,7 +234,7 @@ export default function AdminAuditLogsPage() {
 
         const res = await listAuditLogs(params);
         if (isApiError(res)) {
-          setError(res.message || "Failed to load audit logs.");
+          setError(res.message || t("admin.audit.loadFailed"));
           setMode("error");
           return;
         }
@@ -254,7 +254,7 @@ export default function AdminAuditLogsPage() {
           setUnauthorized(true);
           return;
         }
-        setError("Failed to load audit logs.");
+        setError(t("admin.audit.loadFailed"));
         setMode("error");
       }
     },

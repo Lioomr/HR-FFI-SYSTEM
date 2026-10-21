@@ -308,9 +308,11 @@ class ContractExpiryWorkflowTests(TestCase):
 
     @patch("employees.contract_expiry.notify_manual_resolution")
     def test_invalid_original_duration_fails_without_changing_profile(self, notify_failure):
-        self.profile.contract_expiry = timezone.localdate()
-        self.profile.contract_date = timezone.localdate()
-        self.profile.save(update_fields=["contract_date", "contract_expiry", "updated_at"])
+        # Legacy data can hold a zero-length contract; the model now refuses to save one, so write it directly.
+        EmployeeProfile.objects.filter(pk=self.profile.pk).update(
+            contract_expiry=timezone.localdate(), contract_date=timezone.localdate()
+        )
+        self.profile.refresh_from_db()
         decision, _ = ensure_contract_decision(self.profile)
 
         process_contract_expiry(today=timezone.localdate(), now=timezone.now())

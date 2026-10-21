@@ -25,6 +25,7 @@ import LeaveApprovalMap from "../../../components/leaves/LeaveApprovalMap";
 import PageHeader from "../../../components/ui/PageHeader";
 import ResponsiveTable from "../../../components/ui/ResponsiveTable";
 import { useI18n } from "../../../i18n/useI18n";
+import { humanizeCode } from "../../../utils/humanizeCode";
 import { isApiError } from "../../../services/api/apiTypes";
 import {
   approveDelegatedLeaveRequest,
@@ -107,7 +108,7 @@ export default function DelegatedLeaveInboxPage() {
   const statusLabel = (status?: string) => {
     const key = `leave.status.${(status || "").toLowerCase()}`;
     const translated = t(key);
-    return translated === key ? (status || "").replace(/_/g, " ") : translated;
+    return translated === key ? humanizeCode(status) : translated;
   };
 
   const translateLeaveType = (name?: string) => {

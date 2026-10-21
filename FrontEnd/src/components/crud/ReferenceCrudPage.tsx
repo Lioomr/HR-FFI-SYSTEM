@@ -367,7 +367,7 @@ export function ReferenceCrudPage<
       try {
         await beforeOpenEdit(row);
       } catch (err: any) {
-        notifyError(err.message || "Failed to prepare edit");
+        notifyError(err.message || t("crud.prepareEditFailed"));
         return;
       }
     }

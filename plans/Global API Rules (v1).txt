@@ -252,7 +252,9 @@ Create Payroll Run
 
 POST /payroll-runs
 
-body: { "year": 2026, "month": 1 }
+body: { "period_start": "2026-01-20", "period_end": "2026-02-18" }
+
+period_start and period_end are required ISO dates. The range is inclusive, may cross a month or year boundary, and must contain 1 to 30 calendar days. Salary and daily calculations keep the fixed divisor 30. year/month and calendar_days are response compatibility fields derived from the period end and inclusive length.
 
 Payroll Run Review
 

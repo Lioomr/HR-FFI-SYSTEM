@@ -619,7 +619,7 @@ describe("ContractDecisionsPage HR submission", () => {
     fireEvent.click(screen.getByRole("button", { name: "Submit to CEO" }));
 
     expect(
-      await screen.findByText("The backend rejected this request"),
+      await screen.findByText("This request could not be completed"),
     ).toBeInTheDocument();
     expect(
       screen.getByText(
@@ -691,7 +691,7 @@ describe("ContractDecisionsPage CEO decision", () => {
     await waitFor(() => expect(approveMock).toHaveBeenCalledTimes(1));
     // A 200 that came back MANUAL_RESOLUTION_REQUIRED is not an approval.
     expect(
-      await screen.findByText("Backend status: Manual resolution required"),
+      await screen.findByText("Contract status: Manual resolution required"),
     ).toBeInTheDocument();
     expect(screen.queryByText(/Contract decision approved/)).toBeNull();
   });
@@ -709,7 +709,7 @@ describe("ContractDecisionsPage CEO decision", () => {
 
     await waitFor(() => expect(rejectMock).toHaveBeenCalledTimes(1));
     expect(
-      await screen.findByText("Backend status: Rejected"),
+      await screen.findByText("Contract status: Rejected"),
     ).toBeInTheDocument();
   });
 

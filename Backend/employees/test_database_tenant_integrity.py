@@ -6,6 +6,7 @@ from django.db import IntegrityError, transaction
 from django.test import TransactionTestCase
 
 from attendance.models import BioTimeEmployeeMap
+from core.testing_seed import restore_migration_seed_data
 from employees.models import EmployeeProfile
 from leaves.models import (
     AnnualLeavePaymentRequest,
@@ -20,6 +21,11 @@ User = get_user_model()
 
 
 class DatabaseTenantIntegrityTests(TransactionTestCase):
+    @classmethod
+    def tearDownClass(cls):
+        super().tearDownClass()
+        restore_migration_seed_data()
+
     def setUp(self):
         self.company_a = OrganizationNode.objects.create(
             code="DB_SCOPE_A",
